@@ -7,13 +7,13 @@ using System.Text.Json.Serialization;
 namespace Mirador.Core.Monado;
 
 /// <summary>A dated copy of Monado's folder.</summary>
-/// <param name="Taken">When it was taken, to the second.</param>
+/// <param name="Taken">When it was taken, to the second, in UTC (show it with <see cref="DateTimeOffset.ToLocalTime()"/>).</param>
 /// <param name="Dir">Its folder: <c>manifest.json</c> and the copied files below <c>files</c>.</param>
 public sealed record FolderBackup(DateTimeOffset Taken, string Dir);
 
 /// <summary>
 /// Dated copies of Monado's folder (<c>%LOCALAPPDATA%\monado</c>: Monado's config, and whatever its drivers keep there,
-/// calibrations included), in <c>&lt;backups&gt;\monado\&lt;yyyyMMdd-HHmmss&gt;\</c>. Each copy has a
+/// calibrations included), in <c>&lt;backups&gt;\monado\&lt;yyyyMMdd-HHmmss&gt;\</c>, named in UTC. Each copy has a
 /// <c>manifest.json</c> of every file's size and SHA-256; a copy is taken only when the folder differs from the newest
 /// one, and the newest <c>keep</c> are kept. Restoring and importing copy the folder as it is first, and only while
 /// Monado is stopped. One operation at a time.
@@ -179,7 +179,8 @@ public sealed class MonadoFolderBackups(
             return null;
         }
 
-        var now = time.GetLocalNow();
+        // Named in UTC, so that a time zone change doesn't reorder the copies.
+        var now = time.GetUtcNow();
         var name = now.ToString(StampFormat, CultureInfo.InvariantCulture);
         var dir = Path.Combine(Root, name);
         for (var n = 2; Directory.Exists(dir); n++)
@@ -211,7 +212,7 @@ public sealed class MonadoFolderBackups(
             throw;
         }
 
-        Prune();
+        Prune(dir);
         return new FolderBackup(TakenOf(Path.GetFileName(dir))!.Value, dir);
     }
 
@@ -355,8 +356,8 @@ public sealed class MonadoFolderBackups(
         return [.. found.OrderByDescending(b => b.Taken).ThenByDescending(b => b.Dir, StringComparer.Ordinal)];
     }
 
-    /// <summary>When a copy named <paramref name="name"/> was taken, on this clock's time zone; null for another name.</summary>
-    private DateTimeOffset? TakenOf(string name)
+    /// <summary>When a copy named <paramref name="name"/> was taken, in UTC; null for another name.</summary>
+    private static DateTimeOffset? TakenOf(string name)
     {
         if (name.Length < StampFormat.Length
             || !DateTime.TryParseExact(name[..StampFormat.Length], StampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local)
@@ -365,13 +366,17 @@ public sealed class MonadoFolderBackups(
             return null;
         }
 
-        return new DateTimeOffset(local, time.LocalTimeZone.GetUtcOffset(local));
+        return new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TimeSpan.Zero);
     }
 
-    /// <summary>Deletes the oldest copies beyond <c>keep</c>; one that can't be deleted now goes another time.</summary>
-    private void Prune()
+    /// <summary>
+    /// Deletes the oldest copies beyond <c>keep</c>, never <paramref name="made"/>, the one just taken: after the clock
+    /// was set back it sorts before older ones. One that can't be deleted now goes another time.
+    /// </summary>
+    private void Prune(string made)
     {
-        foreach (var old in List().Skip(keep))
+        var others = List().Where(b => !string.Equals(b.Dir, made, StringComparison.OrdinalIgnoreCase));
+        foreach (var old in others.Skip(Math.Max(keep - 1, 0)))
         {
             DeleteQuietly(old.Dir);
         }

@@ -7,7 +7,7 @@ namespace Mirador.Core.Tests.Monado;
 public sealed class MonadoFolderBackupsTests : IDisposable
 {
     private readonly TempDir dir = new();
-    private readonly FakeTimeProvider time = new(new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero));
+    private readonly FakeTimeProvider time = NewClock(new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero));
     private bool running;
 
     private string MonadoDir => dir.File("monado");
@@ -15,6 +15,14 @@ public sealed class MonadoFolderBackupsTests : IDisposable
     private string BackupsDir => dir.File("Mirador", "backups");
 
     private MonadoFolderBackups Backups(long maxBytes = 200_000_000) => new(MonadoDir, BackupsDir, time, () => running, maxBytes: maxBytes);
+
+    /// <summary>A clock at <paramref name="utc"/> in a time zone five hours west of UTC, so that local and UTC names differ.</summary>
+    private static FakeTimeProvider NewClock(DateTimeOffset utc)
+    {
+        var clock = new FakeTimeProvider(utc);
+        clock.SetLocalTimeZone(TimeZoneInfo.CreateCustomTimeZone("West", TimeSpan.FromHours(-5), "West", "West"));
+        return clock;
+    }
 
     public void Dispose() => dir.Dispose();
 
@@ -46,7 +54,8 @@ public sealed class MonadoFolderBackupsTests : IDisposable
 
         Assert.Null(problem);
         Assert.NotNull(backup);
-        Assert.Equal(Path.Combine(BackupsDir, "monado", time.GetLocalNow().ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)), backup.Dir);
+        Assert.Equal(Path.Combine(BackupsDir, "monado", "20261104-120000"), backup.Dir); // named in UTC
+        Assert.Equal(time.GetUtcNow(), backup.Taken);
         Assert.True(File.Exists(Path.Combine(backup.Dir, "manifest.json")));
         Assert.Equal([backup], backups.Backups());
 
@@ -93,8 +102,8 @@ public sealed class MonadoFolderBackupsTests : IDisposable
 
         var kept = backups.Backups();
         Assert.Equal(10, kept.Count);
-        Assert.Equal(time.GetLocalNow() - TimeSpan.FromSeconds(1), kept[0].Taken);
-        Assert.Equal(time.GetLocalNow() - TimeSpan.FromSeconds(10), kept[^1].Taken);
+        Assert.Equal(time.GetUtcNow() - TimeSpan.FromSeconds(1), kept[0].Taken);
+        Assert.Equal(time.GetUtcNow() - TimeSpan.FromSeconds(10), kept[^1].Taken);
         Assert.Equal(10, Directory.GetDirectories(Path.Combine(BackupsDir, "monado")).Length);
     }
 
@@ -205,5 +214,34 @@ public sealed class MonadoFolderBackupsTests : IDisposable
 
         Assert.Equal(MonadoFolderBackups.NotAnExport, Assert.Throws<MiradorException>(() => backups.Import(zip)).Message);
         Assert.Equal(MonadoFolderBackups.NotAnExport, Assert.Throws<MiradorException>(() => backups.Import(notZip)).Message);
+    }
+
+    [Fact]
+    public void A_clock_moved_back_never_prunes_the_copy_just_made()
+    {
+        var backups = Backups();
+        for (var i = 0; i < 10; i++)
+        {
+            Write("config_v0.json", $"version {i}");
+            Assert.NotNull(backups.SnapshotIfChanged(out _));
+            time.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        // The clock was corrected: every copy so far looks newer than now.
+        var earlier = new MonadoFolderBackups(MonadoDir, BackupsDir, NewClock(time.GetUtcNow() - TimeSpan.FromDays(1)), () => running);
+        Write("config_v0.json", "after the correction");
+
+        var made = earlier.SnapshotIfChanged(out var problem);
+
+        Assert.Null(problem);
+        Assert.NotNull(made);
+        Assert.True(Directory.Exists(made.Dir));
+        Assert.Contains(made, earlier.Backups());
+        Assert.Equal(10, earlier.Backups().Count);
+
+        // A restore under that clock keeps its safety copy too.
+        Write("config_v0.json", "replaced by the restore");
+        earlier.Restore(earlier.Backups()[0]);
+        Assert.Contains(earlier.Backups(), b => File.ReadAllText(Path.Combine(b.Dir, "files", "config_v0.json")) == "replaced by the restore");
     }
 }
