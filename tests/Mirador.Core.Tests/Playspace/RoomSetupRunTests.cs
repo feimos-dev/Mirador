@@ -74,7 +74,9 @@ public sealed class RoomSetupRunTests : IDisposable
         public IReadOnlyDictionary<string, string>? MonadoEnvironment =>
             ExitOnDisconnect ? new Dictionary<string, string> { ["IPC_EXIT_ON_DISCONNECT"] = "1" } : null;
 
-        public string? CurrentUniverse() => "1500000001";
+        public Exception? UniverseFails { get; set; }
+
+        public string? CurrentUniverse() => UniverseFails is { } fails ? throw fails : "1500000001";
 
         public Task<StartOutcome> StartMonadoAsync()
         {
@@ -93,9 +95,12 @@ public sealed class RoomSetupRunTests : IDisposable
         }
     }
 
+    private readonly List<string> logged = [];
+
     private RoomSetupRun Run() => new(new RoomMeasuring(runner, "xr-check.exe"), store, monado, TimeProvider.System)
     {
         StopWait = TimeSpan.FromSeconds(2),
+        Log = (what, e) => logged.Add($"{what}: {e.Message}"),
     };
 
     private void Answer(string line, int code)
@@ -207,6 +212,21 @@ public sealed class RoomSetupRunTests : IDisposable
             await Step(RoomStep.Floor));
         Assert.Equal(0, monado.Starts);
         Assert.NotNull(store.Get("steamvr_lh", "1500000001"));
+    }
+
+    [Fact]
+    public async Task An_unexpected_failure_is_logged_and_monado_started_again()
+    {
+        monado.Current = monado.Client;
+        monado.ExitOnDisconnect = true;
+        monado.UniverseFails = new InvalidOperationException("Something unexpected.");
+        Answer(Measured, 0);
+
+        Assert.Equal(
+            new RoomStepOutcome("Mirador couldn't set up the room: Something unexpected. Monado started again.", RoomStepLevel.Error),
+            await Step(RoomStep.Floor));
+        Assert.Equal(1, monado.Starts);
+        Assert.Equal(["The room setup step failed: Something unexpected."], logged);
     }
 
     [Fact]

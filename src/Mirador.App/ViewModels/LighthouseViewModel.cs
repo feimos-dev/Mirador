@@ -394,7 +394,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
 
     public bool HasMissingRoomSetup => MissingRoomSetup is not null;
 
-    /// <summary>Reads whether the space in use has a room setup, off the UI thread; Home is told too.</summary>
+    /// <summary>Reads whether the space in use has a room setup, for this page, off the UI thread.</summary>
     private async Task CheckRoomSetupAsync()
     {
         MissingRoomSetup = await Task.Run(host.MissingRoomSetup);
@@ -553,7 +553,10 @@ public sealed partial class LighthouseViewModel : ObservableObject
         RoomSetupBusy = true;
         try
         {
-            var run = new RoomSetupRun(host.RoomMeasuring, host.RoomSetups, new SessionForRoomSetup(host), TimeProvider.System);
+            var run = new RoomSetupRun(host.RoomMeasuring, host.RoomSetups, new SessionForRoomSetup(host), TimeProvider.System)
+            {
+                Log = AppLog.Write,
+            };
             void Status(string text) => ui.TryEnqueue(() => ShowRoomSetup(text, InfoBarSeverity.Informational));
             var outcome = await Task.Run(() => run.RunAsync(step, Status, CancellationToken.None));
             ShowRoomSetup(outcome.Message, outcome.Level switch

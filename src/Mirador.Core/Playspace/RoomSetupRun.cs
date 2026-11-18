@@ -44,6 +44,9 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
     /// <summary>How long the step waits for Monado to stop after the measuring program closed, with "exit on disconnect".</summary>
     public TimeSpan StopWait { get; init; } = TimeSpan.FromSeconds(15);
 
+    /// <summary>Hears a failure the step didn't expect (it is shown in plain words too).</summary>
+    public Action<string, Exception>? Log { get; init; }
+
     /// <summary>Runs <paramref name="step"/>; <paramref name="status"/> hears what it is doing. Never throws but for cancelling.</summary>
     /// <remarks>Talks to Monado and reads files: not on the UI thread.</remarks>
     public async Task<RoomStepOutcome> RunAsync(RoomStep step, Action<string> status, CancellationToken ct)
@@ -102,6 +105,12 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
         catch (Exception e) when (e is NotSupportedException or ObjectDisposedException)
         {
             problem = "Monado stopped while measuring. Start it and measure again.";
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Unexpected, but it goes the same way: shown, and Monado started again if the measuring program stopped it.
+            Log?.Invoke("The room setup step failed", e);
+            problem = $"Mirador couldn't set up the room: {e.Message.Trim().TrimEnd('.')}.";
         }
 
         // Once the measuring program has run, its exit stops Monado with "exit on disconnect", failed or not.
