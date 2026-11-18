@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
-using Mirador.Core.Build;
 using Mirador.Ipc;
 
 namespace Mirador.App.ViewModels;
@@ -118,11 +117,14 @@ public sealed partial class MiradorMonadoViewModel(AppHost host) : ObservableObj
         HasPrevious = versions.Previous is not null;
         CanInstall = newest is not null && newest != versions.Current;
         InstallLabel = versions.Current is null ? "Install" : "Update Monado";
-        var checks = versions.Current is null ? null : BuildCheckResult.Load(MiradorMonado.FolderOf(host.Locator.MiradorRoot, versions.Current));
         var installed = versions.Current is null
             ? "Not installed yet."
-            : $"Installed: {versions.Current}{(versions.Previous is { } p ? $" (kept for Roll back: {p})" : "")}.{(checks is null ? "" : " CI's checks: " + checks.Summary())}";
-        var latest = newest is null ? "" : newest == versions.Current ? " It is the newest." : $" Newest: {newest}.";
+            : $"Installed: {Date(versions.Current)}{(versions.Previous is { } p ? $" (kept for Roll back: {Date(p)})" : "")}.";
+        var latest = newest is null ? "" : newest == versions.Current ? " It is the newest." : $" Newest: {Date(newest)}.";
         Status = problem is null ? installed + latest : $"{problem} {installed}";
     }
+
+    /// <summary>A weekly build as its build date, in the user's short date format; the full version when it has none.</summary>
+    private static string Date(string version) =>
+        MiradorMonado.DateOf(version) is { } date ? date.ToString("d", System.Globalization.CultureInfo.CurrentCulture) : version;
 }

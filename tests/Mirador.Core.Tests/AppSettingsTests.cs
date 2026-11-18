@@ -41,8 +41,8 @@ public class AppSettingsTests
         var settings = new AppSettingsStore(dir.File("settings.json")).Load();
 
         Assert.False(settings.CloseToTray);
-        Assert.True(settings.BaseStationsOnAtStart);
-        Assert.True(settings.BaseStationsOffAtStop);
+        Assert.False(settings.BaseStationsOnAtStart);
+        Assert.False(settings.BaseStationsOffAtStop);
     }
 
     [Fact]
@@ -104,5 +104,33 @@ public class AppSettingsTests
         File.WriteAllText(dir.File("settings.json"), """{"closeToTray": false}""");
 
         Assert.True(new AppSettingsStore(dir.File("settings.json")).Load().StartMinimized);
+    }
+
+    [Fact]
+    public void Start_mirador_for_games_defaults_to_on_and_round_trips()
+    {
+        using var dir = new TempDir();
+        var store = new AppSettingsStore(dir.File("settings.json"));
+        Assert.True(new AppSettings().StartMiradorForGames);
+        Assert.True(store.Load().StartMiradorForGames);
+
+        store.Save(new AppSettings(StartMiradorForGames: false));
+
+        Assert.False(store.Load().StartMiradorForGames);
+
+        // The stand-in reads this very text: the key, then false.
+        Assert.Contains("\"startMiradorForGames\": false", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    [Fact]
+    public void Lighthouse_settings_are_off_on_a_fresh_install()
+    {
+        var settings = new AppSettings();
+
+        Assert.False(settings.BaseStationsOnAtStart);
+        Assert.False(settings.BaseStationsOffAtStop);
+        Assert.False(settings.BaseStationsOnAtMiradorStart);
+        Assert.False(settings.BaseStationsOffAtMiradorQuit);
+        Assert.False(settings.ControllersOffAtStop);
     }
 }

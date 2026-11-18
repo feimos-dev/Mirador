@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Time.Testing;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
@@ -215,6 +216,9 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
 
     public bool SessionFileExistedAtLaunch { get; private set; }
 
+    /// <summary>Runs as each launch begins, to look at what the Start did before it.</summary>
+    public Action? OnStart { get; set; }
+
     public int Starts
     {
         get
@@ -240,6 +244,7 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
     public IRunningProcess Start(ProcessSpec spec)
     {
         steps.Add("launch");
+        OnStart?.Invoke();
         lock (specs)
         {
             specs.Add(spec);
@@ -280,6 +285,96 @@ internal sealed class FakePipe(Steps steps) : IMonadoPipe
         asked.Enqueue(name);
         FirstPoll.TrySetResult();
         return Up;
+    }
+}
+
+/// <summary>Libmonado as the session opens it: counts the opens and hands out <see cref="FakeMonadoClient"/>s.</summary>
+internal sealed class FakeLibmonado(Steps steps)
+{
+    private readonly ConcurrentQueue<string> binDirs = new();
+
+    /// <summary>What the next open gives when not null; else a new connected client.</summary>
+    public LibmonadoOpen? Result { get; set; }
+
+    public FakeMonadoClient? Client { get; private set; }
+
+    public IReadOnlyCollection<string> BinDirs => binDirs;
+
+    public int Opens => binDirs.Count;
+
+    /// <summary>When set, an open waits for it (at most <see cref="Harness.Limit"/>) before it connects.</summary>
+    public TaskCompletionSource? Gate { get; set; }
+
+    /// <summary>Completes once an open has begun.</summary>
+    public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public LibmonadoOpen Open(string binDir)
+    {
+        steps.Add("libmonado");
+        binDirs.Enqueue(binDir);
+        Entered.TrySetResult();
+        Gate?.Task.Wait(Harness.Limit);
+        if (Result is { } result)
+        {
+            return result;
+        }
+
+        Client = new FakeMonadoClient(steps);
+        return new LibmonadoOpen(Client, null);
+    }
+}
+
+/// <summary>A libmonado connection to a Monado with a head; it throws after <see cref="Dispose"/>, as the real one does.</summary>
+internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
+{
+    public bool Disposed { get; private set; }
+
+    /// <summary>Completes once <see cref="Dispose"/> has run.</summary>
+    public TaskCompletionSource Closed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>When set, <see cref="Devices"/> waits for it (at most <see cref="Harness.Limit"/>), as a call Monado doesn't answer does.</summary>
+    public TaskCompletionSource? DevicesGate { get; set; }
+
+    /// <summary>Completes once a <see cref="Devices"/> call has begun.</summary>
+    public TaskCompletionSource DevicesEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public bool OffersOriginOffsets => true;
+
+    /// <summary>When set, <see cref="Devices"/> throws it, as a read Monado's answer breaks does.</summary>
+    public Exception? DevicesFail { get; set; }
+
+    public IReadOnlyList<MonadoDevice> Devices()
+    {
+        DevicesEntered.TrySetResult();
+        DevicesGate?.Task.Wait(Harness.Limit);
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        if (DevicesFail is { } fail)
+        {
+            throw fail;
+        }
+
+        return [new MonadoDevice(0, "head", "Fake headset", "FAKE-1", 0, false, false, 0)];
+    }
+
+    public IReadOnlyList<string> TrackingOrigins()
+    {
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        return ["Fake origin"];
+    }
+
+    public MonadoPose GetOriginOffset(uint origin)
+    {
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        return MonadoPose.Identity;
+    }
+
+    public void SetOriginOffset(uint origin, MonadoPose offset) => ObjectDisposedException.ThrowIf(Disposed, this);
+
+    public void Dispose()
+    {
+        steps.Add("libmonado closed");
+        Disposed = true;
+        Closed.TrySetResult();
     }
 }
 
@@ -542,9 +637,12 @@ internal sealed class Harness : IAsyncDisposable
     /// and runs them through <see cref="Launcher"/>.</param>
     /// <param name="approvedCopy">The locator's lookup of a build's approved copy; null: no build is approved.</param>
     /// <param name="elevationFix">Whether Verify found the elevation fix in a build; null: never.</param>
+    /// <param name="variablesApproved">Whether a profile's variables are approved to run as administrator; null: never.</param>
+    /// <param name="folderBackupLimit">With a value, the session copies <see cref="MonadoFolder"/> at each Start, up to that many bytes.</param>
     public Harness(
         ISessionHook? hook = null, bool? installedCopy = null, Func<Profile, MonadoInstall, Mirador.Ipc.ApprovedBuild?>? approvedCopy = null,
-        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false)
+        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false, long? folderBackupLimit = null,
+        Func<Profile, bool>? variablesApproved = null)
     {
         Root = Path.Combine(dir.Path, "Zoë's data");
         Paths = new AppPaths(Path.Combine(Root, "Mirador"));
@@ -571,6 +669,7 @@ internal sealed class Harness : IAsyncDisposable
         Module = new FakeModule(Steps);
         Launcher = new FakeLauncher(Steps, Paths.SessionFile);
         Pipe = new FakePipe(Steps);
+        Libmonado = new FakeLibmonado(Steps);
         Runtime = new FakeRuntimeReader { Active = BundledManifest };
         Profiles = new ProfileStore(Paths.ProfilesFile);
         Settings = new MonadoSettingsStore(Paths.MonadoSettingsFile);
@@ -599,7 +698,12 @@ internal sealed class Harness : IAsyncDisposable
                 ElevatedInstalledCopy: installedCopy is { } installed ? () => installed : null,
                 BundledLayerDir: BundledLayer,
                 ElevationFixVerified: elevationFix,
-                ControllersOffAtStop: () => controllersOffAtStop),
+                VariablesApproved: variablesApproved,
+                ControllersOffAtStop: () => controllersOffAtStop,
+                OpenLibmonado: Libmonado.Open,
+                FolderBackups: folderBackupLimit is { } limit
+                    ? new MonadoFolderBackups(MonadoFolder, Paths.BackupsDir, Time, maxBytes: limit)
+                    : null),
             isStandIn: path => path.StartsWith(StandInImages, StringComparison.OrdinalIgnoreCase));
 
         Controller.Changed += () => Changes.Enqueue(Controller.State);
@@ -635,6 +739,9 @@ internal sealed class Harness : IAsyncDisposable
 
     public string BundledServer { get; }
 
+    /// <summary>The Monado folder the session's backups copy (with <c>folderBackupLimit</c> given).</summary>
+    public string MonadoFolder => Path.Combine(Root, "monado");
+
     /// <summary>The bundled Monado's runtime DLL folder, with the stand-in's <c>service</c> folder below it.</summary>
     public string RuntimeDir => Path.GetDirectoryName(BundledServer)!;
 
@@ -663,6 +770,8 @@ internal sealed class Harness : IAsyncDisposable
     public FakeUsb Usb { get; }
 
     public FakePipe Pipe { get; }
+
+    public FakeLibmonado Libmonado { get; }
 
     public FakeRuntimeReader Runtime { get; }
 

@@ -109,7 +109,7 @@ public class BranchSourceStoreTests
         using var dir = new TempDir();
         var store = new ProfileStore(dir.File("profiles.json"));
         var source = BuildSource.FromBranch("https://gitlab.freedesktop.org/ultradev/monado.git", "pimax-p3c", ["-DXRT_HAVE_SDL2=OFF"]);
-        var set = ProfileSet.Defaults().Replace(ProfileSet.Defaults().Profiles[1] with { Monado = source });
+        var set = TestProfiles.Two().Replace(TestProfiles.Two().Profiles[1] with { Monado = source });
 
         store.Save(set);
         var text = File.ReadAllText(dir.File("profiles.json"));
@@ -120,4 +120,23 @@ public class BranchSourceStoreTests
         Assert.DoesNotContain("\"options\"", text);
         Assert.Contains("\"kind\": \"Mirador\"", text);
     }
+
+    [Theory]
+    [InlineData("https://gitlab.freedesktop.org/monado/monado/-/merge_requests/3107")]
+    [InlineData("https://github.com/fzeruhn/monado/pull/4")]
+    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado/-/commit/49769371a0b2c3d4e5f60718293a4b5c6d7e8f90")]
+    [InlineData("https://github.com/fzeruhn/monado/commit/49769371a")]
+    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado/-/tree/pimax-p3c-windows")]
+    [InlineData("https://github.com/fzeruhn/monado/tree/dream-air")]
+    public void Links_naming_a_merge_request_commit_or_branch_name_their_branch(string link) =>
+        Assert.True(BranchLink.NamesItsBranch(link));
+
+    [Theory]
+    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado")]
+    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado.git")]
+    [InlineData("  https://github.com/fzeruhn/monado  ")]
+    [InlineData("")]
+    [InlineData("not a link")]
+    public void A_repository_link_does_not_name_its_branch(string link) =>
+        Assert.False(BranchLink.NamesItsBranch(link));
 }

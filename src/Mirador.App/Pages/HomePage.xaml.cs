@@ -34,6 +34,14 @@ public sealed partial class HomePage : Page
         ViewModel.Refresh();
     }
 
+    /// <summary>Leaving Home stops its listening and its device reads at once, before the page unloads.</summary>
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        current = false;
+        UpdateShown();
+    }
+
     /// <summary>Windows' default graphics settings, where hardware-accelerated GPU scheduling is turned on.</summary>
     private async void OnGraphicsSettings(object sender, RoutedEventArgs e)
     {

@@ -44,4 +44,56 @@ public class AppArgsTests
         Assert.False(AppArgs.Parse(["--start"]).AllowElevatedMonado);
         Assert.False(AppArgs.Parse([]).AllowElevatedMonado);
     }
+
+    [Fact]
+    public void Approve_build_parses_variables()
+    {
+        var args = AppArgs.Parse(["--approve-build", "p1", "abc1234", @"C:\Builds\p1\install", "PIMAX_P3C_LOG=info", "XRT_MODE=a=b", "EMPTY=", "--start"]);
+
+        Assert.True(args.Start);
+        var (profileId, commit, source, variables) = args.ApproveBuild!.Value;
+        Assert.Equal(("p1", "abc1234", @"C:\Builds\p1\install"), (profileId, commit, source));
+        Assert.Equal(
+            [new("PIMAX_P3C_LOG", "info"), new("XRT_MODE", "a=b"), new KeyValuePair<string, string>("EMPTY", "")],
+            variables);
+    }
+
+    [Fact]
+    public void Approve_build_with_bundled_source_needs_no_folder()
+    {
+        var args = AppArgs.Parse(["--approve-build", "p1", "bundled", "bundled", "XRT_LOG=debug"]);
+
+        var (profileId, commit, source, variables) = args.ApproveBuild!.Value;
+        Assert.Equal(("p1", "bundled", "bundled"), (profileId, commit, source));
+        Assert.Equal([new KeyValuePair<string, string>("XRT_LOG", "debug")], variables);
+    }
+
+    [Fact]
+    public void Approve_build_without_variables_has_none()
+    {
+        var (_, _, _, variables) = AppArgs.Parse(["--approve-build", "p1", "abc1234", @"C:\b"]).ApproveBuild!.Value;
+        Assert.Empty(variables);
+        Assert.Null(AppArgs.Parse(["--approve-build", "p1", "abc1234"]).ApproveBuild);
+    }
+
+    [Fact]
+    public void Approve_build_can_come_with_the_consent_step()
+    {
+        var args = AppArgs.Parse(["--allow-elevated-monado", "--approve-build", "p1", "bundled", "bundled", "XRT_LOG=debug"]);
+
+        Assert.True(args.AllowElevatedMonado);
+        Assert.NotNull(args.ApproveBuild);
+    }
+
+    [Fact]
+    public void A_bundled_approval_is_only_of_miradors_own_monado()
+    {
+        Assert.Equal(("bundled", ""), AppArgs.ApprovalTarget("bundled", "bundled"));
+        Assert.Equal(("0123abc", @"C:\x"), AppArgs.ApprovalTarget("0123abc", @"C:\x"));
+
+        // A build folder whose build-info.json says "bundled", or a "bundled" folder with a real commit: refused.
+        var (_, commit, source, _) = AppArgs.Parse(["--approve-build", "p1", "bundled", @"C:\x"]).ApproveBuild!.Value;
+        Assert.Throws<InvalidOperationException>(() => AppArgs.ApprovalTarget(commit, source));
+        Assert.Throws<InvalidOperationException>(() => AppArgs.ApprovalTarget("0123abc", "bundled"));
+    }
 }

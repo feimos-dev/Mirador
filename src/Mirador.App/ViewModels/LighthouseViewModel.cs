@@ -5,6 +5,7 @@ using Microsoft.UI.Dispatching;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.BaseStations;
+using Mirador.Core.Lighthouse;
 
 namespace Mirador.App.ViewModels;
 
@@ -170,6 +171,110 @@ public sealed partial class LighthouseViewModel : ObservableObject
         ControllersOffAtMonadoStop = settings.ControllersOffAtStop;
         StationState = settings.BaseStationsState == StationStateMode.Live ? 0 : 1; // Constant first, When Relevant second
         loading = false;
+        ReadSteamVrButtonStart();
+    }
+
+    /// <summary>
+    /// "Stop SteamVR starting when a controller turns on": on when SteamVR's own setting says <c>false</c>, whoever wrote
+    /// it (Mirador, or the user by hand).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool SteamVrButtonStartStopped { get; set; }
+
+    /// <summary>Whether the switch can be used: Steam is installed.</summary>
+    public bool CanStopSteamVrButtonStart => host.SteamVrSettings is not null;
+
+    /// <summary>The switch's description: what it does, or why it can't.</summary>
+    public string SteamVrButtonStartDescription => host.SteamVrSettings is null
+        ? "Steam isn't installed."
+        : "SteamVR then doesn't start when a controller or tracker is switched on. Mirador changes SteamVR's own setting, and puts it back when you turn this off.";
+
+    /// <summary>Why the switch couldn't be changed, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSteamVrButtonStartProblem))]
+    public partial string? SteamVrButtonStartProblem { get; set; }
+
+    public bool HasSteamVrButtonStartProblem => SteamVrButtonStartProblem is not null;
+
+    /// <summary>The question asked before Mirador first changes SteamVR's setting.</summary>
+    public const string SteamVrButtonStartQuestion =
+        "Mirador will change a SteamVR setting so a controller button no longer starts SteamVR. A copy of SteamVR's settings is kept.";
+
+    /// <summary>Reads the switch's state from SteamVR's settings again.</summary>
+    public void ReadSteamVrButtonStart()
+    {
+        try
+        {
+            SteamVrButtonStartStopped = host.SteamVrSettings?.AutoLaunchOnButton() == false;
+        }
+        catch (SteamVrSettingsException e)
+        {
+            SteamVrButtonStartProblem = e.Message;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            SteamVrButtonStartProblem = $"Mirador couldn't read SteamVR's settings ({e.Message.Trim().TrimEnd('.')}).";
+        }
+    }
+
+    /// <summary>"Close SteamVR first." while SteamVR runs (it rewrites its settings when it exits); null when it doesn't.</summary>
+    public string? SteamVrStillRunning()
+    {
+        var running = LighthouseConflicts.Find(host.Processes.Snapshot());
+        return running.Any(name => name is "vrserver" or "vrmonitor") ? "Close SteamVR first." : null;
+    }
+
+    /// <summary>
+    /// Turns the switch on (the page asked first) or off, while SteamVR is closed. On: SteamVR's setting as it is
+    /// now is kept (once, at Mirador's first write), then <c>false</c> is written. Off: that kept setting goes back (none:
+    /// the key goes). Null when done, else what went wrong; the switch then shows SteamVR's setting as it is.
+    /// </summary>
+    public string? SetSteamVrButtonStart(bool stop)
+    {
+        string? problem = null;
+        try
+        {
+            if (host.SteamVrSettings is not { } steamVr)
+            {
+                problem = "Steam isn't installed.";
+            }
+            else if (SteamVrStillRunning() is { } running)
+            {
+                problem = running;
+            }
+            else
+            {
+                var settings = host.Settings.Load();
+                if (stop)
+                {
+                    var before = settings.KeepSteamVrFromButtonStart ? settings.SteamVrButtonStartBefore : steamVr.AutoLaunchOnButton();
+                    problem = SettingsViewModel.Write(host, s => s with { SteamVrButtonStartBefore = before });
+                    if (problem is null)
+                    {
+                        steamVr.SetAutoLaunchOnButton(false);
+                        problem = SettingsViewModel.Write(host, s => s with { KeepSteamVrFromButtonStart = true });
+                    }
+                }
+                else
+                {
+                    steamVr.SetAutoLaunchOnButton(settings.KeepSteamVrFromButtonStart ? settings.SteamVrButtonStartBefore : null);
+                    problem = SettingsViewModel.Write(host, s => s with { KeepSteamVrFromButtonStart = false, SteamVrButtonStartBefore = null });
+                }
+            }
+        }
+        catch (SteamVrSettingsException e)
+        {
+            problem = e.Message;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            problem = $"Mirador couldn't change SteamVR's settings ({e.Message.Trim().TrimEnd('.')}).";
+        }
+
+        SteamVrButtonStartProblem = problem;
+        ReadSteamVrButtonStart();
+        App.Current.Home.CheckSteamVrButtonStart();
+        return problem;
     }
 
     public ObservableCollection<StationItem> Stations { get; } = [];

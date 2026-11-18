@@ -18,6 +18,13 @@ public class PimaxElevatedTests
             Assert.Equal(value, pimax[name]);
         }
 
+        // The module adds its table and nothing else: no variable of a driver that isn't in upstream Monado.
+        var none = ElevatedEnvironment.Build(
+            new ElevatedStart(3000, 100, 6, false, ""), Folders, @"C:\Program Files\Mirador\monado\server", @"C:\SteamVR");
+        Assert.Equal(
+            DreamAirEnvironment.FixedEnvironment.Select(p => p.Key).Order(),
+            pimax.Keys.Except(none.Keys).Order());
+
         Assert.Throws<ArgumentException>(() => ElevatedEnvironment.Build(
             new ElevatedStart(3000, 100, 6, false, "dreamair"), Folders, @"C:\Program Files\Mirador\monado\server", @"C:\SteamVR"));
     }

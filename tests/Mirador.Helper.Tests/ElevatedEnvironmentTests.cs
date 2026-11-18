@@ -22,6 +22,36 @@ public class ElevatedEnvironmentTests
         ElevatedEnvironment.Build(start ?? Start(module: module), Folders, ServerDir, SteamVrPath);
 
     [Fact]
+    public void Approved_variables_come_last_and_win()
+    {
+        // Every name the helper sets itself is refused (ElevatedVariables), so they only add to it.
+        var plain = Build(module: PimaxEnvironment.ModuleId);
+        var env = ElevatedEnvironment.Build(
+            Start(module: PimaxEnvironment.ModuleId), Folders, ServerDir, SteamVrPath,
+            approvedVariables: [new("XRT_LOG", "debug"), new("PIMAX_P3C_LOG", "debug")]);
+
+        Assert.Equal("debug", env["XRT_LOG"]);
+        Assert.Equal("debug", env["PIMAX_P3C_LOG"]);
+        Assert.Equal(plain.Count + 2, env.Count);
+        Assert.Equal(["XRT_LOG", "PIMAX_P3C_LOG"], env.Keys.TakeLast(2));
+    }
+
+    [Fact]
+    public void A_duplicate_name_keeps_the_last_value()
+    {
+        var env = ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("PIMAX_P3C_LOG", "info"), new("pimax_p3c_log", "debug")]);
+
+        Assert.Equal("debug", env["PIMAX_P3C_LOG"]);
+    }
+
+    [Fact]
+    public void A_refused_name_never_reaches_the_environment()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("Path", @"C:\Users\you\bin")]));
+    }
+
+    [Fact]
     public void Headless_adds_the_null_compositor_and_the_simulated_headset_and_nothing_else()
     {
         var plain = Build();
@@ -167,7 +197,7 @@ public class ElevatedEnvironmentTests
         Assert.Throws<ArgumentException>(() => Build(Start(module: "vive")));
 
     [Fact]
-    public void The_dream_airs_elevated_table_is_exactly_its_eight_variables()
+    public void The_dream_airs_elevated_table_is_exactly_its_six_variables()
     {
         var expected = new Dictionary<string, string>
         {
@@ -177,12 +207,10 @@ public class ElevatedEnvironmentTests
             ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
             ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
             ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            ["U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS"] = "8.9",
-            ["DREAMAIR_LOG"] = "info",
         };
 
         Assert.Equal(expected, DreamAirEnvironment.FixedEnvironment.ToDictionary(p => p.Key, p => p.Value));
-        Assert.Equal(8, DreamAirEnvironment.FixedEnvironment.Count);
+        Assert.Equal(6, DreamAirEnvironment.FixedEnvironment.Count);
         Assert.Equal(
             ["MIRADOR_DIRECT_MODE", "DISABLE_RTSS_LAYER", "VK_LOADER_LAYERS_ALLOW", "XRT_COMPOSITOR_FORCE_VK_DISPLAY", "XRT_COMPOSITOR_USE_PRESENT_WAIT"],
             DirectModeEnvironment.Variables.Select(p => p.Key));

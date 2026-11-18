@@ -162,12 +162,28 @@ public class LineCodecTests
         Assert.Equal(["Build", "Clean", "Command", "Start", "Version"], typeof(HelperRequest).GetProperties().Select(p => p.Name).Order());
         Assert.Equal(typeof(string), typeof(HelperRequest).GetProperty("Version")!.PropertyType);
         Assert.Equal(typeof(string), typeof(HelperRequest).GetProperty("Build")!.PropertyType);
-        foreach (var property in typeof(ElevatedStart).GetProperties())
+        // The one list is the profile's variables, which the helper runs only when they equal its own record of what
+        // the user approved (ElevatedRequestCheck.ApprovedVariables): it can't widen what runs.
+        foreach (var property in typeof(ElevatedStart).GetProperties().Where(p => p.Name != nameof(ElevatedStart.Variables)))
         {
             Assert.True(
                 property.PropertyType == typeof(int) || property.PropertyType == typeof(bool) || property.PropertyType == typeof(string),
                 $"ElevatedStart.{property.Name} is a {property.PropertyType.Name}");
         }
+
+        Assert.Equal(typeof(IReadOnlyList<KeyValuePair<string, string>>), typeof(ElevatedStart).GetProperty(nameof(ElevatedStart.Variables))!.PropertyType);
+    }
+
+    [Fact]
+    public async Task A_starts_variables_go_over_the_wire_in_order()
+    {
+        IReadOnlyList<KeyValuePair<string, string>> variables = [new("PIMAX_P3C_LOG", "debug"), new("XRT_MODE", "a=b"), new("EMPTY", "")];
+        var request = new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, false, "", ProfileId: "p1", Variables: variables));
+
+        var read = await LineCodec.ReadAsync<HelperRequest>(Bytes(WireText(request)), CancellationToken.None);
+
+        Assert.Equal("p1", read!.Start!.ProfileId);
+        Assert.Equal(variables, read.Start.Variables);
     }
 
     [Fact]

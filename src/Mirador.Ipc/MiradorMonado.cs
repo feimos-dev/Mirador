@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -24,6 +25,16 @@ public static partial class MiradorMonado
 
     /// <summary>Whether <paramref name="version"/> is a weekly build's name, and so a safe folder name.</summary>
     public static bool IsVersion(string? version) => version is not null && VersionPattern().IsMatch(version);
+
+    /// <summary>
+    /// The build date of a weekly build, from its name (<c>monado-yyyy.MM.dd-&lt;hash&gt;</c>, the date in UTC); null for
+    /// anything else, a date that doesn't exist included.
+    /// </summary>
+    public static DateOnly? DateOf(string? version) =>
+        IsVersion(version)
+        && DateOnly.TryParseExact(version!.Substring(TagPrefix.Length, 10), "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
 
     /// <summary>The versions in <paramref name="root"/>, or none when nothing is installed or the file is unusable.</summary>
     public static MiradorMonadoVersions Read(string root)

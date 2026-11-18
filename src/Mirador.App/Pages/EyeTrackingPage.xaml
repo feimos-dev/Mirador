@@ -4,7 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:c="using:Mirador.App.Controls"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
-    xmlns:vm="using:Mirador.App.ViewModels"
     NavigationCacheMode="Required">
 
     <ScrollViewer>
@@ -24,44 +23,12 @@
                     SelectedItem="{x:Bind ViewModel.SelectedVariant, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
             </toolkit:SettingsCard>
 
-            <TextBlock Style="{StaticResource SectionHeader}" Text="Calibration backups" />
-            <toolkit:SettingsCard Description="Save the calibration to a file, or take one in from another PC." Header="Export and import">
-                <!-- Below 700 wide the controls go under the text (the toolkit's default is 476): the serial, Export and Import need about 400. -->
-                <toolkit:SettingsCard.Resources>
-                    <x:Double x:Key="SettingsCardWrapThreshold">700</x:Double>
-                </toolkit:SettingsCard.Resources>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox
-                        MinWidth="160"
-                        MaxWidth="300"
-                        ItemsSource="{x:Bind ViewModel.Serials}"
-                        PlaceholderText="No calibration yet"
-                        SelectedItem="{x:Bind ViewModel.SelectedSerial, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
-                    <Button
-                        Click="OnExport"
-                        Content="Export…"
-                        IsEnabled="{x:Bind ViewModel.CanExport, Mode=OneWay}" />
-                    <Button Click="OnImport" Content="Import…" />
-                </StackPanel>
-            </toolkit:SettingsCard>
-            <toolkit:SettingsExpander
-                Description="Mirador keeps a copy whenever the eye calibration changes. Monado uses a restored one unless the eye tracker holds its own from Pimax Play; then it keeps the tracker's and says so."
-                Header="Backups"
-                ItemsSource="{x:Bind ViewModel.Backups}">
-                <toolkit:SettingsExpander.ItemTemplate>
-                    <DataTemplate x:DataType="vm:BackupItem">
-                        <toolkit:SettingsCard Header="{x:Bind Text}">
-                            <Button Click="OnRestore" Content="Restore" />
-                        </toolkit:SettingsCard>
-                    </DataTemplate>
-                </toolkit:SettingsExpander.ItemTemplate>
-            </toolkit:SettingsExpander>
             <InfoBar
-                Closed="OnBackupMessageClosed"
+                Closed="OnMessageClosed"
                 IsClosable="True"
-                IsOpen="{x:Bind ViewModel.HasBackupMessage, Mode=OneWay}"
-                Message="{x:Bind ViewModel.BackupMessage, Mode=OneWay}"
-                Severity="{x:Bind ViewModel.BackupSeverity, Mode=OneWay}"
+                IsOpen="{x:Bind ViewModel.HasMessage, Mode=OneWay}"
+                Message="{x:Bind ViewModel.Message, Mode=OneWay}"
+                Severity="Error"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
         </StackPanel>
         </c:PageColumn>

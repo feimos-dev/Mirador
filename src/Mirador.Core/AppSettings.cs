@@ -16,6 +16,15 @@ namespace Mirador.Core;
 /// Turn the controllers and trackers Monado tracks with SteamVR's Lighthouse driver off when Monado stops: Monado puts
 /// every such device in standby as it ends cleanly (<c>LH_STANDBY_ON_EXIT</c>), as SteamVR does when it exits.
 /// </param>
+/// <param name="StartMiradorForGames">
+/// "Start Mirador when a game needs Monado": a game that finds no Monado has the stand-in start Mirador. Off, games find
+/// Monado only while Mirador is open. The stand-in reads the key <c>startMiradorForGames</c> from this file itself.
+/// </param>
+/// <param name="KeepSteamVrFromButtonStart">
+/// "Stop SteamVR starting when a controller turns on" was turned on here: Mirador wrote <c>false</c> into SteamVR's
+/// own setting, and checks at launch and at Start that SteamVR didn't change it back.
+/// </param>
+/// <param name="SteamVrButtonStartBefore">SteamVR's setting before Mirador's first write, put back when the switch is turned off; null: it wasn't there.</param>
 /// <remarks>
 /// A file from before 2026-11-07 may still have <c>baseStationsOff</c> ("Off means: Sleep / Standby"); it is ignored,
 /// since off always means sleep now, and goes at the next save.
@@ -24,13 +33,16 @@ public sealed record AppSettings(
     bool CloseToTray = true,
     bool CheckForUpdates = true,
     DateTimeOffset? LastUpdateCheck = null,
-    bool BaseStationsOnAtStart = true,
-    bool BaseStationsOffAtStop = true,
+    bool BaseStationsOnAtStart = false,
+    bool BaseStationsOffAtStop = false,
     bool BaseStationsOnAtMiradorStart = false,
     bool BaseStationsOffAtMiradorQuit = false,
     StationStateMode BaseStationsState = StationStateMode.LastScan,
     bool StartMinimized = true,
-    bool ControllersOffAtStop = false);
+    bool ControllersOffAtStop = false,
+    bool StartMiradorForGames = true,
+    bool KeepSteamVrFromButtonStart = false,
+    bool? SteamVrButtonStartBefore = null);
 
 /// <summary>How often Mirador follows the base stations' states ("Station state tracking rate" on the Lighthouse page).</summary>
 public enum StationStateMode

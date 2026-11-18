@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
@@ -22,8 +23,21 @@ public sealed class ApprovedBuildsTests : IDisposable
     private const string Other = "S-1-5-21-1-2-3-1002";
     private readonly TempDir temp = new();
     private readonly FakeApprovedBuildStore store = new();
+    private readonly string scratch = @"Software\MiradorHelperTests-" + Guid.NewGuid().ToString("N");
 
-    public void Dispose() => temp.Dispose();
+    public void Dispose()
+    {
+        temp.Dispose();
+        using var hkcu = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
+        hkcu.DeleteSubKeyTree(scratch, throwOnMissingSubKey: false);
+    }
+
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> Variables =
+    [
+        new("PIMAX_P3C_LOG", "debug"),
+        new("XRT_COMPOSITOR_DESIRED_MODE", "a=b=c"),
+        new("EMPTY_ONE", ""),
+    ];
 
     private string App => temp.File("app");
 
@@ -304,6 +318,71 @@ public sealed class ApprovedBuildsTests : IDisposable
     {
         Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.Approve(owner, "p1", Commit, MakeInstall(), App, store));
     }
+
+    [Fact]
+    public void Variables_round_trip_through_the_registry_store()
+    {
+        var registry = new RegistryApprovedBuildStore(RegistryHive.CurrentUser, scratch);
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, registry, Variables);
+
+        var read = registry.Get(Finn, "p1")!;
+
+        Assert.Equal(Variables, read.Variables);
+        Assert.Equal(build.Files, read.Files);
+
+        // A record from before variables were approved has no Variables value: it holds none.
+        using (var hkcu = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64))
+        using (var key = hkcu.OpenSubKey($@"{scratch}\{Finn}\p1", writable: true)!)
+        {
+            Assert.Equal(RegistryValueKind.MultiString, key.GetValueKind("Variables"));
+            key.DeleteValue("Variables");
+        }
+
+        Assert.Empty(registry.Get(Finn, "p1")!.Variables);
+    }
+
+    [Fact]
+    public void A_bundled_approval_has_no_folder_or_files()
+    {
+        var build = ApprovedBuilds.Approve(Finn, "p1", ApprovedBuilds.BundledCommit, "", App, store, Variables);
+
+        Assert.Equal(ApprovedBuilds.BundledCommit, build.Commit);
+        Assert.Equal("", build.Folder);
+        Assert.Empty(build.Files);
+        Assert.Equal(Variables, build.Variables);
+        Assert.Same(build, store.Get(Finn, "p1"));
+        Assert.False(Directory.Exists(ApprovedBuilds.ProfileRoot(App, Finn, "p1")));
+        Assert.NotNull(ApprovedBuilds.Verify(build, App)); // never a build to run
+    }
+
+    [Fact]
+    public void An_approval_refuses_a_name_refused_for_elevated_runs()
+    {
+        var e = Assert.Throws<InvalidOperationException>(() =>
+            ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, store, [new("VK_LAYER_PATH", @"C:\x")]));
+
+        Assert.Contains("VK_LAYER_PATH", e.Message);
+        Assert.Null(store.Get(Finn, "p1"));
+    }
+
+    [Fact]
+    public void A_bundled_commit_with_a_build_folder_is_refused()
+    {
+        var source = MakeInstall();
+
+        Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.Approve(Finn, "p1", ApprovedBuilds.BundledCommit, source, App, store));
+        Assert.Null(store.Get(Finn, "p1"));
+    }
+
+    [Theory]
+    [InlineData("0123abc", true)]
+    [InlineData("0123456789abcdef0123456789abcdef01234567", true)]
+    [InlineData("bundled", false)]
+    [InlineData("folder", false)]
+    [InlineData("0123ab", false)]
+    [InlineData("0123ABC", false)]
+    [InlineData("../x", false)]
+    public void Only_hex_is_a_git_commit(string commit, bool isCommit) => Assert.Equal(isCommit, ApprovedBuilds.IsGitCommit(commit));
 }
 
 /// <summary>The calls the OpenXR loader makes to load a runtime DLL.</summary>

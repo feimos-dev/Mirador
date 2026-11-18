@@ -9,7 +9,7 @@ public class AppPathsTests
         Assert.Equal(@"C:\data\Mirador\profiles.json", p.ProfilesFile);
         Assert.Equal(@"C:\data\Mirador\monado-settings.json", p.MonadoSettingsFile);
         Assert.Equal(@"C:\data\Mirador\logs\mirador.log", p.AppLogFile);
-        Assert.Equal(@"C:\data\Mirador\calibration-backups", p.BackupsDir);
+        Assert.Equal(@"C:\data\Mirador\backups", p.BackupsDir);
         Assert.Equal(@"C:\data\Mirador\logs\monado-20261103-141502.log",
             p.NewMonadoLogFile(new DateTime(2026, 11, 3, 14, 15, 2)));
     }

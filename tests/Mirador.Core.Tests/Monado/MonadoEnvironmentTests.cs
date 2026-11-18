@@ -13,7 +13,7 @@ public class MonadoEnvironmentTests
         ["Path"] = @"C:\WINDOWS\system32;C:\WINDOWS",
     };
 
-    private static Profile Custom() => ProfileSet.Defaults().Profiles[1];
+    private static Profile Custom() => ProfileSet.Defaults().Profiles[0];
 
     private static Profile CustomWith(params EnvVar[] extra) => Custom() with { ExtraEnvironment = extra };
 

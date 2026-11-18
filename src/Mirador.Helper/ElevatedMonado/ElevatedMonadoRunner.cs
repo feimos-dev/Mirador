@@ -132,6 +132,12 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                 return Fail(refusal);
             }
 
+            // The profile's own variables run only as the caller approved them, read from the helper's own record.
+            if (ElevatedRequestCheck.ApprovedVariables(start, sid, approved, out var variables) is { } notApproved)
+            {
+                return Fail(notApproved);
+            }
+
             // Mirador's Monado's current version, read at each Start: an update or a roll back may have changed it. Or a
             // profile's approved build, every file checked against its approval at each Start.
             string serverDir;
@@ -205,7 +211,7 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                 IReadOnlyDictionary<string, string> env;
                 try
                 {
-                    env = ElevatedEnvironment.Build(start, folders, serverDir, steamVrPath, AdministratorProtection.IsOn());
+                    env = ElevatedEnvironment.Build(start, folders, serverDir, steamVrPath, AdministratorProtection.IsOn(), variables);
                 }
                 catch (ArgumentException e)
                 {

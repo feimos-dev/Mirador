@@ -4,7 +4,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
 using Mirador.Core;
+using Mirador.Core.Build;
 using Mirador.Core.DirectMode;
+using Mirador.Core.Elevation;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
 using Mirador.Pimax;
@@ -130,9 +132,49 @@ public sealed partial class ProfilesViewModel : ObservableObject
     [ObservableProperty]
     public partial string MonadoLink { get; set; } = "";
 
-    /// <summary>The branch or ref to build; filled in from <see cref="MonadoLink"/>, and changeable.</summary>
+    /// <summary>The branch or ref to build; filled in from <see cref="MonadoLink"/>, and picked from <see cref="Branches"/>.</summary>
     [ObservableProperty]
     public partial string MonadoBranch { get; set; } = "";
+
+    /// <summary>The branches of the repository the link names, for the "Branch" drop-down; empty until listed.</summary>
+    public ObservableCollection<string> Branches { get; } = [];
+
+    /// <summary>
+    /// The drop-down's pick: copied into <see cref="MonadoBranch"/> when it is a branch. The drop-down sets it to null
+    /// while its list is emptied, which must not empty the profile's branch.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? SelectedBranch { get; set; }
+
+    partial void OnSelectedBranchChanged(string? value)
+    {
+        if (value is not null)
+        {
+            MonadoBranch = value;
+        }
+    }
+
+    /// <summary>Whether the "Branch" drop-down shows: a repository link whose repository has two branches or more.</summary>
+    [ObservableProperty]
+    public partial bool ShowBranches { get; set; }
+
+    /// <summary>Whether the branches are being listed (a ring by the link).</summary>
+    [ObservableProperty]
+    public partial bool IsListingBranches { get; set; }
+
+    /// <summary>Why the branches couldn't be listed, shown under the link; null otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBranchListProblem))]
+    public partial string? BranchListProblem { get; set; }
+
+    public bool HasBranchListProblem => BranchListProblem is not null;
+
+    private CancellationTokenSource? listing;
+    private string? listingUrl;
+    private BranchOffer? branchOffer;
+
+    /// <summary>The branches offered for the link, listed once per link.</summary>
+    private BranchOffer Offer => branchOffer ??= new BranchOffer(() => host.Tools.Git, new CommandRunner());
 
     /// <summary>
     /// The profile's "Run as administrator" (Mirador.md §4.10 item 44, §4.11 item 51): for Mirador's Monado the user's
@@ -168,9 +210,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the approval card shows: the saved profile builds a branch or uses a build folder.</summary>
+    /// <summary>
+    /// Whether the approval card shows: the saved profile builds a branch or uses a build folder, or runs the bundled
+    /// Monado with extra variables.
+    /// </summary>
     [ObservableProperty]
     public partial bool CanApprove { get; set; }
+
+    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check, and Approve is off.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApproveCommand))]
+    public partial bool IsApproved { get; set; }
 
     /// <summary>The approval's state: approved, a newer build waiting, or none.</summary>
     [ObservableProperty]
@@ -262,6 +312,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public void Detach()
     {
+        // The list stays for a return to the page (it is kept in the cache); only a listing under way stops.
+        CancelListing();
         host.Session.Changed -= OnSessionChanged;
         host.Builds.Changed -= OnBuildsChanged;
         Build.Detach();
@@ -408,7 +460,38 @@ public sealed partial class ProfilesViewModel : ObservableObject
         string? problem = null;
         // Only the installed copy asks: the helper starts Monado as administrator for it alone, so a consent recorded
         // from another copy would buy nothing (Home says why this copy runs as you).
-        if (profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false))
+        var needsConsent = profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false);
+
+        // Turning the switch on, or changing the variables while it is on, approves the profile (its build, its variables)
+        // here too, behind the same one prompt. Declining the prompt saves a switch just turned on as off; one that was
+        // on stays on, and the profile runs as you until approved. Turning the switch off later keeps the approval.
+        if (ElevatedChoice.ApprovesOnSave(editing, profile) && Approvable(profile) && !host.FullyApproved(profile)
+            && host.ApprovalTarget(profile, out _, out _) is null)
+        {
+            var refusal = await host.ApproveBuildAsync(profile, alsoAllow: needsConsent);
+            if (refusal == AppHost.ApprovalCancelled)
+            {
+                if (ElevatedChoice.KeepsSwitchWhenDeclined(editing))
+                {
+                    problem = "Saved, but not approved: Windows' administrator prompt was cancelled. The profile runs as you until you approve it.";
+                }
+                else
+                {
+                    profile = profile with { RunAsAdministrator = false };
+                    problem = "Saved to run as you: Windows' administrator prompt was cancelled.";
+                }
+            }
+            else if (refusal is not null)
+            {
+                problem = $"Saved, but not approved: {refusal}";
+            }
+        }
+        else if (profile.RunAsAdministrator && ElevatedChoice.ApprovalProblem(profile) is { } blocked)
+        {
+            // No prompt: it couldn't make this profile run as administrator.
+            problem = $"Saved, but it runs as you: {blocked}";
+        }
+        else if (needsConsent)
         {
             var code = await ElevatedMonado.AllowAsync();
             if (code == 0)
@@ -485,7 +568,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Changed();
     }
 
-    /// <summary>A pasted link fills in its branch (a merge request's ref), which the owner can still change.</summary>
+    /// <summary>
+    /// A pasted link fills in its branch (a merge request's ref). The branches of another repository than the one
+    /// listed go: the link is listed again when the box loses focus or on Enter (<see cref="ListBranchesAsync"/>).
+    /// </summary>
     partial void OnMonadoLinkChanged(string value)
     {
         if (!loading)
@@ -498,9 +584,109 @@ public sealed partial class ProfilesViewModel : ObservableObject
             {
                 // Validate says why.
             }
+
+            ClearBranches();
         }
 
         Changed();
+    }
+
+    /// <summary>
+    /// Lists the branches of the repository the link names (<c>git ls-remote --heads</c>, at most 20 s) into the "Branch"
+    /// drop-down: only for a repository's own link, not one naming a merge request, pull request, commit or branch.
+    /// The branch picked is the profile's, else <c>main</c>, else the first (<see cref="BranchOffer.Offer"/>). The same
+    /// link isn't listed again (leaving the box, Enter): the list and the branch stay as they are, with no git run. A
+    /// listing of another link cancels this one; a failure is shown under the link and the branch stays as it was.
+    /// </summary>
+    /// <param name="keepCurrent">A saved profile's branch stays picked even when the repository no longer lists it.</param>
+    public async Task ListBranchesAsync(bool keepCurrent = false)
+    {
+        if (MonadoSource != LinkSource || BranchLink.NamesItsBranch(MonadoLink) || MonadoBranch.StartsWith("refs/", StringComparison.Ordinal))
+        {
+            ClearBranches();
+            return;
+        }
+
+        string url;
+        try
+        {
+            url = BranchLink.Parse(MonadoLink).Url;
+        }
+        catch (MiradorException)
+        {
+            ClearBranches(); // Validate says why.
+            return;
+        }
+
+        if (listing is not null && url == listingUrl)
+        {
+            return; // this very link is being listed now
+        }
+
+        listing?.Cancel();
+        listing?.Dispose();
+        var cts = listing = new CancellationTokenSource();
+        listingUrl = url;
+        IsListingBranches = true;
+        BranchListProblem = null;
+        try
+        {
+            if (await Offer.ListAsync(url, cts.Token) is not { } branches || cts.IsCancellationRequested)
+            {
+                return; // listed already for this link: nothing changes
+            }
+
+            // The saved profile's own repository keeps its branch, even one it no longer lists; another link's doesn't.
+            var savedLink = editing?.Monado.Kind == SourceKind.Branch && string.Equals(editing.Monado.Url, url, StringComparison.OrdinalIgnoreCase);
+            var (items, pick) = BranchOffer.Offer(branches, MonadoBranch, keepCurrent || savedLink);
+            Branches.Clear();
+            foreach (var branch in items)
+            {
+                Branches.Add(branch);
+            }
+
+            SelectedBranch = pick;
+            MonadoBranch = pick;
+            ShowBranches = Branches.Count >= 2;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // A newer listing, or another link.
+        }
+        catch (GitRemoteException e)
+        {
+            BranchListProblem = e.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(listing, cts))
+            {
+                IsListingBranches = false;
+                listing = null;
+                listingUrl = null;
+                cts.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Stops a listing under way (the page is left): git doesn't outlive the page.</summary>
+    private void CancelListing()
+    {
+        listing?.Cancel();
+        listing = null;
+        listingUrl = null;
+        IsListingBranches = false;
+    }
+
+    private void ClearBranches()
+    {
+        CancelListing();
+        branchOffer?.Forget();
+        SelectedBranch = null;
+        Branches.Clear();
+        ShowBranches = false;
+        IsListingBranches = false;
+        BranchListProblem = null;
     }
 
     partial void OnMonadoBranchChanged(string value) => Changed();
@@ -524,27 +710,51 @@ public sealed partial class ProfilesViewModel : ObservableObject
         RefreshApproval(problem);
     }
 
-    private bool CanApproveNow() => editing is not null && !IsDirty;
+    private bool CanApproveNow() => editing is not null && !IsDirty && !IsApproved;
+
+    /// <summary>Whether <paramref name="profile"/> has something to approve: a branch's or build folder's build, or the bundled Monado's extra variables.</summary>
+    private static bool Approvable(Profile profile) =>
+        profile.Monado.Kind is SourceKind.Branch or SourceKind.Folder
+        || (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count > 0);
+
+    /// <summary>What an approved variable that names a file means, in the approval card's text.</summary>
+    private const string FileRightsNote =
+        "A variable that names a file runs that file with full rights; keep such files where only administrators can change them.";
 
     private void RefreshApproval(string? problem = null)
     {
-        CanApprove = editing?.Monado.Kind is SourceKind.Branch or SourceKind.Folder;
+        CanApprove = editing is not null && Approvable(editing);
+        IsApproved = CanApprove && host.FullyApproved(editing!);
         if (!CanApprove || editing is null)
         {
             return;
         }
 
-        var uses = editing.RunAsAdministrator ? "run as administrator and be the OpenXR runtime" : "be the OpenXR runtime";
-        var state = host.ApprovedBuildCurrent(editing)
-            ? editing.RunAsAdministrator
-                ? "Approved: this build runs as administrator and can be the OpenXR runtime."
-                : "Approved: this build can be the OpenXR runtime. Monado runs from the approved copy, as you."
-            : host.HasApproval(editing)
-                ? $"This build changed since it was approved: approve it again to let it {uses}."
-                : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it.";
-        if (Verify.ElevationNote is { } verified)
+        string state;
+        if (ElevatedChoice.ApprovalProblem(editing) is { } blocked)
         {
-            state += " " + verified;
+            state = blocked;
+        }
+        else if (editing.Monado.Kind == SourceKind.Mirador)
+        {
+            state = IsApproved
+                ? "Approved: these variables run with Monado as administrator, with full rights. " + FileRightsNote
+                : host.HasApproval(editing)
+                    ? "Not approved: the variables changed."
+                    : "Approve these variables to run them with Monado as administrator. Approved variables run with full rights. " + FileRightsNote;
+        }
+        else
+        {
+            var uses = editing.RunAsAdministrator ? "run as administrator and be the OpenXR runtime" : "be the OpenXR runtime";
+            state = IsApproved
+                ? editing.RunAsAdministrator
+                    ? "Approved: this build runs as administrator and can be the OpenXR runtime."
+                    : "Approved: this build can be the OpenXR runtime. Monado runs from the approved copy, as you."
+                : host.ApprovedBuildCurrent(editing)
+                    ? "Not approved: the variables changed."
+                    : host.HasApproval(editing)
+                        ? $"This build changed since it was approved: approve it again to let it {uses}."
+                        : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it. Its variables are approved with it and run with full rights. {FileRightsNote}";
         }
 
         ApprovalStatus = problem is null ? state : $"{problem} {state}";
@@ -637,6 +847,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
             MonadoLink = p?.Monado.Kind == SourceKind.Branch && !p.Monado.IsUpstreamMain ? p.Monado.Url ?? "" : "";
             MonadoBranch = MonadoLink.Length > 0 ? p!.Monado.Ref ?? "" : "";
             MonadoOptions = MonadoLink.Length > 0 ? string.Join(Environment.NewLine, p!.Monado.Options) : "";
+            ClearBranches();
             Extra.Clear();
             foreach (var v in p?.ExtraEnvironment ?? [])
             {
@@ -653,6 +864,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Show(p);
         Verify.Unsaved = false;
         RefreshApproval();
+        if (MonadoFromLink)
+        {
+            _ = ListBranchesAsync(keepCurrent: true);
+        }
+
         MiradorMonado.Show(MonadoSource == MiradorSource);
         Build.Show(p);
         Build.Unsaved = false;

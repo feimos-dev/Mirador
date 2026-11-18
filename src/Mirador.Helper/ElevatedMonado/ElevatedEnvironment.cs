@@ -47,9 +47,10 @@ public sealed record UserFolders(string UserProfile, string AppData, string Loca
 /// helper builds it from scratch: Windows' machine-wide variables (from the helper's own SYSTEM environment), the
 /// caller's own folders and temp, a <c>PATH</c> of System32, Windows and the server folder only, <c>STEAMVR_PATH</c>,
 /// <c>IPC_RELAXED_CONNECTION_SECURITY</c> (only when needed: <see cref="ElevatedStart.ElevationFix"/>), the
-/// range-checked settings and the module's fixed table. Nothing from the request becomes a path, and no <c>VK_*</c>
-/// (beyond the module's <c>VK_LOADER_LAYERS_ALLOW</c>) or <c>XR_*</c> variable, nor the profile's own variables, ever
-/// reaches it.
+/// range-checked settings, the module's fixed table, and last the profile's variables the user approved (checked against
+/// the helper's own record before, <see cref="ElevatedRequestCheck.ApprovedVariables"/>). Nothing from the request
+/// becomes a path, and no name <see cref="ElevatedVariables.IsRefused"/> (the search path, the user's folders, the
+/// Vulkan loader's paths and layers, <c>XR_*</c>) comes from the profile.
 /// </summary>
 public static class ElevatedEnvironment
 {
@@ -57,10 +58,17 @@ public static class ElevatedEnvironment
     private const string DefaultPathExt = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.WSF;.MSC";
 
     /// <param name="administratorProtection">Whether Windows' Administrator protection is on (<see cref="AdministratorProtection.IsOn"/>).</param>
-    /// <exception cref="ArgumentException">A setting is out of range, or the module name is unknown.</exception>
+    /// <param name="approvedVariables">The profile's approved variables, set last in their order, so they win (a name given twice keeps the last value).</param>
+    /// <exception cref="ArgumentException">A setting is out of range, the module name is unknown, or a variable's name is refused.</exception>
     public static IReadOnlyDictionary<string, string> Build(
-        ElevatedStart start, UserFolders folders, string serverDir, string steamVrPath, bool administratorProtection = false)
+        ElevatedStart start, UserFolders folders, string serverDir, string steamVrPath, bool administratorProtection = false,
+        IReadOnlyList<KeyValuePair<string, string>>? approvedVariables = null)
     {
+        if (approvedVariables is not null && ElevatedVariables.FirstRefused(approvedVariables) is { } refused)
+        {
+            throw new ArgumentException($"{refused} can't be set for Monado run as administrator.", nameof(approvedVariables));
+        }
+
         if (MonadoSettingsEnvironment.OutOfRange(start.LighthouseWaitMs, start.RenderScalePercent, start.CompositorMinTimeMs) is { } bad)
         {
             throw new ArgumentException($"The Monado setting {bad} is out of range.", nameof(start));
@@ -121,8 +129,16 @@ public static class ElevatedEnvironment
                 throw new ArgumentException("A headless Monado runs without a headset module.", nameof(start));
             }
 
-            Set(env, "XRT_COMPOSITOR_NULL", "1");
-            Set(env, "SIMULATED_ENABLE", "1");
+            foreach (var (name, value) in HeadlessEnvironment.Variables)
+            {
+                Set(env, name, value);
+            }
+        }
+
+        // The profile's own variables last, so they win, as they do when Monado runs as the user.
+        foreach (var (name, value) in approvedVariables ?? [])
+        {
+            Set(env, name, value);
         }
 
         return env;

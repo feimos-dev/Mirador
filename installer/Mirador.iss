@@ -228,7 +228,7 @@ begin
 end;
 
 { Uninstall: put the OpenXR runtime back if Mirador's is active, then take the helper out. Profiles, logs and
-  calibration backups in %LOCALAPPDATA%\Mirador stay. }
+  backups in %LOCALAPPDATA%\Mirador stay. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Active, Recorded: String;

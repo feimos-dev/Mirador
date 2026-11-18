@@ -77,8 +77,6 @@ public sealed class PimaxModuleTests : IDisposable
 
     private ModuleContext Context => new(paths, helper, processes, usb, time);
 
-    private CalibrationStore? calibration;
-
     private PimaxModule Module() => new(new PimaxDeps(
         Registry,
         consoles.Start,
@@ -88,7 +86,6 @@ public sealed class PimaxModuleTests : IDisposable
         () => { duringChecks?.Invoke(); return nvidia; },
         () => Path.Combine(dir.Path, "SteamVR"),
         _ => EyeBlobVariants.Tested,
-        calibration,
         () =>
         {
             usbQueries++;
@@ -120,12 +117,7 @@ public sealed class PimaxModuleTests : IDisposable
         // The layer's variables are the session's (the module uses NVIDIA direct mode); the helper's table has both.
         Assert.True(Module().UsesNvidiaDirectMode);
         Assert.Equal(
-            new EnvVar[]
-            {
-                new("STEAMVR_LH_ENABLE", "1"),
-                new("U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS", "8.9"),
-                new("DREAMAIR_LOG", "info"),
-            },
+            new EnvVar[] { new("STEAMVR_LH_ENABLE", "1") },
             session.Environment);
         Assert.Equal(new Dictionary<string, string> { ["pimaxWasRunning"] = "true" }, session.RecoveryData);
         Assert.Equal(
@@ -196,8 +188,6 @@ public sealed class PimaxModuleTests : IDisposable
             ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
             ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
             ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            ["U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS"] = "8.9",
-            ["DREAMAIR_LOG"] = "info",
         };
         foreach (var (name, value) in expected)
         {
@@ -627,24 +617,6 @@ public sealed class PimaxModuleTests : IDisposable
     }
 
     [Fact]
-    public async Task Calibrations_are_kept_before_a_start_and_after_the_session()
-    {
-        var monadoDir = Path.Combine(dir.Path, "monado", "dreamair");
-        Directory.CreateDirectory(monadoDir);
-        File.WriteAllText(Path.Combine(monadoDir, "eye_calibration_XR5DA-1.bin"), "mine");
-        calibration = new CalibrationStore(monadoDir, Path.Combine(dir.Path, "backups"), TimeProvider.System);
-
-        var session = (DreamAirSession)await BeforeStart();
-        Assert.Single(calibration.Backups("XR5DA-1"));
-
-        File.WriteAllText(Path.Combine(monadoDir, "eye_calibration_XR5DA-1.bin"), "the tracker's"); // Monado replaced it
-        await session.EndAsync(CancellationToken.None);
-        session.Dispose();
-
-        Assert.Equal(2, calibration.Backups("XR5DA-1").Count);
-    }
-
-    [Fact]
     public async Task Checks_read_the_variant_pimax_runs_with_and_remember_it()
     {
         processes.Add(PimaxNames.EyeRuntimeProcess);
@@ -858,10 +830,10 @@ public sealed class PimaxModuleTests : IDisposable
 
         session.OnServiceLine("\tNo builder can be used to create a head device");
 
-        var board = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.BoardKey);
-        Assert.Equal(StatusLevel.Error, board.Level);
-        Assert.DoesNotContain("no driver", board.Text);
-        Assert.Contains("found no headset", board.Text);
+        var headset = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.HeadsetKey);
+        Assert.Equal(StatusLevel.Error, headset.Level);
+        Assert.DoesNotContain("no driver", headset.Text);
+        Assert.Contains("found no headset", headset.Text);
     }
 
     [Fact]
@@ -872,8 +844,15 @@ public sealed class PimaxModuleTests : IDisposable
 
         session.OnServiceLine("\tNo builder can be used to create a head device");
 
-        var board = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.BoardKey);
-        Assert.Equal(StatusLevel.Error, board.Level);
-        Assert.Contains("no driver for the Pimax Crystal Light", board.Text);
+        var headset = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.HeadsetKey);
+        Assert.Equal(StatusLevel.Error, headset.Level);
+        Assert.Contains("no driver for the Pimax Crystal Light", headset.Text);
+    }
+
+    [Fact]
+    public void Module_variables_are_only_the_lighthouse_switch()
+    {
+        Assert.Equal([new KeyValuePair<string, string>("STEAMVR_LH_ENABLE", "1")], DreamAirEnvironment.ModuleVariables);
+        Assert.Equal([new EnvVar("STEAMVR_LH_ENABLE", "1")], PimaxModule.EnvironmentFor(PimaxModels.DreamAir));
     }
 }

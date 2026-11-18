@@ -5,40 +5,29 @@ using Mirador.Core.Modules;
 namespace Mirador.Pimax;
 
 /// <summary>
-/// Turns Monado's output into the Dream Air's status lines on Home: the display (from the layer's lines), the headset
-/// board and the eye tracker (from Monado's Dream Air and Tobii drivers). Lines are matched by their message, whatever
-/// prefix the log puts in front. Fed one line at a time; <see cref="Lines"/> may be read from any thread.
+/// Turns Monado's output into a Pimax headset's status lines on Home: the display, from the lines of Mirador's layer;
+/// the eye tracker, from the geometry upload before the run; and the headset, when Monado's prober found no driver
+/// for it. Lines are matched by their message, whatever prefix the log puts in front. Fed one line at a time;
+/// <see cref="Lines"/> may be read from any thread.
 /// </summary>
 public sealed partial class DreamAirLogParser
 {
     public const string DisplayKey = "display";
-    public const string BoardKey = "board";
     public const string EyeKey = "eye";
-
-    private const string LostHeadset = "Lost the headset, the panels stay dark until Monado restarts.";
-
-    private const string Replaced = "Pimax Play's calibration replaced the one Mirador kept (a backup is in Eye tracking).";
+    public const string HeadsetKey = "headset";
 
     private readonly object gate = new();
-    private readonly bool geometryMissing;
     private readonly string headset;
     private readonly bool headsetThere;
+    private readonly StatusLine? eye;
 
     private string? mode;
     private long presents;
     private long missed;
     private bool sawStats;
+    private StatusLine? noDriver;
 
-    private StatusLine board = new(BoardKey, "Headset board", StatusLevel.Info, "Not opened yet");
-    private StatusLine eye;
-    private string? eyeState;
-    private bool correction;
-
-    /// <summary>Why a gaze correction file was found but not used; null when there was none or it was used.</summary>
-    private string? unusedCorrection;
-    private bool replaced;
-
-    /// <param name="upload">How the geometry upload before this run went; null when there was none.</param>
+    /// <param name="upload">How the geometry upload before this run went; null when there was none (then there is no eye line).</param>
     /// <param name="headset">The model's name, for the line that says Monado has no driver for it.</param>
     /// <param name="headsetThere">Whether the headset's board (and Lighthouse receiver) were plugged in at the Start: only
     /// then is a missing head Monado's driver's fault.</param>
@@ -46,23 +35,33 @@ public sealed partial class DreamAirLogParser
     {
         this.headset = headset;
         this.headsetThere = headsetThere;
-        geometryMissing = upload is { Ok: false };
         eye = upload switch
         {
-            null => new StatusLine(EyeKey, "Eye tracker", StatusLevel.Info, "Not connected yet"),
+            null => null,
             { Ok: true } => new StatusLine(EyeKey, "Eye tracker", StatusLevel.Ok, GeometryUploader.Uploaded),
             _ => new StatusLine(EyeKey, "Eye tracker", StatusLevel.Warning, upload.Message),
         };
     }
 
-    /// <summary>The display, board and eye tracker lines, in that order.</summary>
+    /// <summary>The display line, then the eye tracker's when a geometry upload ran, then the headset's once Monado found no driver for it.</summary>
     public IReadOnlyList<StatusLine> Lines
     {
         get
         {
             lock (gate)
             {
-                return [Display(), board, eye];
+                List<StatusLine> lines = [Display()];
+                if (eye is not null)
+                {
+                    lines.Add(eye);
+                }
+
+                if (noDriver is not null)
+                {
+                    lines.Add(noDriver);
+                }
+
+                return lines;
             }
         }
     }
@@ -72,9 +71,9 @@ public sealed partial class DreamAirLogParser
     {
         lock (gate)
         {
-            var before = (Display(), board, eye);
+            var before = (Display(), noDriver);
             Read(line);
-            return before != (Display(), board, eye);
+            return before != (Display(), noDriver);
         }
     }
 
@@ -95,100 +94,17 @@ public sealed partial class DreamAirLogParser
             return;
         }
 
-        // Monado's prober, when none of its drivers takes the headset (upstream has none for the Pimax headsets yet).
+        // Monado's prober, when none of its drivers takes the headset.
         if (line.Contains("No builder can be used to create a head device", StringComparison.Ordinal))
         {
-            board = board with
-            {
-                Level = StatusLevel.Error,
-                Text = headsetThere
+            noDriver = new StatusLine(
+                HeadsetKey,
+                "Headset",
+                StatusLevel.Error,
+                headsetThere
                     ? $"This Monado has no driver for the {headset}: none of its drivers took the headset. Use a profile whose Monado has a driver for it."
-                    : "Monado found no headset: plug the headset in and switch it on, then start Monado again.",
-            };
-            return;
+                    : "Monado found no headset: plug the headset in and switch it on, then start Monado again.");
         }
-
-        if (line.Contains("Pimax Dream Air opened.", StringComparison.Ordinal))
-        {
-            board = board with { Level = StatusLevel.Ok, Text = "Connected" };
-        }
-        else if (line.Contains(LostHeadset, StringComparison.Ordinal))
-        {
-            board = board with { Level = StatusLevel.Error, Text = LostHeadset };
-        }
-        else if (line.Contains("Eye tracker connected.", StringComparison.Ordinal))
-        {
-            // The driver applies the calibration before it says it's connected: that state stays.
-            if (eyeState is null)
-            {
-                SetEye("Connected", StatusLevel.Info);
-            }
-        }
-        else if (line.Contains("Eye calibration applied (from the tracker).", StringComparison.Ordinal))
-        {
-            SetEye("Calibration applied (from the tracker)", StatusLevel.Ok);
-        }
-        else if (line.Contains("Eye calibration applied (from file).", StringComparison.Ordinal))
-        {
-            SetEye("Calibration applied (from file)", StatusLevel.Ok);
-        }
-        else if (line.Contains("Gaze correction loaded from ", StringComparison.Ordinal))
-        {
-            correction = true;
-            unusedCorrection = null;
-            if (eyeState is not null)
-            {
-                SetEye(eyeState, eye.Level);
-            }
-        }
-        else if (line.Contains("is for another calibration, not used.", StringComparison.Ordinal))
-        {
-            NoteUnusedCorrection("gaze correction not used: it was made for another calibration");
-        }
-        else if (line.Contains("has no combined table, not used.", StringComparison.Ordinal))
-        {
-            NoteUnusedCorrection("gaze correction not used: its file is incomplete");
-        }
-        else if (line.Contains("Replaced the saved calibration in ", StringComparison.Ordinal))
-        {
-            replaced = true;
-            eye = eye with { Level = StatusLevel.Warning, Text = Replaced };
-        }
-        else if (line.Contains("Lost the eye tracker (", StringComparison.Ordinal) && line.Contains("reconnecting", StringComparison.Ordinal))
-        {
-            eyeState = null;
-            eye = eye with { Level = StatusLevel.Warning, Text = "Lost the eye tracker; reconnecting" };
-        }
-    }
-
-    private void NoteUnusedCorrection(string why)
-    {
-        correction = false;
-        unusedCorrection = why;
-        if (eyeState is not null)
-        {
-            SetEye(eyeState, eye.Level);
-        }
-    }
-
-    /// <summary>
-    /// The eye line for <paramref name="state"/>, with the gaze correction when one was loaded; a geometry that wasn't
-    /// uploaded stays on the line, since gaze is off without it.
-    /// </summary>
-    private void SetEye(string state, StatusLevel level)
-    {
-        eyeState = state;
-        if (replaced)
-        {
-            // Whatever the driver says after it (or before it, in another order), the owner must see this one.
-            eye = eye with { Level = StatusLevel.Warning, Text = Replaced };
-            return;
-        }
-
-        var text = correction ? state + ", gaze correction on" : unusedCorrection is null ? state : $"{state}; {unusedCorrection}";
-        eye = geometryMissing
-            ? eye with { Level = StatusLevel.Warning, Text = text + "; geometry not uploaded, gaze about 10° off" }
-            : eye with { Level = level, Text = text };
     }
 
     private StatusLine Display()

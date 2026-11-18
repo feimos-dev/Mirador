@@ -34,34 +34,54 @@ public static partial class Program
         var parsed = AppArgs.Parse(args);
 
         // The elevated step of "Run Monado as administrator": records this user's consent, and SteamVR's Lighthouse DLLs
-        // that Valve didn't sign as they are now. No window, no app.
+        // that Valve didn't sign as they are now. No window, no app. With an approval in the same run (turning on "Run as
+        // administrator" for a profile that needs one), both happen behind the one prompt.
         if (parsed.AllowElevatedMonado)
         {
             AppLog.Open(AppPaths.Default);
-            return AllowElevatedCommand.Run(
+            var allowed = AllowElevatedCommand.Run(
                 new ElevatedConsent(new RegistryConsentValues()),
                 AllowElevatedCommand.CurrentUser(),
                 AllowElevatedCommand.UnsignedLighthouseFiles,
                 AppLog.Write);
+            if (allowed != 0 || parsed.ApproveBuild is null)
+            {
+                return allowed;
+            }
         }
 
-        // The elevated step of "Run as administrator" for a branch or build folder (Mirador.md §4.11 item 51): copies the
-        // build into the install folder, which only administrators can change, and records each file's hash. No window.
+        // The elevated step of approving a profile: for a branch or build folder it copies the
+        // build into the install folder, which only administrators can change, and records each file's hash; for the
+        // bundled Monado nothing is copied. Either way the profile's variables are recorded with it. No window.
         if (parsed.ApproveBuild is { } approve)
         {
             AppLog.Open(AppPaths.Default);
             try
             {
                 var owner = AllowElevatedCommand.CurrentUser()?.Value ?? throw new InvalidOperationException("Windows didn't say who you are.");
-                var build = Mirador.Ipc.ApprovedBuilds.Approve(owner, approve.ProfileId, approve.Commit, approve.Source, AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore());
-
-                // When the machine's runtime was this profile's earlier approved copy, it is the new one now: the old
-                // copy goes.
+                var (commit, source) = AppArgs.ApprovalTarget(approve.Commit, approve.Source);
+                var bundled = commit == Mirador.Ipc.ApprovedBuilds.BundledCommit;
                 var profileRoot = Mirador.Ipc.ApprovedBuilds.ProfileRoot(AppContext.BaseDirectory, owner, approve.ProfileId) + Path.DirectorySeparatorChar;
-                if (new RegistryRuntimeReader().ActiveRuntime() is { } active
-                    && Path.GetFullPath(active).StartsWith(profileRoot, StringComparison.OrdinalIgnoreCase))
+                var active = new RegistryRuntimeReader().ActiveRuntime();
+                var runtimeWasThisProfiles = active is not null && Path.GetFullPath(active).StartsWith(profileRoot, StringComparison.OrdinalIgnoreCase);
+                var build = Mirador.Ipc.ApprovedBuilds.Approve(
+                    owner, approve.ProfileId, commit, source,
+                    AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approve.Variables);
+
+                // When the machine's runtime was this profile's earlier approved copy, it is the new copy now. An approval
+                // of the bundled Monado has no copy, and the earlier one goes: Mirador's Monado takes over, when it is there.
+                if (runtimeWasThisProfiles)
                 {
-                    ActiveRuntimeWriter.Write(build.Manifest);
+                    if (!bundled && Path.IsPathRooted(build.Folder))
+                    {
+                        ActiveRuntimeWriter.Write(build.Manifest);
+                    }
+                    else if (Mirador.Ipc.MiradorMonado.Read(Path.Combine(AppContext.BaseDirectory, "monado")).Current is { } version
+                        && Mirador.Ipc.MiradorMonado.ManifestOf(Path.Combine(AppContext.BaseDirectory, "monado"), version) is var miradors
+                        && File.Exists(miradors))
+                    {
+                        ActiveRuntimeWriter.Write(miradors);
+                    }
                 }
 
                 return 0;

@@ -59,6 +59,21 @@ public static partial class BranchLink
         return problem is null ? (url, gitRef) : throw new MiradorException(problem);
     }
 
+    /// <summary>
+    /// Whether <paramref name="link"/> names what to build itself: a merge request, a pull request, a commit or a branch
+    /// page. A repository's own link doesn't, so the Profiles page offers its branches; so does anything that isn't a link.
+    /// </summary>
+    public static bool NamesItsBranch(string? link)
+    {
+        if (!Uri.TryCreate((link ?? "").Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+
+        var path = uri.AbsolutePath.Trim('/');
+        return MergeRequest().IsMatch(path) || PullRequest().IsMatch(path) || Commit().IsMatch(path) || Tree().IsMatch(path);
+    }
+
     /// <summary>Null when <paramref name="url"/> is an HTTPS repository URL Mirador may clone; else why not.</summary>
     public static string? UrlProblem(string? url)
     {
@@ -131,6 +146,9 @@ public static partial class BranchLink
 
     [GeneratedRegex(@"^(.+?)(?:/-)?/tree/(.+)$")]
     private static partial Regex Tree();
+
+    [GeneratedRegex(@"^(.+?)(?:/-)?/commit/[0-9A-Fa-f]{7,40}(?:/.*)?$")]
+    private static partial Regex Commit();
 
     [GeneratedRegex(@"^[A-Za-z0-9._/+-]+$")]
     private static partial Regex RefCharacters();

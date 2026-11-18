@@ -10,8 +10,8 @@ public class ProfileStoreTests
     {
         using var dir = new TempDir();
         var store = new ProfileStore(dir.File("profiles.json"));
-        var set = ProfileSet.Defaults()
-            .Replace(ProfileSet.Defaults().Profiles[0] with
+        var set = TestProfiles.Two()
+            .Replace(TestProfiles.Two().Profiles[0] with
             {
                 Monado = new BuildSource(SourceKind.Folder, @"D:\Monado Build\bin"),
                 ExtraEnvironment = [new EnvVar("XRT_DEBUG_GUI", "1"), new EnvVar("XRT_LOG", "debug")],
@@ -143,7 +143,7 @@ public class ProfileStoreTests
     {
         using var dir = new TempDir();
         var path = dir.File("profiles.json");
-        new ProfileStore(path).Save(ProfileSet.Defaults());
+        new ProfileStore(path).Save(TestProfiles.Two());
 
         new ProfileStore(path).Load();
 
@@ -176,8 +176,8 @@ public class ProfileStoreTests
         var path = Path.Combine(dir.Path, "not", "yet", "profiles.json");
         var store = new ProfileStore(path);
 
-        store.Save(ProfileSet.Defaults());
-        store.Save(ProfileSet.Defaults().Select("custom"));
+        store.Save(TestProfiles.Two());
+        store.Save(TestProfiles.Two().Select("custom"));
 
         Assert.Equal("custom", store.Load().SelectedId);
         Assert.False(File.Exists(path + ".tmp"));
@@ -189,7 +189,7 @@ public class ProfileStoreTests
         using var dir = new TempDir();
         var path = dir.File("profiles.json");
 
-        new ProfileStore(path).Save(ProfileSet.Defaults());
+        new ProfileStore(path).Save(TestProfiles.Two());
 
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         Assert.Equal(["profiles", "selectedId"], doc.RootElement.EnumerateObject().Select(p => p.Name));
@@ -200,7 +200,7 @@ public class ProfileStoreTests
     {
         using var dir = new TempDir();
         var path = dir.File("profiles.json");
-        var defaults = ProfileSet.Defaults();
+        var defaults = TestProfiles.Two();
         var set = defaults with { Profiles = [defaults.Profiles[0] with { Name = "Zoë's builds" }, .. defaults.Profiles.Skip(1)] };
 
         new ProfileStore(path).Save(set);
@@ -226,7 +226,7 @@ public class ProfileStoreTests
     {
         using var dir = new TempDir();
         var path = dir.File("profiles.json");
-        var defaults = ProfileSet.Defaults();
+        var defaults = TestProfiles.Two();
         var set = defaults with { Profiles = [defaults.Profiles[0] with { Lighthouse = false }, defaults.Profiles[1] with { Lighthouse = true }] };
 
         new ProfileStore(path).Save(set);

@@ -40,15 +40,12 @@ public static class DirectModeEnvironment
 public static class DreamAirEnvironment
 {
     /// <summary>
-    /// The Dream Air's own variables: SteamVR's Lighthouse driver, the compositor's pacing for its panels, and the Dream
-    /// Air drivers' log at info, whose lines the board and eye tracker status come from (their default, warn, leaves those
-    /// out). The session adds <see cref="DirectModeEnvironment"/> for it (the module uses direct mode).
+    /// The Dream Air's own variables: only the switch for SteamVR's Lighthouse driver, an upstream Monado variable. The
+    /// session adds <see cref="DirectModeEnvironment"/> for it (the module uses direct mode).
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, string>> ModuleVariables { get; } =
     [
         new("STEAMVR_LH_ENABLE", "1"),
-        new("U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS", "8.9"),
-        new("DREAMAIR_LOG", "info"),
     ];
 
     /// <summary>Everything a Dream Air Monado gets, as the helper writes it: the module's variables and the layer's.</summary>

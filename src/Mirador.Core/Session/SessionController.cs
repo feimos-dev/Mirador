@@ -3,6 +3,7 @@ using System.Globalization;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Profiles;
 using Mirador.Ipc;
 
@@ -63,6 +64,12 @@ public sealed class SessionController(SessionDeps deps)
     /// <summary>How long a module's <see cref="ModuleSession.EndAsync"/> may take before Mirador stops waiting for it.</summary>
     private static readonly TimeSpan EndLimit = TimeSpan.FromSeconds(60);
 
+    /// <summary>How long a Start, and then a Stop, waits for libmonado to connect.</summary>
+    private static readonly TimeSpan LibmonadoLimit = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long a Stop waits for libmonado's connection to close before it ends Monado anyway.</summary>
+    private static readonly TimeSpan LibmonadoCloseLimit = TimeSpan.FromSeconds(5);
+
     private static readonly IReadOnlyDictionary<string, string> Nothing = new Dictionary<string, string>();
 
     private readonly SessionDeps deps = deps;
@@ -83,8 +90,19 @@ public sealed class SessionController(SessionDeps deps)
     /// <summary>For tests: <paramref name="isStandIn"/> stands in for <see cref="StandIn.IsStandIn"/>.</summary>
     internal SessionController(SessionDeps deps, Func<string, bool> isStandIn) : this(deps) => this.isStandIn = isStandIn;
 
-    /// <summary>Raised when <see cref="State"/>, <see cref="CurrentInstall"/>, <see cref="RuntimeNotice"/> or <see cref="LastMiradorEnvironment"/> may be different.</summary>
+    /// <summary>
+    /// Raised when <see cref="State"/>, <see cref="CurrentInstall"/>, <see cref="RuntimeNotice"/>,
+    /// <see cref="LastMiradorEnvironment"/>, <see cref="Monado"/> or <see cref="MonadoClientProblem"/> may be different.
+    /// </summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Raised once a run's libmonado connection is open, with it (<see cref="Monado"/>). It comes on a pool thread, and may
+    /// come while <see cref="State"/> is still <see cref="SessionState.Starting"/> (the connection opens once Monado's pipe
+    /// is there, before the Start ends), or later, when libmonado was slow to answer. A subscriber hands UI work to its UI
+    /// thread, as for the other events.
+    /// </summary>
+    public event Action<IMonadoClient>? MonadoConnected;
 
     /// <summary>Raised when <see cref="Status"/> may be different.</summary>
     public event Action? StatusChanged;
@@ -200,6 +218,35 @@ public sealed class SessionController(SessionDeps deps)
             lock (gate)
             {
                 return current is { Profile: { } profile } run ? new SessionProfile(profile, run.Module) : null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The libmonado connection of the running session, opened once Monado is up and closed before it is stopped; null
+    /// before that, after it, or without libmonado (<see cref="MonadoClientProblem"/> then says why). Safe to read from
+    /// any thread: once the session has closed it, its reads are empty. Only the session closes it; disposing it does
+    /// nothing.
+    /// </summary>
+    public IMonadoClient? Monado
+    {
+        get
+        {
+            lock (gate)
+            {
+                return current?.Libmonado;
+            }
+        }
+    }
+
+    /// <summary>Why the running session has no <see cref="Monado"/> connection, such as <see cref="Libmonado.NotOffered"/>; null otherwise.</summary>
+    public string? MonadoClientProblem
+    {
+        get
+        {
+            lock (gate)
+            {
+                return current?.LibmonadoProblem;
             }
         }
     }
@@ -762,12 +809,146 @@ public sealed class SessionController(SessionDeps deps)
         // An approved build runs from its approved copy, the same files as the runtime games load from it, whether the
         // helper runs it as administrator or it runs as the user.
         var serviceExe = install.Approved is { } approved ? Path.Combine(approved.ServerDir, "monado-service.exe") : install.ServiceExe;
+        BackUpMonadoFolder();
         var launcher = ChooseLauncher(install, profile, module, run.Settings);
         var process = launcher.Start(new ProcessSpec(serviceExe, "", Path.GetDirectoryName(serviceExe)!, environment));
         run.Process = process;
         Listen(run, process);
 
-        return await WaitForPipeAsync(run, process, deps.Pipe.NameFor(environment), logPath, ct).ConfigureAwait(false);
+        var outcome = await WaitForPipeAsync(run, process, deps.Pipe.NameFor(environment), logPath, ct).ConfigureAwait(false);
+        if (outcome.Ok && !process.Exited.IsCompleted)
+        {
+            await OpenLibmonadoAsync(run, install).ConfigureAwait(false);
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// Opens libmonado from the build Monado runs from, on a background thread, once its pipe is there. Never again in
+    /// the run: when Monado's pipe is missing, libmonado starts Monado itself. Waits at most
+    /// <see cref="LibmonadoLimit"/>; an open that ends later is still kept while the run goes on.
+    /// </summary>
+    private async Task OpenLibmonadoAsync(Run run, MonadoInstall install)
+    {
+        var binDir = install.Approved is { } approved ? approved.ServerDir : Path.GetDirectoryName(install.RuntimeDll)!;
+        var settled = Task.Run(() => deps.OpenLibmonado(binDir))
+            .ContinueWith(KeepLibmonado(run), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        lock (gate)
+        {
+            run.LibmonadoSettled = settled;
+        }
+
+        try
+        {
+            await settled.WaitAsync(LibmonadoLimit, deps.Context.Time).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            lock (gate)
+            {
+                if (run.Libmonado is null && run.LibmonadoProblem is null && !run.LibmonadoClosed)
+                {
+                    run.LibmonadoProblem = $"Monado didn't answer libmonado within {Number((int)LibmonadoLimit.TotalSeconds)} s.";
+                }
+            }
+
+            RaiseChanged();
+        }
+    }
+
+    /// <summary>
+    /// Makes a finished open the run's <see cref="Monado"/> (or its <see cref="MonadoClientProblem"/>), and raises
+    /// <see cref="MonadoConnected"/>; a connection that arrives after the run closed libmonado is closed at once.
+    /// </summary>
+    private Action<Task<LibmonadoOpen>> KeepLibmonado(Run run) => opening =>
+    {
+        var opened = opening.IsCompletedSuccessfully
+            ? opening.Result
+            : new LibmonadoOpen(null, $"Mirador couldn't open libmonado ({Trimmed(opening.Exception?.GetBaseException().Message ?? "")}).");
+        var client = opened.Client is { } connection ? new SharedMonadoClient(connection) : null;
+        bool kept;
+        lock (gate)
+        {
+            kept = !run.LibmonadoClosed;
+            if (kept)
+            {
+                run.Libmonado = client;
+                run.LibmonadoProblem = client is null ? opened.Problem ?? Libmonado.NotOffered : null;
+            }
+        }
+
+        if (!kept)
+        {
+            client?.Close();
+            return;
+        }
+
+        RaiseChanged();
+        if (client is not null)
+        {
+            Raise<IMonadoClient>(MonadoConnected, client);
+        }
+    };
+
+    /// <summary>
+    /// Takes the run's libmonado connection from readers, then closes it on a background thread; nothing opens one for
+    /// the run afterwards. Called before Monado is stopped, and as soon as it is seen to have ended. The task completes
+    /// once the connection is closed, which waits for a call under way: one stuck in Monado returns only once Monado
+    /// has ended. Called again (Monado ended by itself, then the run's end), it gives the same close.
+    /// </summary>
+    private Task CloseLibmonado(Run run)
+    {
+        SharedMonadoClient? client;
+        Task closing;
+        lock (gate)
+        {
+            run.LibmonadoClosed = true;
+            client = run.Libmonado;
+            run.Libmonado = null;
+            run.LibmonadoProblem = null;
+            if (client is not null)
+            {
+                client.EndCalls();
+                run.LibmonadoClosing = Task.Run(client.Close);
+            }
+
+            closing = run.LibmonadoClosing ?? Task.CompletedTask;
+        }
+
+        if (client is not null)
+        {
+            RaiseChanged();
+        }
+
+        return closing;
+    }
+
+    /// <summary>
+    /// Copies Monado's folder before Monado runs, when it changed since the last copy. It never stops the Start: a copy
+    /// that can't be taken (a file held, the folder too big) is a warning.
+    /// </summary>
+    private void BackUpMonadoFolder()
+    {
+        if (deps.FolderBackups is not { } backups)
+        {
+            return;
+        }
+
+        string? problem;
+        try
+        {
+            backups.SnapshotIfChanged(out problem);
+        }
+        catch (Exception e)
+        {
+            problem = $"Mirador couldn't back up Monado's folder ({Trimmed(e.Message)}).";
+        }
+
+        if (problem is not null)
+        {
+            RaiseWarning(new SessionWarning("backup", problem));
+        }
     }
 
     /// <summary>Looks for Monado's pipe every 100 ms until it is there, the service ends, or <see cref="StartTimeout"/> has passed.</summary>
@@ -833,6 +1014,8 @@ public sealed class SessionController(SessionDeps deps)
             message = "Monado stopped by itself.";
         }
 
+        _ = CloseLibmonado(run); // Monado has ended, so a call under way returns and the close completes
+
         lock (gate)
         {
             if (current == run && state == SessionState.Running) // else a Stop got there first
@@ -870,12 +1053,42 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>
-    /// Ends what a run set up, in order: Monado's service (with <paramref name="clean"/>, asked to end by itself, so that
-    /// it tears its devices down; else, or when it doesn't, killed; then its exit awaited), its log, the module's session,
-    /// <c>session.json</c>. Never throws: a failure becomes a <see cref="Warning"/>.
+    /// Ends what a run set up, in order: its libmonado connection, Monado's service (with <paramref name="clean"/>, asked
+    /// to end by itself, so that it tears its devices down; else, or when it doesn't, killed; then its exit awaited), its
+    /// log, the module's session, <c>session.json</c>. Never throws: a failure becomes a <see cref="Warning"/>.
     /// </summary>
     private async Task EndRunAsync(Run run, bool clean)
     {
+        var closing = CloseLibmonado(run);
+        try
+        {
+            await closing.WaitAsync(LibmonadoCloseLimit, deps.Context.Time).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // A call stuck in libmonado holds the close: ending Monado below frees it, and the close completes then.
+        }
+
+        Task? settled;
+        lock (gate)
+        {
+            settled = run.LibmonadoSettled;
+        }
+
+        if (settled is { IsCompleted: false })
+        {
+            // Monado isn't ended while libmonado still connects to it: a connect after the pipe has gone would start
+            // Monado again. The open, once done, sees the run closed and closes its connection itself.
+            try
+            {
+                await settled.WaitAsync(LibmonadoLimit, deps.Context.Time).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Late: Monado is ended anyway.
+            }
+        }
+
         if (run.Process is { } process)
         {
             try
@@ -1148,7 +1361,8 @@ public sealed class SessionController(SessionDeps deps)
             && profile.RunAsAdministrator
             && deps.ElevatedConsented?.Invoke() == true
             && (install.IsBundled || approvedBuild)
-            && Elevation.ElevatedChoice.RunsAsYouReason(profile, module, deps.ElevatedInstalledCopy?.Invoke() == true, approvedBuild) is null;
+            && Elevation.ElevatedChoice.RunsAsYouReason(
+                profile, module, deps.ElevatedInstalledCopy?.Invoke() == true, approvedBuild, deps.VariablesApproved?.Invoke(profile) == true) is null;
 
         if (!eligible)
         {
@@ -1163,7 +1377,9 @@ public sealed class SessionController(SessionDeps deps)
             module?.ElevatedModuleId ?? "",
             approvedBuild ? profile.Id : "",
             ElevationFix: deps.ElevationFixVerified?.Invoke(profile, install) == true,
-            StandbyOnExit: deps.ControllersOffAtStop?.Invoke() == true);
+            StandbyOnExit: deps.ControllersOffAtStop?.Invoke() == true,
+            ProfileId: profile.Id,
+            Variables: profile.ExtraEnvironment.Count > 0 ? Elevation.ElevatedChoice.Variables(profile) : null);
         return deps.ElevatedLauncher!(start);
     }
 
@@ -1266,6 +1482,129 @@ public sealed class SessionController(SessionDeps deps)
         }
     }
 
+    /// <summary>
+    /// A run's libmonado connection as readers get it. Calls wait for each other; once <see cref="Close"/> has begun,
+    /// or when Monado doesn't answer, the reads are empty instead of throwing, without waiting for a call under way.
+    /// Only the session closes it: <see cref="Dispose"/> does nothing, since with "exit on disconnect" a closed
+    /// connection stops Monado.
+    /// </summary>
+    private sealed class SharedMonadoClient(IMonadoClient inner) : IMonadoClient
+    {
+        private readonly object gate = new();
+
+        /// <summary>Set as <see cref="Close"/> begins, outside the lock, so that no new call waits behind a stuck one.</summary>
+        private volatile bool closed;
+
+        private bool disposed;
+
+        public bool OffersOriginOffsets => inner.OffersOriginOffsets;
+
+        public IReadOnlyList<MonadoDevice> Devices()
+        {
+            if (closed)
+            {
+                return [];
+            }
+
+            lock (gate)
+            {
+                try
+                {
+                    return closed ? [] : inner.Devices();
+                }
+                catch (Exception e) when (e is ObjectDisposedException || (e is MiradorException && closed))
+                {
+                    return [];
+                }
+            }
+        }
+
+        public IReadOnlyList<string> TrackingOrigins()
+        {
+            if (closed)
+            {
+                return [];
+            }
+
+            lock (gate)
+            {
+                try
+                {
+                    return closed || !inner.OffersOriginOffsets ? [] : inner.TrackingOrigins();
+                }
+                catch (Exception e) when (e is MiradorException or ObjectDisposedException)
+                {
+                    return [];
+                }
+            }
+        }
+
+        /// <exception cref="MiradorException">Monado has stopped, can't move tracking origins, or didn't answer.</exception>
+        public MonadoPose GetOriginOffset(uint origin)
+        {
+            ThrowUnlessOriginOffsets();
+            lock (gate)
+            {
+                ThrowUnlessOriginOffsets();
+                return inner.GetOriginOffset(origin);
+            }
+        }
+
+        /// <exception cref="MiradorException">Monado has stopped, can't move tracking origins, or didn't answer.</exception>
+        public void SetOriginOffset(uint origin, MonadoPose offset)
+        {
+            ThrowUnlessOriginOffsets();
+            lock (gate)
+            {
+                ThrowUnlessOriginOffsets();
+                inner.SetOriginOffset(origin, offset);
+            }
+        }
+
+        public void Dispose()
+        {
+        }
+
+        /// <summary>From now on, calls return at once (empty, or with <see cref="MiradorException"/>); one under way goes on.</summary>
+        public void EndCalls() => closed = true;
+
+        /// <summary>Closes the connection once a call under way has returned. Never throws.</summary>
+        public void Close()
+        {
+            EndCalls();
+            lock (gate)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                try
+                {
+                    inner.Dispose();
+                }
+                catch (Exception)
+                {
+                    // The connection goes with Monado anyway.
+                }
+            }
+        }
+
+        private void ThrowUnlessOriginOffsets()
+        {
+            if (closed)
+            {
+                throw new MiradorException("Monado isn't running.");
+            }
+
+            if (!inner.OffersOriginOffsets)
+            {
+                throw new MiradorException("This Monado can't move its tracking origins.");
+            }
+        }
+    }
+
     /// <summary>One Start and, if it succeeds, the session that follows it.</summary>
     private sealed class Run
     {
@@ -1299,6 +1638,20 @@ public sealed class SessionController(SessionDeps deps)
         public TextLog? Log { get; set; }
 
         public IRunningProcess? Process { get; set; }
+
+        // Written and read under the controller's lock.
+        /// <summary>Completes once libmonado's open has ended and its connection was kept or closed.</summary>
+        public Task? LibmonadoSettled { get; set; }
+
+        public SharedMonadoClient? Libmonado { get; set; }
+
+        public string? LibmonadoProblem { get; set; }
+
+        /// <summary>The run's libmonado connection was closed, or the run ended: no connection is kept for it afterwards.</summary>
+        public bool LibmonadoClosed { get; set; }
+
+        /// <summary>The close of the run's libmonado connection, once one began; null before.</summary>
+        public Task? LibmonadoClosing { get; set; }
 
         public Action<string>? OnLine { get; set; }
 

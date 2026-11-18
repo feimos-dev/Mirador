@@ -1,4 +1,4 @@
-namespace Mirador.Helper.Tests;
+namespace Mirador.Tests;
 
 /// <summary>
 /// A test that needs a real Monado install (Monado's layout: <c>openxr_monado.json</c> and <c>bin\</c>). It is skipped,
