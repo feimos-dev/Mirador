@@ -934,6 +934,47 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_failed_compositor_stops_monado_with_its_message()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Launcher.Last!.Emit(" INFO [ipc_server_process] Starting", "ERROR [ipc_server_process] Failed to init compositor");
+        var message = await h.HasEnded.Task.WaitAsync(Limit);
+
+        Assert.StartsWith("Monado couldn't start its compositor", message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.Equal(1, h.Module.Session!.Ends);
+    }
+
+    [Fact]
+    public async Task An_idle_monado_without_a_game_is_not_stopped()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Time.Advance(TimeSpan.FromMinutes(5));
+        h.Launcher.Last!.Emit(" INFO [ipc_server_process] Waiting for applications");
+        await Task.Delay(50);
+
+        Assert.Equal(SessionState.Running, h.Controller.State);
+        Assert.Empty(h.EndedMessages);
+    }
+
+    [Fact]
+    public async Task A_module_asking_to_stop_ends_the_run_with_its_reason()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Module.Session!.RequestStop("The headset's display didn't come up within a minute.");
+        var message = await h.HasEnded.Task.WaitAsync(Limit);
+
+        Assert.Equal("The headset's display didn't come up within a minute.", message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+    }
+
+    [Fact]
     public async Task Exit_after_the_last_app_closed_says_so()
     {
         await using var h = new Harness();

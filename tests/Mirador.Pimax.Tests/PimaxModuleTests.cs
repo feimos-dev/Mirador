@@ -751,6 +751,25 @@ public sealed class PimaxModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task A_display_that_never_opens_asks_to_stop_monado_once()
+    {
+        var session = (DreamAirSession)await BeforeStart();
+        var reasons = new List<string>();
+        session.StopRequested += reasons.Add;
+        session.OnServiceLine("[dvl] warning: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
+
+        Poll(11);
+        Assert.Empty(reasons);
+
+        Poll(5);
+
+        var reason = Assert.Single(reasons);
+        Assert.StartsWith("The headset's display didn't come up within a minute. ", reason);
+        Assert.Contains("still waiting for the display", reason);
+        session.Dispose();
+    }
+
+    [Fact]
     public async Task Ending_stops_the_watch()
     {
         var session = (DreamAirSession)await BeforeStart();

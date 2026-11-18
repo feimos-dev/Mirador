@@ -33,6 +33,7 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     private bool pimaxSeen;
     private bool steamVrSeen;
     private bool ended;
+    private bool stopRequested;
 
     /// <param name="ctx">The module's context: the helper, the process list and the clock.</param>
     /// <param name="environment">The variables Monado gets for the Dream Air.</param>
@@ -48,7 +49,7 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         this.pimaxWasRunning = pimaxWasRunning;
         Environment = environment;
         RecoveryData = Recovery(pimaxWasRunning);
-        parser = new DreamAirLogParser(upload, headset, headsetThere);
+        parser = new DreamAirLogParser(upload, headset, headsetThere, ctx.Time);
         timer = ctx.Time.CreateTimer(_ => Poll(), null, PollInterval, Timeout.InfiniteTimeSpan);
     }
 
@@ -152,6 +153,24 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         foreach (var warning in warnings)
         {
             RaiseWarning(warning);
+        }
+
+        // The layer's display never came up: Monado idles for ever otherwise. Asked once.
+        parser.Tick();
+        if (parser.Failed is { } failed)
+        {
+            lock (gate)
+            {
+                if (stopRequested || ended)
+                {
+                    return;
+                }
+
+                stopRequested = true;
+            }
+
+            RaiseStatusChanged();
+            RaiseStopRequested(failed);
         }
     }
 }

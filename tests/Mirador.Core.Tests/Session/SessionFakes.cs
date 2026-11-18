@@ -443,6 +443,8 @@ internal sealed class FakeModuleSession(
     }
 
     public void Warn(SessionWarning warning) => RaiseWarning(warning);
+
+    public void RequestStop(string reason) => RaiseStopRequested(reason);
 }
 
 internal sealed class FakeModule(Steps steps) : IHeadsetModule

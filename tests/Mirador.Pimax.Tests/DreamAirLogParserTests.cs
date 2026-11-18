@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using Mirador.Core.Modules;
 
 namespace Mirador.Pimax.Tests;
@@ -7,6 +8,45 @@ public class DreamAirLogParserTests
     private static StatusLine Line(DreamAirLogParser parser, string key) => parser.Lines.Single(l => l.Key == key);
 
     private static readonly GeometryResult Uploaded = new(true, "XR5DA-P501G0D202652600422", GeometryUploader.Uploaded, "log");
+
+    [Fact]
+    public void No_display_session_within_a_minute_fails()
+    {
+        var time = new FakeTimeProvider();
+        var parser = new DreamAirLogParser(timeProvider: time);
+        parser.Feed("[dvl] warning: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
+
+        time.Advance(TimeSpan.FromSeconds(59));
+        parser.Tick();
+        Assert.Null(parser.Failed);
+        Assert.Equal(StatusLevel.Info, Line(parser, "display").Level);
+
+        time.Advance(TimeSpan.FromSeconds(2));
+        parser.Tick();
+
+        Assert.NotNull(parser.Failed);
+        Assert.StartsWith("The headset's display didn't come up within a minute. ", parser.Failed);
+        Assert.Contains("still waiting for the display", parser.Failed);
+        Assert.EndsWith(" Check Diagnostics, then start again.", parser.Failed);
+        var display = Line(parser, "display");
+        Assert.Equal(StatusLevel.Error, display.Level);
+        Assert.Equal(parser.Failed, display.Text);
+    }
+
+    [Fact]
+    public void A_display_session_in_time_never_fails()
+    {
+        var time = new FakeTimeProvider();
+        var parser = new DreamAirLogParser(timeProvider: time);
+
+        time.Advance(TimeSpan.FromSeconds(30));
+        parser.Feed("[dvl] info: display session open: Pimax Dream Air, 7104x3840 at 90.000 Hz, display 0x80061086, adapter 00000000:00014f8d");
+        time.Advance(TimeSpan.FromMinutes(10));
+        parser.Tick();
+
+        Assert.Null(parser.Failed);
+        Assert.Equal(StatusLevel.Ok, Line(parser, "display").Level);
+    }
 
     [Fact]
     public void Log_parser_reads_the_layers_lines()

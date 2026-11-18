@@ -658,6 +658,11 @@ public sealed class SessionController(SessionDeps deps)
                 state = outcome.Ok ? SessionState.Running : SessionState.Stopped;
                 starting = null;
                 startCancel = null;
+                if (outcome.Ok && run.StopReason is { } reason)
+                {
+                    _ = BeginStop(run, reason);
+                }
+
                 if (!outcome.Ok)
                 {
                     current = null;
@@ -1138,6 +1143,7 @@ public sealed class SessionController(SessionDeps deps)
 
             session.StatusChanged -= run.OnModuleStatus;
             session.Warning -= run.OnModuleWarning;
+            session.StopRequested -= run.OnModuleStopRequested;
         }
 
         if (run.WroteSessionFile && !keepSessionFile)
@@ -1192,6 +1198,8 @@ public sealed class SessionController(SessionDeps deps)
         run.OnModuleWarning = RaiseWarning;
         session.StatusChanged += run.OnModuleStatus;
         session.Warning += run.OnModuleWarning;
+        run.OnModuleStopRequested = reason => RequestStopAsync(run, reason);
+        session.StopRequested += run.OnModuleStopRequested;
         lock (gate)
         {
             run.Session = session;
@@ -1239,6 +1247,11 @@ public sealed class SessionController(SessionDeps deps)
             (failures ??= []).Add(new LogWriteException(e));
         }
 
+        if (line.Contains(CompositorFailure, StringComparison.Ordinal))
+        {
+            RequestStopAsync(run, CompositorMessage(line));
+        }
+
         var appsChanged = run.Clients.Feed(line);
         var trackingChanged = run.Lighthouse.Feed(line) && run.UsesLighthouse;
         Raise(LogLine, line);
@@ -1261,6 +1274,41 @@ public sealed class SessionController(SessionDeps deps)
             throw failures.Count == 1 ? failures[0] : new AggregateException(failures);
         }
     }
+
+    /// <summary>Monado's own line when it can't set up its compositor: it then idles with nothing to show.</summary>
+    private const string CompositorFailure = "Failed to init compositor";
+
+    private static string CompositorMessage(string line)
+    {
+        var at = line.IndexOf(CompositorFailure, StringComparison.Ordinal);
+        var said = line[at..].Trim().TrimEnd('.');
+        return $"Monado couldn't start its compositor ({said}). Check Diagnostics for the reason in Monado's log, then start again.";
+    }
+
+    /// <summary>
+    /// Stops a running session for <paramref name="reason"/>, which becomes how it ended. Asynchronous: it is asked for
+    /// from the output's reader or a module's thread, and Stop then runs its usual path from another one, so nothing
+    /// waits for the thread that asked. A session that is still starting stops as soon as it runs.
+    /// </summary>
+    private void RequestStopAsync(Run run, string reason) => _ = Task.Run(() =>
+    {
+        lock (gate)
+        {
+            if (current != run)
+            {
+                return;
+            }
+
+            if (state == SessionState.Running)
+            {
+                _ = BeginStop(run, reason);
+            }
+            else if (state == SessionState.Starting)
+            {
+                run.StopReason ??= reason;
+            }
+        }
+    });
 
     /// <summary>
     /// Warns once per session about each kind of failure while following the output, with the first one's message: the
@@ -1670,5 +1718,10 @@ public sealed class SessionController(SessionDeps deps)
         public int LogFailureReported;
 
         public int ModuleFailureReported;
+
+        public Action<string>? OnModuleStopRequested { get; set; }
+
+        /// <summary>Why the run must stop, asked for before it was running; it stops as soon as it is. Under the lock.</summary>
+        public string? StopReason { get; set; }
     }
 }

@@ -16,7 +16,16 @@ public sealed partial class DreamAirLogParser
     public const string EyeKey = "eye";
     public const string HeadsetKey = "headset";
 
+    /// <summary>How long after construction the layer may take to log <c>display session open</c> before the display counts as failed.</summary>
+    public static readonly TimeSpan DisplayWait = TimeSpan.FromSeconds(60);
+
+    private const string Layer = "[dvl] ";
+
     private readonly object gate = new();
+    private readonly TimeProvider time;
+    private readonly long startedAt;
+    private string? lastLayerMessage;
+    private string? failed;
     private readonly string headset;
     private readonly bool headsetThere;
     private readonly StatusLine? eye;
@@ -31,8 +40,12 @@ public sealed partial class DreamAirLogParser
     /// <param name="headset">The model's name, for the line that says Monado has no driver for it.</param>
     /// <param name="headsetThere">Whether the headset's board (and Lighthouse receiver) were plugged in at the Start: only
     /// then is a missing head Monado's driver's fault.</param>
-    public DreamAirLogParser(GeometryResult? upload = null, string headset = "Pimax Dream Air", bool headsetThere = true)
+    /// <param name="timeProvider">The clock for <see cref="DisplayWait"/>.</param>
+    public DreamAirLogParser(
+        GeometryResult? upload = null, string headset = "Pimax Dream Air", bool headsetThere = true, TimeProvider? timeProvider = null)
     {
+        time = timeProvider ?? TimeProvider.System;
+        startedAt = time.GetTimestamp();
         this.headset = headset;
         this.headsetThere = headsetThere;
         eye = upload switch
@@ -66,6 +79,34 @@ public sealed partial class DreamAirLogParser
         }
     }
 
+    /// <summary>
+    /// Why the display didn't come up (no <c>display session open</c> within <see cref="DisplayWait"/> of the start, with
+    /// the layer's last message); null while it may still come, and once it did.
+    /// </summary>
+    public string? Failed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return failed;
+            }
+        }
+    }
+
+    /// <summary>Looks at the clock: sets <see cref="Failed"/> once the display session hasn't opened within <see cref="DisplayWait"/>.</summary>
+    public void Tick()
+    {
+        lock (gate)
+        {
+            if (mode is null && failed is null && time.GetElapsedTime(startedAt) > DisplayWait)
+            {
+                var last = lastLayerMessage is null ? "" : (lastLayerMessage.EndsWith('.') ? lastLayerMessage : lastLayerMessage + ".") + " ";
+                failed = $"The headset's display didn't come up within a minute. {last}Check Diagnostics, then start again.";
+            }
+        }
+    }
+
     /// <summary>Reads one line of Monado's output; whether <see cref="Lines"/> changed.</summary>
     public bool Feed(string line)
     {
@@ -79,9 +120,15 @@ public sealed partial class DreamAirLogParser
 
     private void Read(string line)
     {
+        if (line.IndexOf(Layer, StringComparison.Ordinal) is var at and >= 0)
+        {
+            lastLayerMessage = line[(at + Layer.Length)..].Trim();
+        }
+
         if (DisplayOpen().Match(line) is { Success: true } open)
         {
             var hz = double.Parse(open.Groups["hz"].Value, CultureInfo.InvariantCulture);
+            failed = null;
             mode = $"Direct mode, {open.Groups["w"].Value}×{open.Groups["h"].Value} at {hz.ToString("0.##", CultureInfo.InvariantCulture)} Hz";
             return;
         }
@@ -111,7 +158,9 @@ public sealed partial class DreamAirLogParser
     {
         if (mode is null)
         {
-            return new StatusLine(DisplayKey, "Display", StatusLevel.Info, "Waiting for the display");
+            return failed is not null
+                ? new StatusLine(DisplayKey, "Display", StatusLevel.Error, failed)
+                : new StatusLine(DisplayKey, "Display", StatusLevel.Info, "Waiting for the display");
         }
 
         var text = sawStats
