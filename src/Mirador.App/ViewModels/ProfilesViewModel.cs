@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
 using Mirador.Core;
+using Mirador.Core.Build;
 using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Profiles;
@@ -131,9 +132,44 @@ public sealed partial class ProfilesViewModel : ObservableObject
     [ObservableProperty]
     public partial string MonadoLink { get; set; } = "";
 
-    /// <summary>The branch or ref to build; filled in from <see cref="MonadoLink"/>, and changeable.</summary>
+    /// <summary>The branch or ref to build; filled in from <see cref="MonadoLink"/>, and picked from <see cref="Branches"/>.</summary>
     [ObservableProperty]
     public partial string MonadoBranch { get; set; } = "";
+
+    /// <summary>The branches of the repository the link names, for the "Branch" drop-down; empty until listed.</summary>
+    public ObservableCollection<string> Branches { get; } = [];
+
+    /// <summary>
+    /// The drop-down's pick: copied into <see cref="MonadoBranch"/> when it is a branch. The drop-down sets it to null
+    /// while its list is emptied, which must not empty the profile's branch.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? SelectedBranch { get; set; }
+
+    partial void OnSelectedBranchChanged(string? value)
+    {
+        if (value is not null)
+        {
+            MonadoBranch = value;
+        }
+    }
+
+    /// <summary>Whether the "Branch" drop-down shows: a repository link whose repository has two branches or more.</summary>
+    [ObservableProperty]
+    public partial bool ShowBranches { get; set; }
+
+    /// <summary>Whether the branches are being listed (a ring by the link).</summary>
+    [ObservableProperty]
+    public partial bool IsListingBranches { get; set; }
+
+    /// <summary>Why the branches couldn't be listed, shown under the link; null otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBranchListProblem))]
+    public partial string? BranchListProblem { get; set; }
+
+    public bool HasBranchListProblem => BranchListProblem is not null;
+
+    private CancellationTokenSource? listing;
 
     /// <summary>
     /// The profile's "Run as administrator" (Mirador.md §4.10 item 44, §4.11 item 51): for Mirador's Monado the user's
@@ -520,7 +556,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Changed();
     }
 
-    /// <summary>A pasted link fills in its branch (a merge request's ref), which the owner can still change.</summary>
+    /// <summary>
+    /// A pasted link fills in its branch (a merge request's ref). The branches of another repository than the one
+    /// listed go: the link is listed again when the box loses focus or on Enter (<see cref="ListBranchesAsync"/>).
+    /// </summary>
     partial void OnMonadoLinkChanged(string value)
     {
         if (!loading)
@@ -533,9 +572,97 @@ public sealed partial class ProfilesViewModel : ObservableObject
             {
                 // Validate says why.
             }
+
+            ClearBranches();
         }
 
         Changed();
+    }
+
+    /// <summary>
+    /// Lists the branches of the repository the link names (<c>git ls-remote --heads</c>, at most 20 s) into the "Branch"
+    /// drop-down: only for a repository's own link, not one naming a merge request, pull request, commit or branch.
+    /// The branch picked is the profile's, else <c>main</c>, else the first. A newer listing cancels this one; a failure
+    /// is shown under the link and the branch stays as it was.
+    /// </summary>
+    /// <param name="keepCurrent">A saved profile's branch stays picked even when the repository no longer lists it.</param>
+    public async Task ListBranchesAsync(bool keepCurrent = false)
+    {
+        listing?.Cancel();
+        listing?.Dispose();
+        listing = null;
+        if (MonadoSource != LinkSource || BranchLink.NamesItsBranch(MonadoLink) || MonadoBranch.StartsWith("refs/", StringComparison.Ordinal))
+        {
+            ClearBranches();
+            return;
+        }
+
+        string url;
+        try
+        {
+            url = BranchLink.Parse(MonadoLink).Url;
+        }
+        catch (MiradorException)
+        {
+            ClearBranches(); // Validate says why.
+            return;
+        }
+
+        var cts = listing = new CancellationTokenSource();
+        IsListingBranches = true;
+        BranchListProblem = null;
+        try
+        {
+            var branches = await GitRemote.ListBranchesAsync(url, host.Tools.Git, new CommandRunner(), GitRemote.Limit, cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var keep = MonadoBranch;
+            Branches.Clear();
+            if (keepCurrent && keep.Length > 0 && !branches.Contains(keep))
+            {
+                Branches.Add(keep);
+            }
+
+            foreach (var branch in branches)
+            {
+                Branches.Add(branch);
+            }
+
+            var pick = Branches.Contains(keep) ? keep
+                : branches.Contains(BuildSource.UpstreamRef) ? BuildSource.UpstreamRef
+                : branches.FirstOrDefault() ?? keep;
+            SelectedBranch = pick;
+            MonadoBranch = pick;
+            ShowBranches = Branches.Count >= 2;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // A newer listing, or another link.
+        }
+        catch (GitRemoteException e)
+        {
+            BranchListProblem = e.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(listing, cts))
+            {
+                IsListingBranches = false;
+            }
+        }
+    }
+
+    private void ClearBranches()
+    {
+        listing?.Cancel();
+        SelectedBranch = null;
+        Branches.Clear();
+        ShowBranches = false;
+        IsListingBranches = false;
+        BranchListProblem = null;
     }
 
     partial void OnMonadoBranchChanged(string value) => Changed();
@@ -692,6 +819,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
             MonadoLink = p?.Monado.Kind == SourceKind.Branch && !p.Monado.IsUpstreamMain ? p.Monado.Url ?? "" : "";
             MonadoBranch = MonadoLink.Length > 0 ? p!.Monado.Ref ?? "" : "";
             MonadoOptions = MonadoLink.Length > 0 ? string.Join(Environment.NewLine, p!.Monado.Options) : "";
+            ClearBranches();
             Extra.Clear();
             foreach (var v in p?.ExtraEnvironment ?? [])
             {
@@ -708,6 +836,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Show(p);
         Verify.Unsaved = false;
         RefreshApproval();
+        if (MonadoFromLink)
+        {
+            _ = ListBranchesAsync(keepCurrent: true);
+        }
+
         MiradorMonado.Show(MonadoSource == MiradorSource);
         Build.Show(p);
         Build.Unsaved = false;

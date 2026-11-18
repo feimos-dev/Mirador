@@ -75,13 +75,38 @@
                     Header="Link"
                     HorizontalContentAlignment="Stretch"
                     Visibility="{x:Bind ViewModel.MonadoFromLink, Mode=OneWay}">
-                    <TextBox PlaceholderText="https://gitlab.freedesktop.org/you/monado/-/tree/your-branch" Text="{x:Bind ViewModel.MonadoLink, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel Spacing="4">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                KeyDown="OnMonadoLinkKeyDown"
+                                LostFocus="OnMonadoLinkLostFocus"
+                                PlaceholderText="https://gitlab.freedesktop.org/you/monado/-/tree/your-branch"
+                                Text="{x:Bind ViewModel.MonadoLink, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <ProgressRing
+                                Grid.Column="1"
+                                Width="20"
+                                Height="20"
+                                IsActive="{x:Bind ViewModel.IsListingBranches, Mode=OneWay}" />
+                        </Grid>
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Text="{x:Bind ViewModel.BranchListProblem, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind ViewModel.HasBranchListProblem, Mode=OneWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
-                    Description="Filled in from the link."
+                    Description="The repository's branches."
                     Header="Branch"
-                    Visibility="{x:Bind ViewModel.MonadoFromLink, Mode=OneWay}">
-                    <TextBox MinWidth="200" Text="{x:Bind ViewModel.MonadoBranch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    Visibility="{x:Bind ViewModel.ShowBranches, Mode=OneWay}">
+                    <ComboBox
+                        MinWidth="200"
+                        ItemsSource="{x:Bind ViewModel.Branches}"
+                        SelectedItem="{x:Bind ViewModel.SelectedBranch, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
                     Description="{x:Bind ViewModel.MiradorMonado.Status, Mode=OneWay}"

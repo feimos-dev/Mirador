@@ -57,8 +57,9 @@ public sealed class AppHost : IAsyncDisposable
         Helper = new HelperClient();
         Runtime = new OpenXrRuntime(new RegistryRuntimeReader());
         Locator = new MonadoLocator(Path.Combine(appDir, "monado"), paths.BuildsDir, ApprovedCopyOf);
+        Tools = BuildTools.For(appDir, paths);
         Builds = new Builds(new MonadoBuilder(
-            new CommandRunner(), Locator, BuildTools.For(appDir, paths),
+            new CommandRunner(), Locator, Tools,
             new BuildChecks(new CommandRunner(), Environment.SystemDirectory, TimeProvider.System), TimeProvider.System,
             (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)));
         BuildToolsSetup = new BuildToolsSetup(
@@ -245,6 +246,9 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>Mirador's dated copies of Monado's folder.</summary>
     public MonadoFolderBackups FolderBackups { get; }
+
+    /// <summary>The build tools (Mirador's own copies when installed, else the ones on <c>PATH</c>), such as git.</summary>
+    public BuildTools Tools { get; }
 
     /// <summary>SteamVR's settings file, for its start on a controller button; null when Steam isn't installed.</summary>
     public SteamVrSettings? SteamVrSettings { get; }

@@ -29,6 +29,18 @@ public sealed partial class ProfilesPage : Page
     /// The build log shows its newest lines as they come (the box keeps the last few hundred, oldest first), so that a
     /// running build looks like one, and a finished one shows how it ended.
     /// </summary>
+    /// <summary>The link was left: offer the repository's branches.</summary>
+    private void OnMonadoLinkLostFocus(object sender, RoutedEventArgs e) => _ = ViewModel.ListBranchesAsync();
+
+    /// <summary>Enter in the link: offer the repository's branches.</summary>
+    private void OnMonadoLinkKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            _ = ViewModel.ListBranchesAsync();
+        }
+    }
+
     private void OnBuildLogChanged(object sender, TextChangedEventArgs e) => ShowBuildLogEnd();
 
     /// <summary>Opened, the log shows its end.</summary>
