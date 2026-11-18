@@ -63,6 +63,9 @@ internal sealed unsafe class LibmonadoExports
 
     private LibmonadoExports() { }
 
+    /// <summary>For tests: no functions yet; the test sets the ones it needs.</summary>
+    internal static LibmonadoExports ForTests() => new();
+
     /// <summary>Whether the tracking-origin functions were all found.</summary>
     public bool OffersOriginOffsets => GetTrackingOriginCount != null;
 

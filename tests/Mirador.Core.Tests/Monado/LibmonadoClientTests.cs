@@ -1,8 +1,10 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Mirador.Core.Monado.Libmonado;
 
 namespace Mirador.Core.Tests.Monado;
 
-public class LibmonadoClientTests
+public unsafe class LibmonadoClientTests
 {
     [Fact]
     public void Open_without_monado_dll_says_libmonado_is_not_offered()
@@ -41,5 +43,37 @@ public class LibmonadoClientTests
         Assert.Null(opened.Problem);
         using var client = opened.Client!;
         Assert.Single(client.Devices(), device => device.Role == "head");
+    }
+
+    // A libmonado that says it has more devices than Monado can have.
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int HugeCount(IntPtr root, uint* count)
+    {
+        *count = uint.MaxValue;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int NoRole(IntPtr root, byte* role, int* index)
+    {
+        *index = -1;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void Destroy(IntPtr* root) => *root = IntPtr.Zero;
+
+    [Fact]
+    public void An_impossible_device_count_is_a_failed_call_not_a_crash()
+    {
+        var exports = LibmonadoExports.ForTests();
+        exports.GetDeviceCount = &HugeCount;
+        exports.GetDeviceFromRole = &NoRole;
+        exports.RootDestroy = &Destroy;
+        using var client = new LibmonadoClient(IntPtr.Zero, exports, new IntPtr(1));
+
+        var e = Assert.Throws<MiradorException>(() => client.Devices());
+
+        Assert.Contains("4294967295", e.Message);
     }
 }

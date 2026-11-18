@@ -99,6 +99,9 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
     /// <summary>The problem when a libmonado call returns <paramref name="result"/>.</summary>
     public static string NoAnswer(int result) => $"Monado didn't answer libmonado (error {result}).";
 
+    /// <summary>More devices than Monado can hold (its system has 32 at most): a count over this is a broken answer.</summary>
+    private const uint MaxDevices = 64;
+
     public IReadOnlyList<MonadoDevice> Devices()
     {
         lock (gate)
@@ -107,6 +110,10 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
             uint count;
             Check(exports.GetDeviceCount(root, &count));
+            if (count > MaxDevices)
+            {
+                throw new MiradorException($"Monado gave libmonado a device count it can't have ({count}).");
+            }
 
             var roles = new Dictionary<int, string>();
             foreach (var (name, native) in Roles)
