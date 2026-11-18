@@ -47,8 +47,12 @@ public class StandInExeTests
 
     private static string UniqueName() => "mirador-standin-test-" + Guid.NewGuid().ToString("N")[..12];
 
-    /// <summary>Runs the stand-in against the test pipe <paramref name="pipe"/> (beside any real Mirador); its exit code, stderr and time taken.</summary>
-    private static async Task<(int Code, string Error, TimeSpan Took)> RunAsync(string pipe, string? appPath = null, string? exe = null)
+    /// <summary>
+    /// Runs the stand-in against the test pipe <paramref name="pipe"/> (beside any real Mirador); its exit code, stderr
+    /// and time taken. With <paramref name="localAppData"/>, the stand-in reads Mirador's settings from there.
+    /// </summary>
+    private static async Task<(int Code, string Error, TimeSpan Took)> RunAsync(
+        string pipe, string? appPath = null, string? exe = null, string? localAppData = null, TimeSpan? limit = null)
     {
         var info = new ProcessStartInfo(exe ?? Exe) { RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         info.Environment["MIRADOR_STANDIN_PIPE"] = pipe;
@@ -57,12 +61,17 @@ public class StandInExeTests
             info.Environment["MIRADOR_APP_PATH"] = appPath;
         }
 
+        if (localAppData is not null)
+        {
+            info.Environment["LOCALAPPDATA"] = localAppData;
+        }
+
         var watch = Stopwatch.StartNew();
         using var process = Process.Start(info)!;
         var error = process.StandardError.ReadToEndAsync();
         try
         {
-            await process.WaitForExitAsync().WaitAsync(Limit);
+            await process.WaitForExitAsync().WaitAsync(limit ?? Limit);
         }
         catch (TimeoutException)
         {
@@ -152,5 +161,73 @@ public class StandInExeTests
     public void The_built_stand_in_is_told_from_monado()
     {
         Assert.True(StandIn.IsStandIn(Exe));
+    }
+
+    /// <summary>The run's limit for the switch's tests: the stand-in either exits at once or starts its "Mirador", which ends at once.</summary>
+    private static readonly TimeSpan SwitchLimit = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// whoami.exe as the Mirador to start: it turns "--background" down at once (exit 1), and the stand-in then says
+    /// "closed at once". That message is the mark that it started Mirador.
+    /// </summary>
+    private static string Marker => Path.Combine(Environment.SystemDirectory, "whoami.exe");
+
+    private const string Started = "closed at once (exit code 1)";
+
+    private static async Task<(int Code, string Error)> RunWithSettingsAsync(TempDir dir, string? settings)
+    {
+        var mirador = Path.Combine(dir.Path, "Mirador");
+        Directory.CreateDirectory(mirador);
+        if (settings is not null)
+        {
+            File.WriteAllText(Path.Combine(mirador, "settings.json"), settings);
+        }
+
+        var (code, error, _) = await RunAsync(UniqueName(), Marker, localAppData: dir.Path, limit: SwitchLimit);
+        return (code, error);
+    }
+
+    [UnelevatedStandInFact]
+    public async Task Switched_off_the_stand_in_does_not_start_mirador()
+    {
+        using var dir = new TempDir();
+
+        var (code, error) = await RunWithSettingsAsync(dir, """{"startMiradorForGames": false}""");
+
+        Assert.Equal(4, code);
+        Assert.DoesNotContain(Started, error);
+        var line = Assert.Single(File.ReadAllLines(Path.Combine(dir.Path, "Mirador", "logs", "standin.log")));
+        Assert.EndsWith("A game asked for Monado; \"Start Mirador when a game needs Monado\" is off.", line);
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} ", line);
+    }
+
+    [UnelevatedStandInTheory]
+    [InlineData(null)]
+    [InlineData("{}")]
+    [InlineData("not json")]
+    [InlineData("big")]
+    [InlineData("""{"startMiradorForGames"  :  true}""")]
+    public async Task Switched_on_or_unreadable_settings_start_mirador(string? settings)
+    {
+        using var dir = new TempDir();
+
+        // Over 64 KB, the file counts as on, even with the switch off at its start.
+        var text = settings == "big" ? """{"startMiradorForGames": false}""" + new string(' ', 2 * 1024 * 1024) : settings;
+        var (code, error) = await RunWithSettingsAsync(dir, text);
+
+        Assert.Equal(4, code);
+        Assert.Contains(Started, error);
+        Assert.False(File.Exists(Path.Combine(dir.Path, "Mirador", "logs", "standin.log")));
+    }
+
+    [UnelevatedStandInFact]
+    public async Task Spacing_does_not_matter()
+    {
+        using var dir = new TempDir();
+
+        var (code, error) = await RunWithSettingsAsync(dir, """{ "startMiradorForGames" :false }""");
+
+        Assert.Equal(4, code);
+        Assert.DoesNotContain(Started, error);
     }
 }

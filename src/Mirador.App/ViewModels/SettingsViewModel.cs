@@ -26,6 +26,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         Problem = problem;
         CloseToTray = settings.CloseToTray;
         CheckForUpdates = settings.CheckForUpdates;
+        StartMiradorForGames = settings.StartMiradorForGames;
         StartMinimized = settings.StartMinimized;
         try
         {
@@ -52,6 +53,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
+
+    /// <summary>"Start Mirador when a game needs Monado": the stand-in starts Mirador for a game; off, games find Monado only while Mirador is open.</summary>
+    [ObservableProperty]
+    public partial bool StartMiradorForGames { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProblem))]
@@ -261,6 +266,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     partial void OnStartMinimizedChanged(bool value) => Save(s => s with { StartMinimized = value });
 
     partial void OnCheckForUpdatesChanged(bool value) => Save(s => s with { CheckForUpdates = value });
+
+    partial void OnStartMiradorForGamesChanged(bool value) => Save(s => s with { StartMiradorForGames = value });
 
     private void Save(Func<AppSettings, AppSettings> change)
     {

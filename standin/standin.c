@@ -8,9 +8,12 @@
  * to start Monado, starting Mirador first if it isn't running, waits for the answer, and:
  *   - OK:   lingers 2 s, so that the DLL's next retry finds Monado's pipe while this program still lives; exit 0;
  *   - FAIL: prints Mirador's reason and exits 1 at once, so that the game fails quickly instead of hanging.
+ * When Mirador isn't running and its setting "Start Mirador when a game needs Monado" is off, it doesn't start Mirador:
+ * it writes a line to Mirador's logs\standin.log and exits at once, so that the runtime DLL gives up. A running Mirador
+ * still gets the request.
  * Exit codes: 0 Monado is up; 1 Mirador refused or failed (its message on stderr); 3 Mirador isn't running and this
- * process is elevated; 4 Mirador could not be started; 5 Mirador did not answer within 15 s of starting; 6 no answer
- * within 120 s.
+ * process is elevated; 4 Mirador wasn't started: it couldn't be, or "Start Mirador when a game needs Monado" is off;
+ * 5 Mirador did not answer within 15 s of starting; 6 no answer within 120 s.
  *
  * Copyright 2026, Finn Zeruhn. Boost Software License 1.0.
  */
@@ -48,6 +51,7 @@ enum
 #define RETRY_MS 100
 #define POLL_MS 50
 #define MAX_LINE 256
+#define MAX_SETTINGS 65536
 
 static ULONGLONG started;
 
@@ -239,6 +243,116 @@ static BOOL find_app(wchar_t *path, DWORD count)
         && is_file(path);
 }
 
+/* Whether text[0..length) holds the bytes of word at at. */
+static BOOL matches_at(const char *text, size_t length, size_t at, const char *word)
+{
+    size_t word_length = strlen(word);
+    return at <= length && length - at >= word_length && memcmp(text + at, word, word_length) == 0;
+}
+
+static size_t skip_space(const char *text, size_t length, size_t at)
+{
+    while (at < length && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n'))
+    {
+        at++;
+    }
+    return at;
+}
+
+/*
+ * Whether a game may start Mirador: "Start Mirador when a game needs Monado" in %LOCALAPPDATA%\Mirador\settings.json.
+ * Off (0) only when the file holds "startMiradorForGames", optional white space, ':', optional white space, then
+ * false. A file that is missing, can't be read or is over 64 KB counts as on, as before the setting.
+ */
+static int games_may_start_app(void)
+{
+    static const char key[] = "\"startMiradorForGames\"";
+    wchar_t path[MAX_PATH];
+    static char text[MAX_SETTINGS + 1];
+    DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", path, MAX_PATH);
+    LARGE_INTEGER size;
+    DWORD got = 0;
+    HANDLE file;
+    size_t at;
+
+    if (length == 0 || length >= MAX_PATH || wcslen(path) + wcslen(L"\\Mirador\\settings.json") + 1 > MAX_PATH)
+    {
+        return 1;
+    }
+    wcscat(path, L"\\Mirador\\settings.json");
+
+    file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return 1;
+    }
+
+    if (!GetFileSizeEx(file, &size) || size.QuadPart > MAX_SETTINGS || !ReadFile(file, text, MAX_SETTINGS, &got, NULL))
+    {
+        CloseHandle(file);
+        return 1;
+    }
+    CloseHandle(file);
+
+    for (at = 0; at < got; at++)
+    {
+        size_t value;
+        if (!matches_at(text, got, at, key))
+        {
+            continue;
+        }
+
+        value = skip_space(text, got, at + sizeof key - 1);
+        if (value < got && text[value] == ':')
+        {
+            value = skip_space(text, got, value + 1);
+            if (matches_at(text, got, value, "false"))
+            {
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+/* Appends one line, with the local time, to %LOCALAPPDATA%\Mirador\logs\standin.log (the folders made when missing). */
+static void log_line(const char *text)
+{
+    wchar_t path[MAX_PATH];
+    char line[512];
+    SYSTEMTIME now;
+    DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", path, MAX_PATH);
+    DWORD written = 0;
+    HANDLE file;
+    int count;
+
+    if (length == 0 || length >= MAX_PATH || wcslen(path) + wcslen(L"\\Mirador\\logs\\standin.log") + 1 > MAX_PATH)
+    {
+        return;
+    }
+    wcscat(path, L"\\Mirador");
+    CreateDirectoryW(path, NULL);
+    wcscat(path, L"\\logs");
+    CreateDirectoryW(path, NULL);
+    wcscat(path, L"\\standin.log");
+
+    GetLocalTime(&now);
+    count = snprintf(line, sizeof line, "%04u-%02u-%02uT%02u:%02u:%02u %s\r\n",
+                     now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, text);
+    if (count <= 0 || (size_t)count >= sizeof line)
+    {
+        return;
+    }
+
+    file = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        WriteFile(file, line, (DWORD)count, &written, NULL);
+        CloseHandle(file);
+    }
+}
+
 /*
  * Starts Mirador hidden (--background). It must outlive the game: outside the game's job when the job allows that, and
  * with the user's default environment rather than the game's.
@@ -404,6 +518,13 @@ int main(void)
         {
             say("Mirador isn't running. Start Mirador first: it doesn't start from an elevated app.");
             return EXIT_ELEVATED;
+        }
+
+        if (!games_may_start_app())
+        {
+            log_line("A game asked for Monado; \"Start Mirador when a game needs Monado\" is off.");
+            say("Mirador isn't running, and \"Start Mirador when a game needs Monado\" is off in its settings: start Mirador first.");
+            return EXIT_NO_APP;
         }
 
         if (!find_app(app, MAX_PATH))

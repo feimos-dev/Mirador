@@ -105,4 +105,20 @@ public class AppSettingsTests
 
         Assert.True(new AppSettingsStore(dir.File("settings.json")).Load().StartMinimized);
     }
+
+    [Fact]
+    public void Start_mirador_for_games_defaults_to_on_and_round_trips()
+    {
+        using var dir = new TempDir();
+        var store = new AppSettingsStore(dir.File("settings.json"));
+        Assert.True(new AppSettings().StartMiradorForGames);
+        Assert.True(store.Load().StartMiradorForGames);
+
+        store.Save(new AppSettings(StartMiradorForGames: false));
+
+        Assert.False(store.Load().StartMiradorForGames);
+
+        // The stand-in reads this very text: the key, then false.
+        Assert.Contains("\"startMiradorForGames\": false", File.ReadAllText(dir.File("settings.json")));
+    }
 }
