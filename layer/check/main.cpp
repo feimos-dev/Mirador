@@ -39,8 +39,15 @@ int main(int argc, char** argv)
 
     StdoutOutput out;
     if (options.enable_direct_mode) {
-        const std::unique_ptr<nvdm::Api> api = nvdm::make_nvapi();
-        return run_enable_direct_mode(*api, out);
+        // Inside a try like the check below: an exception still ends in a FAIL line and the failing exit code.
+        try {
+            const std::unique_ptr<nvdm::Api> api = nvdm::make_nvapi();
+            return run_enable_direct_mode(*api, out);
+        } catch (const std::exception& e) {
+            say(out, "FAIL: exception: %s", e.what());
+            say(out, "what to do: restart Windows and try again; if it persists, send this output to the maintainer");
+            return kExitFail;
+        }
     }
     say(out, "mirador-display-check %s: NVAPI only, %d s%s%s", DVL_CHECK_VERSION, options.seconds,
         options.no_heartbeat ? ", no heartbeat" : "", options.ignore_holders ? ", holder checks skipped" : "");
