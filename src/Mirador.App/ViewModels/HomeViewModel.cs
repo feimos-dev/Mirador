@@ -956,7 +956,10 @@ public sealed partial class HomeViewModel : ObservableObject
             }
         }
 
-        DirectModeNotice = results.FirstOrDefault(r => r.Label == PimaxModule.DirectModeOffLabel)?.Text;
+        // Only while Monado is stopped: a check that finished after a Start began is stale.
+        DirectModeNotice = State == SessionState.Stopped
+            ? results.FirstOrDefault(r => r.Label == PimaxModule.DirectModeOffLabel)?.Text
+            : null;
         foreach (var r in results.Where(r => r.Level is StatusLevel.Warning or StatusLevel.Error && r.Label != PimaxModule.DirectModeOffLabel))
         {
             Notices.Add(new NoticeItem(
