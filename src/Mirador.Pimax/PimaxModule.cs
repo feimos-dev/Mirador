@@ -175,8 +175,8 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             {
                 var check = await DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct, "--enable-direct-mode").ConfigureAwait(false);
                 return check.Pass ? null : check.WhatToDo is { } advice
-                    ? $"{Sentence(check.Message)} {Sentence(Capitalized(advice))}"
-                    : Sentence(check.Message);
+                    ? $"{DirectModeCheck.Sentence(check.Message)} {DirectModeCheck.Sentence(DirectModeCheck.Capitalized(advice))}"
+                    : DirectModeCheck.Sentence(check.Message);
             },
             stop => stop.Error ?? "Pimax's software couldn't be stopped.").ConfigureAwait(false);
 
@@ -234,10 +234,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 
         return (result, startProblem);
     }
-
-    private static string Sentence(string s) => s.EndsWith('.') || s.EndsWith('!') || s.EndsWith('?') ? s : s + ".";
-
-    private static string Capitalized(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     public async Task<ModuleSession> BeforeStartAsync(
         ModuleContext ctx, Profile profile, IProgress<string> progress, Action<IReadOnlyDictionary<string, string>> saveRecovery, CancellationToken ct)
