@@ -488,25 +488,21 @@ public sealed partial class LighthouseViewModel : ObservableObject
     /// <summary>Why the export can't go ahead, apart from SteamVR running; null when it can. Reads files.</summary>
     private string? ExportRefusal()
     {
-        if (AppHost.SteamDir() is null)
+        if (AppHost.SteamDir() is not { } steam)
         {
             return "Steam isn't installed.";
         }
 
-        var pick = host.CurrentUniverse();
-        if (pick.DiffersFromSteamVr)
-        {
-            return RoomSetupWarning.OtherSpace;
-        }
-
-        if (pick.Id is not { } universe)
+        if (host.CurrentUniverse().Id is not { } universe)
         {
             return "Mirador can't tell which Lighthouse space is in use, so it can't export.";
         }
 
-        return host.RoomSetups.Get(SteamVrRoom.LighthouseOrigin, universe) is null
-            ? "Mirador has no room setup of this space for SteamVR's Lighthouse tracking. Set it up first."
-            : null;
+        // Another space's SteamVR setup in use is fine when the export makes steamvr_lh take this one instead.
+        return SteamVrRoom.ExportRefusal(steam, universe)
+            ?? (host.RoomSetups.Get(SteamVrRoom.LighthouseOrigin, universe) is null
+                ? "Mirador has no room setup of this space for SteamVR's Lighthouse tracking. Set it up first."
+                : null);
     }
 
     /// <summary>Monado runs with "exit on disconnect": the card says what happens first.</summary>

@@ -226,8 +226,9 @@ public static class SteamVrRoom
     /// Writes <paramref name="offset"/>, applied on top of SteamVR's room setup of <paramref name="universe"/>, into
     /// SteamVR's file, then calls <paramref name="clearOwn"/> to drop Mirador's own copy, so that never both apply. The
     /// file is copied to <c>chaperone_info.vrchap.mirador-&lt;yyyyMMdd-HHmmss&gt;</c> in <paramref name="backupDir"/>
-    /// first, and written aside, then moved over the old one. When the clear fails, SteamVR's file is put back. SteamVR
-    /// rewrites the file when it exits: the caller exports only while SteamVR is closed.
+    /// first, and written aside, then moved over the old one. It is refused when <c>steamvr_lh</c> wouldn't use the result
+    /// (<see cref="ExportRefusal"/>), and checked again once written. When that check or the clear fails, SteamVR's
+    /// file is put back. SteamVR rewrites the file when it exits: the caller exports only while SteamVR is closed.
     /// </summary>
     /// <returns>The copy of the file as it was.</returns>
     /// <exception cref="MiradorException">Nothing was changed, or (said so) both apply.</exception>
@@ -242,6 +243,11 @@ public static class SteamVrRoom
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
             throw new MiradorException(NoRoomSetupToCopy);
+        }
+
+        if (ExportRefusal(steamDir, universe) is { } refusal)
+        {
+            throw new MiradorException(refusal);
         }
 
         var text = Encoding.UTF8.GetString(original);
@@ -271,6 +277,24 @@ public static class SteamVrRoom
             }
         }
 
+        // Read back: steamvr_lh must now take this universe, or Mirador's own setup stays and SteamVR's goes back.
+        var (universesNow, roomSetupsNow) = Read(steamDir);
+        if (SteamVrLhPick(universesNow, roomSetupsNow) != universe)
+        {
+            const string notUsed = "After the export SteamVR still wouldn't use this room setup";
+            try
+            {
+                File.WriteAllBytes(path, original);
+            }
+            catch (Exception putBack) when (putBack is IOException or UnauthorizedAccessException)
+            {
+                throw new MiradorException(
+                    $"{notUsed}, and Mirador couldn't put SteamVR's room setup back ({putBack.Message.Trim().TrimEnd('.')}). Mirador kept its own. SteamVR's room setup as it was is in {backup}.");
+            }
+
+            throw new MiradorException($"{notUsed}, so Mirador put SteamVR's room setup back and kept its own.");
+        }
+
         try
         {
             clearOwn();
@@ -292,6 +316,20 @@ public static class SteamVrRoom
         }
 
         return backup;
+    }
+
+    /// <summary>
+    /// Why exporting into <paramref name="universe"/> wouldn't help: <c>steamvr_lh</c> takes the first known universe
+    /// with a room setup, so with an entry for this universe added it would still take an earlier one (or this one isn't
+    /// known). Null when it would take this one. Reads Steam's files.
+    /// </summary>
+    public static string? ExportRefusal(string steamDir, string universe)
+    {
+        var (universes, roomSetups) = Read(steamDir);
+        var withThis = new HashSet<string>(roomSetups, StringComparer.Ordinal) { universe };
+        return SteamVrLhPick(universes, withThis) == universe
+            ? null
+            : $"{RoomSetupWarning.OtherSpace} Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
     }
 
     /// <summary>The object entries of <c>universes</c>.</summary>

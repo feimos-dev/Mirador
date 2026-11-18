@@ -323,6 +323,7 @@ public class SteamVrRoomTests
         var file = steam.File("config", "chaperone_info.vrchap");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, TwoSpaces);
+        KnownUniverses(steam, "30", "2");
         var backups = steam.File("Mirador", "backups", "steamvr");
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 18, 9, 30, 0, TimeSpan.Zero));
         var offset = RoomSetupMath.Correct(MonadoPose.Identity, -0.1f, 0);
@@ -346,6 +347,7 @@ public class SteamVrRoomTests
         var file = steam.File("config", "chaperone_info.vrchap");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, TwoSpaces);
+        KnownUniverses(steam, "30", "2");
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 18, 9, 30, 0, TimeSpan.Zero));
 
         var e = Assert.Throws<MiradorException>(() => SteamVrRoom.Export(
@@ -367,5 +369,63 @@ public class SteamVrRoomTests
         Assert.Equal("SteamVR has no room setup to copy; run SteamVR's Room Setup once.", e.Message);
         Assert.False(cleared);
         Assert.False(File.Exists(SteamVrRoom.ChaperoneInfoPath(steam.Path)));
+    }
+
+    /// <summary>A lighthousedb.json listing <paramref name="ids"/> in that order.</summary>
+    private static void KnownUniverses(TempDir steam, params string[] ids)
+    {
+        var path = SteamVrRoom.LighthousedbPath(steam.Path);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var universes = string.Join(", ", ids.Select(id => $$"""{ "base_stations" : [], "id" : "{{id}}" }"""));
+        File.WriteAllText(path, $$"""{ "known_universes" : [ {{universes}} ] }""");
+    }
+
+    private static TempDir SteamWith(string vrchap, params string[] known)
+    {
+        var steam = new TempDir();
+        var file = SteamVrRoom.ChaperoneInfoPath(steam.Path);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, vrchap);
+        KnownUniverses(steam, known);
+        return steam;
+    }
+
+    [Fact]
+    public void An_export_that_makes_steamvr_use_this_space_goes_ahead()
+    {
+        // The space in use is listed first and has no entry: steamvr_lh falls back to 30 now, and takes it after the export.
+        using var steam = SteamWith(TwoSpaces, "1793836993", "30", "2");
+        var (universes, roomSetups) = SteamVrRoom.Read(steam.Path);
+        Assert.Equal("30", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
+        Assert.Null(SteamVrRoom.ExportRefusal(steam.Path, "1793836993"));
+        var cleared = false;
+
+        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1793836993", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System);
+
+        Assert.True(cleared);
+        (universes, roomSetups) = SteamVrRoom.Read(steam.Path);
+        Assert.Equal("1793836993", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
+    }
+
+    [Fact]
+    public void An_export_steamvr_still_wouldnt_use_is_refused()
+    {
+        // 30 is listed before the space in use and has an entry: steamvr_lh would still take 30.
+        using var steam = SteamWith(TwoSpaces, "30", "1793836993", "2");
+        const string refusal =
+            "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Set it up on the Lighthouse page. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
+        Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "1793836993"));
+        var cleared = false;
+
+        var e = Assert.Throws<MiradorException>(() => SteamVrRoom.Export(
+            steam.Path, steam.File("backups"), "1793836993", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System));
+
+        Assert.Equal(refusal, e.Message);
+        Assert.False(cleared);
+        Assert.Equal(TwoSpaces, File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)));
+        Assert.False(Directory.Exists(steam.File("backups")));
+
+        // A space SteamVR doesn't know at all is refused the same way.
+        Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "99"));
     }
 }
