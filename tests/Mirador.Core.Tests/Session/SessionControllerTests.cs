@@ -991,12 +991,36 @@ public class SessionControllerTests
 
         h.Pipe.Up = true;
         h.Time.Advance(TimeSpan.FromSeconds(1));
-        Assert.True((await start.WaitAsync(Limit)).Ok);
-        var message = await h.HasEnded.Task.WaitAsync(Limit);
+        var outcome = await start.WaitAsync(Limit);
 
-        Assert.StartsWith("Monado couldn't start its compositor", message);
+        // The Start fails with the reason: a game is never told Monado runs, and Monado is stopped.
+        Assert.False(outcome.Ok);
+        Assert.StartsWith("Monado couldn't start its compositor", outcome.Message);
         Assert.Equal(SessionState.Stopped, h.Controller.State);
-        Assert.Equal([true], h.EndedProblems);
+        Assert.True(h.Launcher.Last!.Killed);
+        Assert.Empty(h.EndedMessages); // a failed Start says so through its outcome
+    }
+
+    [Fact]
+    public async Task A_compositor_failure_during_the_libmonado_wait_fails_the_start()
+    {
+        await using var h = new Harness();
+        h.Libmonado.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Pipe.Up = true;
+
+        var start = Start(h);
+        await h.Libmonado.Entered.Task.WaitAsync(Limit); // the pipe is there, libmonado waits for Monado's system
+        h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100);
+        await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
+        var outcome = await start.WaitAsync(Limit);
+        h.Libmonado.Gate.SetResult();
+
+        Assert.False(outcome.Ok);
+        Assert.StartsWith("Monado couldn't start its compositor", outcome.Message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.True(h.Launcher.Last!.Killed);
     }
 
     [Fact]

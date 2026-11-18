@@ -632,6 +632,18 @@ public sealed class SessionController(SessionDeps deps)
             {
                 await recovery.WaitAsync(ct).ConfigureAwait(false);
                 outcome = await StartCoreAsync(run, ct).ConfigureAwait(false);
+                if (outcome.Ok)
+                {
+                    // Monado said while it started (the pipe or libmonado wait) that it can't work: that is the Start's
+                    // outcome, so no game is told Monado runs, and the end below stops it.
+                    lock (gate)
+                    {
+                        if (run.StopReason is { } reason)
+                        {
+                            outcome = Fail(reason);
+                        }
+                    }
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
