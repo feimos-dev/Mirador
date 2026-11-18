@@ -57,7 +57,7 @@ public static class Libmonado
 
             IntPtr root;
             var result = exports.RootCreate(&root);
-            if (result != 0)
+            if (result < 0)
             {
                 LibmonadoNative.FreeLibrary(module);
                 return new(null, LibmonadoClient.NoAnswer(result));
@@ -115,7 +115,7 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                 fixed (byte* role = native)
                 {
                     // A role this libmonado doesn't know, or that no device has, is skipped.
-                    if (exports.GetDeviceFromRole(root, role, &index) == 0 && index >= 0)
+                    if (exports.GetDeviceFromRole(root, role, &index) >= 0 && index >= 0)
                     {
                         roles.TryAdd(index, name);
                     }
@@ -128,13 +128,18 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                 var name = DeviceString(i, LibmonadoExports.PropertyNameString) ?? "";
                 var serial = DeviceString(i, LibmonadoExports.PropertySerialString) is { Length: > 0 } text ? text : null;
 
+                // A libmonado older than 1.4 doesn't know this property; its devices count as on origin 0.
                 uint origin = 0;
-                Check(exports.GetDeviceInfoU32(root, i, LibmonadoExports.PropertyTrackingOriginU32, &origin));
+                var originResult = exports.GetDeviceInfoU32(root, i, LibmonadoExports.PropertyTrackingOriginU32, &origin);
+                if (originResult != LibmonadoExports.ErrorInvalidProperty)
+                {
+                    Check(originResult);
+                }
 
                 // Fails for a device without battery status.
                 byte present = 0, charging = 0;
                 float charge = 0;
-                var hasBattery = exports.GetDeviceBatteryStatus(root, i, &present, &charging, &charge) == 0 && present != 0;
+                var hasBattery = exports.GetDeviceBatteryStatus(root, i, &present, &charging, &charge) >= 0 && present != 0;
 
                 devices.Add(new MonadoDevice(
                     (int)i, roles.GetValueOrDefault((int)i), name, serial, origin,
@@ -224,7 +229,7 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
     private static void Check(int result)
     {
-        if (result != 0)
+        if (result < 0)
         {
             throw new MiradorException(NoAnswer(result));
         }

@@ -34,11 +34,14 @@ internal struct MndPose
 }
 
 /// <summary>
-/// The libmonado functions Mirador calls (<c>monado.h</c>, API version 1). Results are <c>mnd_result_t</c>, 0 on success;
-/// C <c>bool</c>s are single bytes.
+/// The libmonado functions Mirador calls (<c>monado.h</c>, API version 1). Results are <c>mnd_result_t</c>: negative
+/// on error, zero or positive on success. C <c>bool</c>s are single bytes.
 /// </summary>
 internal sealed unsafe class LibmonadoExports
 {
+    /// <summary><c>MND_ERROR_INVALID_PROPERTY</c>: the library doesn't know the property asked for.</summary>
+    public const int ErrorInvalidProperty = -6;
+
     public const int PropertyNameString = 0;
     public const int PropertySerialString = 1;
     public const int PropertyTrackingOriginU32 = 2;
