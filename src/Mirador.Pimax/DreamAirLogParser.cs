@@ -94,6 +94,20 @@ public sealed partial class DreamAirLogParser
         }
     }
 
+    /// <summary>The layer's text without the <c>warning: </c> or <c>info: </c> its level puts in front.</summary>
+    private static string WithoutLevel(string text)
+    {
+        foreach (var level in new[] { "info", "warning", "error", "debug", "trace" })
+        {
+            if (text.StartsWith(level + ": ", StringComparison.Ordinal))
+            {
+                return text[(level.Length + 2)..];
+            }
+        }
+
+        return text;
+    }
+
     /// <summary>Looks at the clock: sets <see cref="Failed"/> once the display session hasn't opened within <see cref="DisplayWait"/>.</summary>
     public void Tick()
     {
@@ -122,7 +136,7 @@ public sealed partial class DreamAirLogParser
     {
         if (line.IndexOf(Layer, StringComparison.Ordinal) is var at and >= 0)
         {
-            lastLayerMessage = line[(at + Layer.Length)..].Trim();
+            lastLayerMessage = WithoutLevel(line[(at + Layer.Length)..].Trim());
         }
 
         if (DisplayOpen().Match(line) is { Success: true } open)

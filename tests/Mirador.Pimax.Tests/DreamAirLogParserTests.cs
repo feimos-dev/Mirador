@@ -26,7 +26,8 @@ public class DreamAirLogParserTests
 
         Assert.NotNull(parser.Failed);
         Assert.StartsWith("The headset's display didn't come up within a minute. ", parser.Failed);
-        Assert.Contains("still waiting for the display", parser.Failed);
+        Assert.Contains(" NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display.", parser.Failed);
+        Assert.DoesNotContain("warning:", parser.Failed);
         Assert.EndsWith(" Check Diagnostics, then start again.", parser.Failed);
         var display = Line(parser, "display");
         Assert.Equal(StatusLevel.Error, display.Level);

@@ -111,10 +111,10 @@ public partial class App : Application
             AppLog.Write($"Warning: {w.Text}");
             Ui.TryEnqueue(() => NotifyUnlessSeen("While Monado runs", w.Text));
         };
-        Host.Session.Ended += text =>
+        Host.Session.Ended += end =>
         {
-            AppLog.Write($"Monado ended: {text}");
-            Ui.TryEnqueue(() => OnEnded(text));
+            AppLog.Write($"Monado ended: {end.Message}");
+            Ui.TryEnqueue(() => OnEnded(end));
         };
         AppHost.RecordAppPath();
         _ = Task.Run(Host.Session.PlaceStandIn);
@@ -353,12 +353,12 @@ public partial class App : Application
     }
 
     /// <summary>Monado ended: by itself is a problem (the tray says so, and a toast when the window isn't in front).</summary>
-    private void OnEnded(string text)
+    private void OnEnded(SessionEnd end)
     {
-        if (text.StartsWith("Monado stopped by itself", StringComparison.Ordinal))
+        if (end.Problem)
         {
             endedBadly = true;
-            NotifyUnlessSeen("Monado stopped", text);
+            NotifyUnlessSeen("Monado stopped", end.Message);
         }
 
         UpdateTray();

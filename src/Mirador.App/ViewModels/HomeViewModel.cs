@@ -68,7 +68,7 @@ public sealed partial class HomeViewModel : ObservableObject
         host.Session.StatusChanged += () => ui.TryEnqueue(RefreshStatus);
         host.Stations.Changed += OnStationsChanged;
         host.Session.Warning += w => ui.TryEnqueue(() => AddWarning(w));
-        host.Session.Ended += text => ui.TryEnqueue(() => OnEnded(text));
+        host.Session.Ended += end => ui.TryEnqueue(() => OnEnded(end));
         App.Current.StartFailed += message =>
         {
             // Through null, so that the same message again opens the bar again after it was closed.
@@ -1003,12 +1003,11 @@ public sealed partial class HomeViewModel : ObservableObject
     }
 
     /// <summary>Monado ended other than by Stop: by itself (a problem), or after the last app closed (as asked).</summary>
-    private void OnEnded(string text)
+    private void OnEnded(SessionEnd end)
     {
-        if (text != "Stopped.")
+        if (end.Message != "Stopped.")
         {
-            var problem = text.StartsWith("Monado stopped by itself", StringComparison.Ordinal);
-            ShowNotice("ended", "Monado stopped", text, problem ? InfoBarSeverity.Error : InfoBarSeverity.Informational);
+            ShowNotice("ended", "Monado stopped", end.Message, end.Problem ? InfoBarSeverity.Error : InfoBarSeverity.Informational);
         }
     }
 

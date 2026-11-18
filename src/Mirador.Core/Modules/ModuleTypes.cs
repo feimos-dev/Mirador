@@ -30,6 +30,9 @@ public sealed record CheckResult(string Label, StatusLevel Level, string Text, s
 /// <param name="Text">What happened and what to do, in plain words.</param>
 public sealed record SessionWarning(string Key, string Text);
 
+/// <summary>How a session that ran ended: what happened, and whether that is a problem (Monado stopped by itself, or Mirador stopped it because something failed) rather than a stop that was asked for.</summary>
+public sealed record SessionEnd(string Message, bool Problem);
+
 /// <summary>Collects the files and texts that go into the diagnostics zip.</summary>
 public interface IDiagnosticsSink
 {
