@@ -86,6 +86,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(CheckNowCommand))]
     public partial bool Checking { get; set; }
 
+    /// <summary>About's "Bundled Monado" line: the full version installed, for bug reports.</summary>
+    public string BundledMonadoVersion =>
+        MiradorMonado.Read(host.Locator.MiradorRoot).Current is { } current ? $"Bundled Monado: {current}" : "Bundled Monado: not installed yet";
+
     /// <summary>The "OpenLamina" card of About: the version and commit.</summary>
     public string OpenCompositeDescription =>
         host.OpenComposite.Source is { } source
