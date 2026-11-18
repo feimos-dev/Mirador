@@ -293,7 +293,15 @@ public sealed partial class HomeViewModel : ObservableObject
         {
             do
             {
-                await ReadDevicesAsync(ct);
+                try
+                {
+                    await ReadDevicesAsync(ct);
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    // One bad read doesn't end the poll: the next tick tries again.
+                    AppLog.Write("Mirador couldn't read Monado's devices", e);
+                }
             }
             while (await timer.WaitForNextTickAsync(ct));
         }
