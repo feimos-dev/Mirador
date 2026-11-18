@@ -621,7 +621,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
 
         public IReadOnlyDictionary<string, string>? MonadoEnvironment => host.Session.LastMiradorEnvironment;
 
-        public SteamVrNow SteamVr() => SteamVrNow.Read(AppHost.SteamDir(), host.KnownStations());
+        public SteamVrNow? SteamVr() => host.RunUsesBaseStations() ? SteamVrNow.Read(AppHost.SteamDir(), host.KnownStations()) : null;
 
         public Task<StartOutcome> StartMonadoAsync() => App.Current.StartAsync(StartReason.Button);
 

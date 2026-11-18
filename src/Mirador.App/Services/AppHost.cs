@@ -157,7 +157,7 @@ public sealed class AppHost : IAsyncDisposable
         try
         {
             var profile = Profiles.Load().Selected;
-            var moduleUsesLighthouse = profile.ModuleId is { } id && Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
+            var moduleUsesLighthouse = ModuleUsesLighthouse(profile);
             if (!profile.UsesBaseStations(moduleUsesLighthouse))
             {
                 return (null, null);
@@ -189,6 +189,19 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the running profile (else the selected one) uses base stations: only then is a room setup kept per
+    /// Lighthouse universe, and SteamVR's files read for it.
+    /// </summary>
+    public bool RunUsesBaseStations()
+    {
+        var profile = Session.CurrentProfile?.Profile ?? Profiles.Load().Selected;
+        return profile.UsesBaseStations(ModuleUsesLighthouse(profile));
+    }
+
+    private bool ModuleUsesLighthouse(Profile profile) =>
+        profile.ModuleId is { } id && Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
+
     /// <summary>The base stations Mirador knows, as kept.</summary>
     public IReadOnlyList<KnownStation> KnownStations() => [.. Stations.Stations.Select(v => v.Station)];
 
@@ -207,7 +220,9 @@ public sealed class AppHost : IAsyncDisposable
         string? problem = null;
         try
         {
-            var applied = RoomSetupApplier.ApplyWithSteamVr(client, RoomSetups, SteamDir(), KnownStations());
+            var applied = RunUsesBaseStations()
+                ? RoomSetupApplier.ApplyWithSteamVr(client, RoomSetups, SteamDir(), KnownStations())
+                : RoomSetupApplier.Apply(client, RoomSetups, universe: null);
             if (applied > 0)
             {
                 AppLog.Write($"Room setup set for {applied} tracking origin{(applied == 1 ? "" : "s")}.");

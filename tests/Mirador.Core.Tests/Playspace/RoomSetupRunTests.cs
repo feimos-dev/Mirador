@@ -84,8 +84,10 @@ public sealed class RoomSetupRunTests : IDisposable
 
         public SteamVrBase? Base { get; set; } = new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1);
 
-        public SteamVrNow SteamVr() =>
-            UniverseFails is { } fails ? throw fails : new SteamVrNow(new UniversePick("1500000001", true), new HashSet<string> { "30" }, Base);
+        public bool NoBaseStations { get; set; }
+
+        public SteamVrNow? SteamVr() =>
+            NoBaseStations ? null : UniverseFails is { } fails ? throw fails : new SteamVrNow(new UniversePick("1500000001", true), new HashSet<string> { "30" }, Base);
 
         public Task<StartOutcome> StartMonadoAsync()
         {
@@ -144,6 +146,20 @@ public sealed class RoomSetupRunTests : IDisposable
 
         // Kept with the SteamVR room setup it was measured on.
         Assert.Equal(new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1), store.Get("steamvr_lh", "1500000001")!.Base);
+    }
+
+    [Fact]
+    public async Task Without_base_stations_a_step_keeps_its_setup_without_a_universe()
+    {
+        monado.Current = monado.Client;
+        monado.NoBaseStations = true;
+        monado.UniverseFails = new MiradorException("SteamVR's files can't be read.");
+        Answer(Measured, 0);
+
+        Assert.Equal(new RoomStepOutcome("The floor is set.", RoomStepLevel.Success), await Step(RoomStep.Floor));
+        Assert.Equal(0.07f, store.Get("steamvr_lh", null)!.Offset.Y, 1e-4f);
+        Assert.Null(store.Get("steamvr_lh", null)!.Base);
+        Assert.Null(store.Get("steamvr_lh", "1500000001"));
     }
 
     [Fact]

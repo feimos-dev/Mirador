@@ -12,6 +12,6 @@ namespace Mirador.Core.Playspace;
 /// <param name="Taken">When it was measured.</param>
 /// <param name="Base">
 /// The SteamVR room setup <c>steamvr_lh</c> applied while it was measured, which <paramref name="Offset"/> is relative
-/// to; null when Steam's files weren't there (or for a setup kept before Mirador noted it).
+/// to; null when Steam's files weren't there or the profile doesn't use base stations.
 /// </param>
 public sealed record RoomSetup(string OriginName, string? Universe, MonadoPose Offset, DateTimeOffset Taken, SteamVrBase? Base = null);
