@@ -629,10 +629,12 @@ internal sealed class Harness : IAsyncDisposable
     /// and runs them through <see cref="Launcher"/>.</param>
     /// <param name="approvedCopy">The locator's lookup of a build's approved copy; null: no build is approved.</param>
     /// <param name="elevationFix">Whether Verify found the elevation fix in a build; null: never.</param>
+    /// <param name="variablesApproved">Whether a profile's variables are approved to run as administrator; null: never.</param>
     /// <param name="folderBackupLimit">With a value, the session copies <see cref="MonadoFolder"/> at each Start, up to that many bytes.</param>
     public Harness(
         ISessionHook? hook = null, bool? installedCopy = null, Func<Profile, MonadoInstall, Mirador.Ipc.ApprovedBuild?>? approvedCopy = null,
-        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false, long? folderBackupLimit = null)
+        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false, long? folderBackupLimit = null,
+        Func<Profile, bool>? variablesApproved = null)
     {
         Root = Path.Combine(dir.Path, "Zoë's data");
         Paths = new AppPaths(Path.Combine(Root, "Mirador"));
@@ -688,6 +690,7 @@ internal sealed class Harness : IAsyncDisposable
                 ElevatedInstalledCopy: installedCopy is { } installed ? () => installed : null,
                 BundledLayerDir: BundledLayer,
                 ElevationFixVerified: elevationFix,
+                VariablesApproved: variablesApproved,
                 ControllersOffAtStop: () => controllersOffAtStop,
                 OpenLibmonado: Libmonado.Open,
                 FolderBackups: folderBackupLimit is { } limit

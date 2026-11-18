@@ -1356,7 +1356,8 @@ public sealed class SessionController(SessionDeps deps)
             && profile.RunAsAdministrator
             && deps.ElevatedConsented?.Invoke() == true
             && (install.IsBundled || approvedBuild)
-            && Elevation.ElevatedChoice.RunsAsYouReason(profile, module, deps.ElevatedInstalledCopy?.Invoke() == true, approvedBuild) is null;
+            && Elevation.ElevatedChoice.RunsAsYouReason(
+                profile, module, deps.ElevatedInstalledCopy?.Invoke() == true, approvedBuild, deps.VariablesApproved?.Invoke(profile) == true) is null;
 
         if (!eligible)
         {
@@ -1371,7 +1372,9 @@ public sealed class SessionController(SessionDeps deps)
             module?.ElevatedModuleId ?? "",
             approvedBuild ? profile.Id : "",
             ElevationFix: deps.ElevationFixVerified?.Invoke(profile, install) == true,
-            StandbyOnExit: deps.ControllersOffAtStop?.Invoke() == true);
+            StandbyOnExit: deps.ControllersOffAtStop?.Invoke() == true,
+            ProfileId: profile.Id,
+            Variables: profile.ExtraEnvironment.Count > 0 ? Elevation.ElevatedChoice.Variables(profile) : null);
         return deps.ElevatedLauncher!(start);
     }
 

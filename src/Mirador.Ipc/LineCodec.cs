@@ -13,6 +13,9 @@ public static class LineCodec
     /// <summary>The longest line, not counting its newline.</summary>
     public const int MaxLineBytes = 4096;
 
+    /// <summary>How many bytes <paramref name="value"/> takes as a line, not counting its newline.</summary>
+    public static int LengthOf<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value, TypeInfo<T>()).Length;
+
     /// <summary>Writes <paramref name="value"/> as one line and flushes.</summary>
     /// <exception cref="InvalidDataException">The value is longer than <see cref="MaxLineBytes"/> as JSON; nothing is written.</exception>
     public static async Task WriteAsync<T>(Stream stream, T value, CancellationToken ct)

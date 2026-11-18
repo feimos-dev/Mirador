@@ -25,6 +25,7 @@ namespace Mirador.Core.Session;
 /// <param name="ElevatedInstalledCopy">Whether this Mirador is the installed one the helper starts Monado as administrator for (asked once consent is on); null: never.</param>
 /// <param name="ControllersOffAtStop">Whether Monado turns its Lighthouse controllers and trackers off as it stops (<see cref="AppSettings.ControllersOffAtStop"/>); null: never.</param>
 /// <param name="ElevationFixVerified">Whether Verify found the elevation fix in the profile's build as it is now (<see cref="ElevatedStart.ElevationFix"/>); null: never.</param>
+/// <param name="VariablesApproved">Whether the profile's variables are exactly the ones approved to run as administrator; null: never.</param>
 /// <param name="FolderBackups">Copies Monado's folder before each launch when it changed; null: no copies.</param>
 /// <param name="OpenLibmonado">Opens libmonado from a Monado install's <c>bin</c> folder once Monado is up; null: <see cref="Libmonado.Open"/>.</param>
 public sealed record SessionDeps(
@@ -47,7 +48,8 @@ public sealed record SessionDeps(
     Func<Profile, MonadoInstall, bool>? ElevationFixVerified = null,
     Func<bool>? ControllersOffAtStop = null,
     Func<string, LibmonadoOpen>? OpenLibmonado = null,
-    MonadoFolderBackups? FolderBackups = null)
+    MonadoFolderBackups? FolderBackups = null,
+    Func<Profile, bool>? VariablesApproved = null)
 {
     public Func<string, LibmonadoOpen> OpenLibmonado { get; init; } = OpenLibmonado ?? Libmonado.Open;
 }

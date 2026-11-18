@@ -118,7 +118,14 @@
                     Description="{x:Bind ViewModel.ApprovalStatus, Mode=OneWay}"
                     Header="Approved build"
                     Visibility="{x:Bind ViewModel.CanApprove, Mode=OneWay}">
-                    <Button Command="{x:Bind ViewModel.ApproveCommand}" Content="Approve" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                            Glyph="&#xE73E;"
+                            Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
+                        <Button Command="{x:Bind ViewModel.ApproveCommand}" Content="Approve" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
                     Description="{x:Bind ViewModel.Build.Status, Mode=OneWay}"

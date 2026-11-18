@@ -76,6 +76,19 @@ public static partial class ElevatedVariables
     public static string? FirstRefused(IEnumerable<KeyValuePair<string, string>> variables) =>
         variables.Select(v => v.Key).FirstOrDefault(IsRefused);
 
+    /// <summary>
+    /// Whether <paramref name="variables"/> fit in an elevated Start's request for <paramref name="profileId"/>, with every
+    /// other field at its longest: the helper reads at most <see cref="LineCodec.MaxLineBytes"/> bytes of a request.
+    /// </summary>
+    public static bool FitInStart(string profileId, IReadOnlyList<KeyValuePair<string, string>> variables)
+    {
+        var start = new ElevatedStart(
+            MonadoSettingsEnvironment.LighthouseWaitRange.Max, MonadoSettingsEnvironment.RenderScaleRange.Max,
+            MonadoSettingsEnvironment.CompositorMinTimeRange.Max, ExitOnDisconnect: true, Module: PimaxEnvironment.ModuleId,
+            Build: profileId, Headless: true, ElevationFix: true, StandbyOnExit: true, ProfileId: profileId, Variables: variables);
+        return LineCodec.LengthOf(new HelperRequest(HelperCommand.StartMonadoElevated, start)) <= LineCodec.MaxLineBytes;
+    }
+
     /// <summary>Every name <see cref="MonadoSettingsEnvironment.Write"/> may write, taken from it so the two can't drift.</summary>
     private static List<string> SettingsNames()
     {

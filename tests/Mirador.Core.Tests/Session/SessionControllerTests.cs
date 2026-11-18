@@ -48,6 +48,40 @@ public class SessionControllerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public async Task Approved_variables_go_to_the_helper_and_unapproved_ones_run_as_you(bool approved)
+    {
+        await using var h = new Harness(installedCopy: true, variablesApproved: _ => approved);
+        h.UseProfile(Harness.DreamAir with { RunAsAdministrator = true, ExtraEnvironment = [new EnvVar("PIMAX_P3C_LOG", "info"), new EnvVar("XRT_LOG", "debug")] });
+
+        await h.StartRunningAsync();
+
+        if (approved)
+        {
+            Assert.True(h.ElevatedStarts.TryDequeue(out var start));
+            Assert.Equal("p1", start.ProfileId);
+            Assert.Equal([new("PIMAX_P3C_LOG", "info"), new KeyValuePair<string, string>("XRT_LOG", "debug")], start.Variables);
+        }
+        else
+        {
+            Assert.Empty(h.ElevatedStarts);
+        }
+    }
+
+    [Fact]
+    public async Task An_elevated_start_without_variables_sends_none()
+    {
+        await using var h = new Harness(installedCopy: true);
+        h.UseProfile(Harness.DreamAir with { RunAsAdministrator = true });
+
+        await h.StartRunningAsync();
+
+        Assert.True(h.ElevatedStarts.TryDequeue(out var start));
+        Assert.Null(start.Variables);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task An_elevated_start_says_whether_verify_found_the_elevation_fix(bool found)
     {
         await using var h = new Harness(installedCopy: true, elevationFix: (_, _) => found);

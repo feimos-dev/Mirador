@@ -121,7 +121,8 @@ public sealed class AppHost : IAsyncDisposable
             BundledLayerDir: Path.Combine(appDir, "layer"),
             ElevationFixVerified: ElevationFixVerified,
             ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
-            FolderBackups: FolderBackups));
+            FolderBackups: FolderBackups,
+            VariablesApproved: VariablesApproved));
     }
 
     /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed (Mirador.md §4.10 item 46).</summary>
@@ -131,6 +132,9 @@ public sealed class AppHost : IAsyncDisposable
     /// <summary>Home's line when the profile has "Run as administrator" on but the user's consent isn't recorded (any more).</summary>
     public const string NotAllowedReason =
         "Runs as you: Windows hasn't been asked yet for Monado to run as administrator.";
+
+    /// <summary>What <see cref="ApproveBuildAsync"/> says when the user cancelled Windows' prompt.</summary>
+    public const string ApprovalCancelled = "You cancelled the prompt; the build runs as you.";
 
     /// <summary>
     /// Whether Mirador started with no profiles file (its first run for this user): the window then asks where Monado
@@ -369,8 +373,10 @@ public sealed class AppHost : IAsyncDisposable
     {
         try
         {
+            // A branch's or build folder's approval, and the approval of a profile's variables with the bundled Monado
+            // (no copy, the variables only) while the profile still sets some.
             var keep = Profiles.Load().Profiles
-                .Where(p => p.Monado.Kind is SourceKind.Branch or SourceKind.Folder)
+                .Where(p => p.Monado.Kind is SourceKind.Branch or SourceKind.Folder || p.ExtraEnvironment.Count > 0)
                 .Select(p => p.Id)
                 .ToHashSet(StringComparer.Ordinal);
             var listed = await Helper.SendAsync(new HelperRequest(HelperCommand.ListApprovedBuilds), CancellationToken.None);
@@ -483,8 +489,17 @@ public sealed class AppHost : IAsyncDisposable
             }
 
             var module = profile.ModuleId is { } id ? Modules.GetValueOrDefault(id) : null;
-            return ElevatedChoice.RunsAsYouReason(profile, module, IsInstalledCopy(askHelper: false), ApprovedBuildCurrent(profile))
-                ?? (steamVrChanged ? SteamVrChangedReason : null);
+            var reason = ElevatedChoice.RunsAsYouReason(
+                profile, module, IsInstalledCopy(askHelper: false), ApprovedBuildCurrent(profile), VariablesApproved(profile));
+
+            // Variables that differ from an approval of them: added, removed or changed since.
+            if (reason == ElevatedChoice.ExtraVariables && Approval(profile) is { } record
+                && (record.Variables.Count > 0 || profile.Monado.Kind != SourceKind.Mirador))
+            {
+                reason = ElevatedChoice.VariablesChanged;
+            }
+
+            return reason ?? (steamVrChanged ? SteamVrChangedReason : null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -597,18 +612,51 @@ public sealed class AppHost : IAsyncDisposable
         VerifyResult.Load(VerifyResultFile(profile.Id)) is { HasElevationFix: true, StrictPipe: true } result && result.Key == VerifyBuild.KeyFor(install);
 
     /// <summary>
-    /// Whether <paramref name="profile"/> has an approval at all, of this build or an earlier one: then a build that isn't
-    /// the approved one changed since.
+    /// Whether <paramref name="profile"/> has an approval of its kind at all, of this build or an earlier one, with these
+    /// variables or others: then whatever isn't the approved one changed since. A branch's or build folder's is a copy;
+    /// one of the bundled Monado holds variables only (<see cref="ApprovedBuilds.BundledCommit"/>) and is never a build.
     /// </summary>
-    public bool HasApproval(Profile profile)
+    public bool HasApproval(Profile profile) => Approval(profile) is not null;
+
+    /// <summary>
+    /// Whether <paramref name="profile"/>'s variables are exactly the ones approved for it (none for a profile of the
+    /// bundled Monado without variables, which needs no approval): a variable added, removed or changed undoes the
+    /// approval, as the helper would refuse it.
+    /// </summary>
+    public bool VariablesApproved(Profile profile)
+    {
+        if (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count == 0)
+        {
+            return true;
+        }
+
+        return Approval(profile) is { } record && ElevatedChoice.SameVariables(profile.ExtraEnvironment, record.Variables);
+    }
+
+    /// <summary>
+    /// The current user's approval record of <paramref name="profile"/>, when it is of the profile's kind: a copy for a
+    /// branch or build folder, the variables only for the bundled Monado. Null otherwise, or when it can't be read.
+    /// </summary>
+    private ApprovedBuild? Approval(Profile profile)
     {
         try
         {
-            return AllowElevatedCommand.CurrentUser()?.Value is { } owner && new RegistryApprovedBuildStore().Get(owner, profile.Id) is not null;
+            if (AllowElevatedCommand.CurrentUser()?.Value is not { } owner || new RegistryApprovedBuildStore().Get(owner, profile.Id) is not { } record)
+            {
+                return null;
+            }
+
+            var bundled = record.Commit == ApprovedBuilds.BundledCommit;
+            return profile.Monado.Kind switch
+            {
+                SourceKind.Mirador => bundled ? record : null,
+                SourceKind.Branch or SourceKind.Folder => bundled ? null : record,
+                _ => null,
+            };
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            return false;
+            return null;
         }
     }
 
@@ -634,36 +682,37 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Runs <c>Mirador.exe --approve-build</c> through one UAC prompt for <paramref name="profile"/>'s build as it is now.
-    /// Null when it is approved, else why not.
+    /// Runs <c>Mirador.exe --approve-build</c> through one UAC prompt for <paramref name="profile"/>'s build as it is now
+    /// and its variables; for a profile of the bundled Monado, its variables only. Variables that can't run as
+    /// administrator are refused before any prompt (<see cref="ElevatedChoice.ApprovalProblem"/>). Null when it is
+    /// approved, else why not.
     /// </summary>
-    public async Task<string?> ApproveBuildAsync(Profile profile)
+    /// <param name="alsoAllow">Record the user's consent for Monado as administrator behind the same prompt.</param>
+    public async Task<string?> ApproveBuildAsync(Profile profile, bool alsoAllow = false)
     {
-        MonadoInstall install;
-        try
+        if (ApprovalTarget(profile, out var commit, out var folder) is { } problem)
         {
-            install = Locator.Locate(profile);
-        }
-        catch (MiradorException e)
-        {
-            return e.Message;
+            return problem;
         }
 
-        var folder = Path.GetDirectoryName(install.Manifest)!;
-        if (!File.Exists(Path.Combine(folder, "bin", "monado-service.exe")))
-        {
-            return "Only an installed build can be approved (Monado's install layout, as Mirador's branch builds are). Build it with \"cmake --install\", or let Mirador build the branch.";
-        }
-
-        var commit = Core.Build.BuildInfo.Load(folder)?.Commit is { Length: >= 7 } c ? c : "folder";
         var info = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Mirador.exe"))
         {
             Verb = "runas",
             UseShellExecute = true,
         };
+        if (alsoAllow)
+        {
+            info.ArgumentList.Add(AllowElevatedCommand.Flag);
+        }
+
         foreach (var argument in new[] { AppArgs.ApproveBuildFlag, profile.Id, commit, folder })
         {
             info.ArgumentList.Add(argument);
+        }
+
+        foreach (var variable in profile.ExtraEnvironment)
+        {
+            info.ArgumentList.Add($"{variable.Name}={variable.Value}");
         }
 
         try
@@ -675,17 +724,71 @@ public sealed class AppHost : IAsyncDisposable
             }
 
             await process.WaitForExitAsync();
+            if (process.ExitCode == 0 && alsoAllow)
+            {
+                // The consent step recorded SteamVR's Lighthouse files as they are now.
+                SteamVrAllowedAgain();
+            }
+
             return process.ExitCode == 0 ? null : "The build couldn't be approved; mirador.log says why.";
         }
         catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == ElevatedRuntime.PromptCancelled)
         {
-            return "You cancelled the prompt; the build runs as you.";
+            return ApprovalCancelled;
         }
         catch (System.ComponentModel.Win32Exception e)
         {
             return $"The approval couldn't be started ({e.Message.TrimEnd('.')}).";
         }
     }
+
+    /// <summary>
+    /// Why <paramref name="profile"/> can't be approved now, before any prompt: its variables can't run as administrator
+    /// (<see cref="ElevatedChoice.ApprovalProblem"/>), a profile of the bundled Monado has no variables to approve, or a
+    /// branch's or build folder's build isn't there as an install. Null when it can, with the commit and folder the
+    /// approval step takes (both <see cref="AppArgs.Bundled"/> for the bundled Monado).
+    /// </summary>
+    public string? ApprovalTarget(Profile profile, out string commit, out string folder)
+    {
+        (commit, folder) = (AppArgs.Bundled, AppArgs.Bundled);
+        if (ElevatedChoice.ApprovalProblem(profile) is { } problem)
+        {
+            return problem;
+        }
+
+        if (profile.Monado.Kind == SourceKind.Mirador)
+        {
+            return profile.ExtraEnvironment.Count == 0
+                ? "This profile has no variables to approve: Mirador's Monado runs as administrator without an approval."
+                : null;
+        }
+
+        MonadoInstall install;
+        try
+        {
+            install = Locator.Locate(profile);
+        }
+        catch (MiradorException e)
+        {
+            return e.Message;
+        }
+
+        folder = Path.GetDirectoryName(install.Manifest)!;
+        if (!File.Exists(Path.Combine(folder, "bin", "monado-service.exe")))
+        {
+            return "Only an installed build can be approved (Monado's install layout, as Mirador's branch builds are). Build it with \"cmake --install\", or let Mirador build the branch.";
+        }
+
+        commit = Core.Build.BuildInfo.Load(folder)?.Commit is { Length: >= 7 } c ? c : "folder";
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="profile"/> is approved as a whole: a branch's or build folder's build as it is now with its
+    /// variables, or a profile of the bundled Monado's variables.
+    /// </summary>
+    public bool FullyApproved(Profile profile) =>
+        (profile.Monado.Kind == SourceKind.Mirador || ApprovedBuildCurrent(profile)) && VariablesApproved(profile);
 
     /// <summary>
     /// When a profile runs Mirador's Monado and none is installed: the helper installs the newest weekly build (Mirador.md

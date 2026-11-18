@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.DirectMode;
+using Mirador.Core.Elevation;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
 using Mirador.Pimax;
@@ -168,9 +169,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the approval card shows: the saved profile builds a branch or uses a build folder.</summary>
+    /// <summary>
+    /// Whether the approval card shows: the saved profile builds a branch or uses a build folder, or runs the bundled
+    /// Monado with extra variables.
+    /// </summary>
     [ObservableProperty]
     public partial bool CanApprove { get; set; }
+
+    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check, and Approve is off.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApproveCommand))]
+    public partial bool IsApproved { get; set; }
 
     /// <summary>The approval's state: approved, a newer build waiting, or none.</summary>
     [ObservableProperty]
@@ -408,7 +417,24 @@ public sealed partial class ProfilesViewModel : ObservableObject
         string? problem = null;
         // Only the installed copy asks: the helper starts Monado as administrator for it alone, so a consent recorded
         // from another copy would buy nothing (Home says why this copy runs as you).
-        if (profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false))
+        var needsConsent = profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false);
+
+        // A profile that needs an approval (its build, its variables) gets it here too, behind the same one prompt.
+        // Declining the prompt saves the profile to run as you; turning the switch off later keeps the approval.
+        if (profile.RunAsAdministrator && Approvable(profile) && !host.FullyApproved(profile) && host.ApprovalTarget(profile, out _, out _) is null)
+        {
+            var refusal = await host.ApproveBuildAsync(profile, alsoAllow: needsConsent);
+            if (refusal == AppHost.ApprovalCancelled)
+            {
+                profile = profile with { RunAsAdministrator = false };
+                problem = "Saved to run as you: Windows' administrator prompt was cancelled.";
+            }
+            else if (refusal is not null)
+            {
+                problem = $"Saved, but not approved: {refusal}";
+            }
+        }
+        else if (needsConsent)
         {
             var code = await ElevatedMonado.AllowAsync();
             if (code == 0)
@@ -524,27 +550,47 @@ public sealed partial class ProfilesViewModel : ObservableObject
         RefreshApproval(problem);
     }
 
-    private bool CanApproveNow() => editing is not null && !IsDirty;
+    private bool CanApproveNow() => editing is not null && !IsDirty && !IsApproved;
+
+    /// <summary>Whether <paramref name="profile"/> has something to approve: a branch's or build folder's build, or the bundled Monado's extra variables.</summary>
+    private static bool Approvable(Profile profile) =>
+        profile.Monado.Kind is SourceKind.Branch or SourceKind.Folder
+        || (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count > 0);
 
     private void RefreshApproval(string? problem = null)
     {
-        CanApprove = editing?.Monado.Kind is SourceKind.Branch or SourceKind.Folder;
+        CanApprove = editing is not null && Approvable(editing);
+        IsApproved = CanApprove && host.FullyApproved(editing!);
         if (!CanApprove || editing is null)
         {
             return;
         }
 
-        var uses = editing.RunAsAdministrator ? "run as administrator and be the OpenXR runtime" : "be the OpenXR runtime";
-        var state = host.ApprovedBuildCurrent(editing)
-            ? editing.RunAsAdministrator
-                ? "Approved: this build runs as administrator and can be the OpenXR runtime."
-                : "Approved: this build can be the OpenXR runtime. Monado runs from the approved copy, as you."
-            : host.HasApproval(editing)
-                ? $"This build changed since it was approved: approve it again to let it {uses}."
-                : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it.";
-        if (Verify.ElevationNote is { } verified)
+        string state;
+        if (ElevatedChoice.ApprovalProblem(editing) is { } blocked)
         {
-            state += " " + verified;
+            state = blocked;
+        }
+        else if (editing.Monado.Kind == SourceKind.Mirador)
+        {
+            state = IsApproved
+                ? "Approved: these variables run with Monado as administrator, with full rights."
+                : host.HasApproval(editing)
+                    ? "Not approved: the variables changed."
+                    : "Approve these variables to run them with Monado as administrator. Approved variables run with full rights.";
+        }
+        else
+        {
+            var uses = editing.RunAsAdministrator ? "run as administrator and be the OpenXR runtime" : "be the OpenXR runtime";
+            state = IsApproved
+                ? editing.RunAsAdministrator
+                    ? "Approved: this build runs as administrator and can be the OpenXR runtime."
+                    : "Approved: this build can be the OpenXR runtime. Monado runs from the approved copy, as you."
+                : host.ApprovedBuildCurrent(editing)
+                    ? "Not approved: the variables changed."
+                    : host.HasApproval(editing)
+                        ? $"This build changed since it was approved: approve it again to let it {uses}."
+                        : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it. Its variables are approved with it and run with full rights.";
         }
 
         ApprovalStatus = problem is null ? state : $"{problem} {state}";
