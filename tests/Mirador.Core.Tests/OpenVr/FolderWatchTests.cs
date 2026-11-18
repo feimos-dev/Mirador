@@ -102,6 +102,87 @@ public sealed class FolderWatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_folder_deleted_and_made_again_is_watched_again()
+    {
+        var openLamina = dir.File("OpenLamina");
+        Directory.CreateDirectory(Path.Combine(openLamina, "bin"));
+        File.WriteAllText(Path.Combine(openLamina, "bin", "vrclient_x64.dll"), "old");
+        using var watch = new FolderWatch([openLamina], Debounce);
+        var counter = new Counter(watch);
+
+        // Uninstalled: a change.
+        Directory.Delete(openLamina, recursive: true);
+        await counter.Next.WaitAsync(EventLimit);
+        await Task.Delay(Quiet);
+        counter.Reset();
+
+        // Installed again: watched again.
+        Directory.CreateDirectory(Path.Combine(openLamina, "bin"));
+        await counter.Next.WaitAsync(EventLimit);
+        await Task.Delay(Quiet);
+        counter.Reset();
+        File.WriteAllText(Path.Combine(openLamina, "bin", "vrclient_x64.dll"), "new");
+        await counter.Next.WaitAsync(EventLimit);
+    }
+
+    [Fact]
+    public async Task A_folder_gone_before_its_watcher_is_made_is_waited_for()
+    {
+        var openvr = dir.File("openvr");
+        Directory.CreateDirectory(openvr);
+        var gone = false;
+
+        // The folder goes between the look and the watcher: the watcher can't be made, and nothing throws.
+        using var watch = new FolderWatch([openvr], Debounce, log: null, folder =>
+        {
+            if (!gone && string.Equals(folder, openvr, StringComparison.OrdinalIgnoreCase))
+            {
+                gone = true;
+                Directory.Delete(openvr);
+            }
+
+            return new FileSystemWatcher(folder);
+        }, retryBase: TimeSpan.FromMilliseconds(50));
+        var counter = new Counter(watch);
+
+        Directory.CreateDirectory(openvr);
+        await counter.Next.WaitAsync(EventLimit);
+        await Task.Delay(Quiet);
+        counter.Reset();
+        File.WriteAllText(Path.Combine(openvr, "openvrpaths.vrpath"), "{}");
+        await counter.Next.WaitAsync(EventLimit);
+    }
+
+    [Fact]
+    public async Task A_folder_that_never_can_be_watched_is_left_after_a_few_tries_and_said_once()
+    {
+        var openvr = dir.File("openvr");
+        Directory.CreateDirectory(openvr);
+        var tries = 0;
+        var said = new List<string>();
+        using var watch = new FolderWatch([openvr], Debounce, text => { lock (said) { said.Add(text); } }, _ =>
+        {
+            Interlocked.Increment(ref tries);
+            throw new UnauthorizedAccessException("Access is denied.");
+        }, retryBase: TimeSpan.FromMilliseconds(10));
+
+        // 10 + 20 + 40 + 80 ms of pauses: well within the limit.
+        var deadline = DateTime.UtcNow + EventLimit;
+        while (Volatile.Read(ref tries) < FolderWatch.MaxAttempts && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        await Task.Delay(Quiet);
+        Assert.Equal(FolderWatch.MaxAttempts, Volatile.Read(ref tries));
+        lock (said)
+        {
+            Assert.Single(said);
+            Assert.Contains("stopped watching", said[0]);
+        }
+    }
+
+    [Fact]
     public async Task Dispose_stops_events()
     {
         var openvr = dir.File("openvr");

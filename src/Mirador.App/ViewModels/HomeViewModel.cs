@@ -252,11 +252,6 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public bool HasGpuSchedulingNotice => GpuSchedulingNotice is not null;
 
-    /// <summary>
-    /// Home listens to the base stations while it is the current page, the base stations card shows and the window is on
-    /// screen; <paramref name="shown"/> is the first and the last of those. Monado's devices are read while it shows and
-    /// Monado runs.
-    /// </summary>
     /// <summary>The window came to the front: while Home shows, its runtime cards are read again.</summary>
     public void OnWindowActivated()
     {
@@ -266,6 +261,11 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Home listens to the base stations while it is the current page, the base stations card shows and the window is on
+    /// screen; <paramref name="shown"/> is the first and the last of those. Monado's devices are read while it shows and
+    /// Monado runs.
+    /// </summary>
     public void SetShown(bool shown)
     {
         pageShown = shown;

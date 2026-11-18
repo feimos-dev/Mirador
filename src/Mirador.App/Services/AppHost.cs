@@ -91,7 +91,8 @@ public sealed class AppHost : IAsyncDisposable
         Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
         OpenVr = new OpenVrGames(new OpenVrPaths(OpenVrPaths.DefaultFile, OpenComposite.Folder), OpenComposite);
-        OpenVrWatch = new FolderWatch([Path.GetDirectoryName(OpenVrPaths.DefaultFile)!, OpenComposite.Folder], TimeSpan.FromMilliseconds(500));
+        OpenVrWatch = new FolderWatch(
+            [Path.GetDirectoryName(OpenVrPaths.DefaultFile)!, OpenComposite.Folder], TimeSpan.FromMilliseconds(500), text => AppLog.Write(text));
 
         radio = new WinRtStationRadio(text => AppLog.Write(text));
         stationStore = new StationStore(paths.BaseStationsFile);
@@ -898,10 +899,16 @@ public sealed class AppHost : IAsyncDisposable
         // Mirador's own off goes now, beside Monado's stop (a headset's end can take long). The session's end has its off
         // waiting its few seconds when Mirador's isn't wanted: the flush sends it at once.
         Stations.QuittingNow();
-        await Session.StopAsync(CancellationToken.None).ConfigureAwait(false);
-        await Stations.FlushAsync(StationsLimit).ConfigureAwait(false);
-        OpenVrWatch.Dispose();
-        launcher.Dispose();
+        try
+        {
+            await Session.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await Stations.FlushAsync(StationsLimit).ConfigureAwait(false);
+        }
+        finally
+        {
+            OpenVrWatch.Dispose();
+            launcher.Dispose();
+        }
     }
 
     /// <summary>

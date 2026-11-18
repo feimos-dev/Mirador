@@ -59,6 +59,9 @@ public partial class App : Application
     /// <summary>Home's view model, made at start so that nothing that happens before Home opens is lost.</summary>
     public HomeViewModel Home => home ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
+    /// <summary>Home once Mirador has started; null before (a window event can come that early).</summary>
+    public HomeViewModel? HomeIfStarted => home;
+
     /// <summary>The check for newer releases, daily and on request.</summary>
     public Updates Updates => updates ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 

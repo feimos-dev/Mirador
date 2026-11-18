@@ -186,7 +186,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            App.Current.Home.OnWindowActivated();
+            App.Current.HomeIfStarted?.OnWindowActivated();
         }
     }
 
