@@ -148,4 +148,51 @@ public class RoomMeasuringTests
         Assert.False(RoomMeasuring.StopsMonado(new Dictionary<string, string> { ["XRT_COMPOSITOR_SCALE_PERCENTAGE"] = "100" }));
         Assert.False(RoomMeasuring.StopsMonado(null));
     }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("true", true)]
+    [InlineData("on", true)]
+    [InlineData("yes", true)]
+    [InlineData("2", true)]
+    [InlineData("False", true)]
+    [InlineData("", true)]
+    [InlineData("false", false)]
+    [InlineData("FALSE", false)]
+    [InlineData("off", false)]
+    [InlineData("OFF", false)]
+    [InlineData("no", false)]
+    [InlineData("NO", false)]
+    [InlineData("n", false)]
+    [InlineData("N", false)]
+    [InlineData("f", false)]
+    [InlineData("F", false)]
+    [InlineData("0", false)]
+    public void Exit_on_disconnect_is_read_as_monado_reads_a_switch(string value, bool on)
+    {
+        // Monado's bool options: set and not one of its exact "false" spellings is on (False with a capital F too).
+        Assert.Equal(on, RoomMeasuring.StopsMonado(new Dictionary<string, string> { ["IPC_EXIT_ON_DISCONNECT"] = value }));
+
+        // Windows' variable names don't care about case.
+        Assert.Equal(on, RoomMeasuring.StopsMonado(new Dictionary<string, string> { ["ipc_exit_on_disconnect"] = value }));
+    }
+
+    [Theory]
+    [InlineData(1.2f)]
+    [InlineData(-1.2f)]
+    public void A_forward_taken_looking_up_or_down_is_refused(float pitch)
+    {
+        // Pitched about 69° while facing +X: too little of the view is left on the floor plane to tell forward.
+        var facing = new MonadoPose(0, MathF.Sin(-MathF.PI / 4), 0, MathF.Cos(-MathF.PI / 4), 0, 0, 0);
+        var tilt = new MonadoPose(MathF.Sin(pitch / 2), 0, 0, MathF.Cos(pitch / 2), 0, 0, 0);
+        var head = RoomSetupMath.Transform(facing, tilt) with { Y = 1.6f };
+        var poses = new XrPoses(head, null, null);
+
+        var e = Assert.Throws<MiradorException>(() => RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Forward, poses, null, Now));
+        Assert.Equal("Look straight ahead, then Set forward.", e.Message);
+
+        // Pitched 45°: still taken.
+        var ahead = RoomSetupMath.Transform(facing, new MonadoPose(MathF.Sin(0.3927f), 0, 0, MathF.Cos(0.3927f), 0, 0, 0));
+        Assert.Single(RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Forward, new XrPoses(ahead, null, null), null, Now));
+    }
 }

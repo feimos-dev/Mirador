@@ -100,6 +100,18 @@ public class RoomSetupMathTests
     }
 
     [Fact]
+    public void Looking_ahead_is_up_to_sixty_degrees_up_or_down()
+    {
+        static MonadoPose Pitch(float radians) => new(MathF.Sin(radians / 2), 0, 0, MathF.Cos(radians / 2), 0, 0, 0);
+
+        Assert.True(RoomSetupMath.LooksAhead(MonadoPose.Identity));
+        Assert.True(RoomSetupMath.LooksAhead(Pitch(1.0f)));
+        Assert.True(RoomSetupMath.LooksAhead(Pitch(-1.0f)));
+        Assert.False(RoomSetupMath.LooksAhead(Pitch(1.1f)));
+        Assert.False(RoomSetupMath.LooksAhead(Pitch(-MathF.PI / 2)));
+    }
+
+    [Fact]
     public void Yaw_of_identity_is_zero()
     {
         Assert.Equal(0, RoomSetupMath.YawOf(0, 0, 0, 1), Tolerance);

@@ -39,6 +39,16 @@ public static class RoomSetupMath
     }
 
     /// <summary>
+    /// Whether <paramref name="head"/> looks ahead enough for <see cref="YawOf"/> to tell forward: at most about 60° up or
+    /// down, so that at least half of its view direction lies along the floor.
+    /// </summary>
+    public static bool LooksAhead(MonadoPose head)
+    {
+        var (fx, _, fz) = Rotate(head, 0, 0, -1);
+        return (fx * fx) + (fz * fz) >= 0.25f;
+    }
+
+    /// <summary>
     /// <paramref name="pose"/>, given relative to <paramref name="offset"/>, in the space <paramref name="offset"/> is
     /// in: <c>offset * pose</c>. The rotation is normalised.
     /// </summary>

@@ -77,12 +77,21 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
         }
     }
 
-    /// <summary>Whether Monado runs with "exit on disconnect", so that the client's exit stops it.</summary>
+    /// <summary>The values Monado reads as off for a switch; any other value of a variable that is set is on.</summary>
+    private static readonly string[] MonadoFalse = ["false", "FALSE", "off", "OFF", "no", "NO", "n", "N", "f", "F", "0"];
+
+    /// <summary>
+    /// Whether Monado runs with "exit on disconnect", so that the client's exit stops it: the variable is set and isn't one
+    /// of the exact values Monado reads as off (its <c>debug_string_to_bool</c>). Names compare as Windows compares them.
+    /// </summary>
     /// <param name="environment">The variables Mirador started Monado with.</param>
-    public static bool StopsMonado(IReadOnlyDictionary<string, string>? environment) =>
-        environment is not null
-        && environment.TryGetValue(MonadoSettingsEnvironment.ExitOnDisconnect, out var value)
-        && value == "1";
+    public static bool StopsMonado(IReadOnlyDictionary<string, string>? environment)
+    {
+        var value = environment?
+            .LastOrDefault(e => string.Equals(e.Key, MonadoSettingsEnvironment.ExitOnDisconnect, StringComparison.OrdinalIgnoreCase))
+            .Value;
+        return value is not null && !MonadoFalse.Contains(value, StringComparer.Ordinal);
+    }
 
     /// <summary>The tracking origins of the headset and the controllers, in index order, with their offsets now.</summary>
     /// <exception cref="MiradorException">
@@ -114,7 +123,9 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
     /// Each origin's room setup after <paramref name="step"/>: its offset corrected by what was measured
     /// (<see cref="RoomSetupMath.Correct"/>), for <paramref name="universe"/>.
     /// </summary>
-    /// <exception cref="MiradorException">The floor step, and neither controller was tracked.</exception>
+    /// <exception cref="MiradorException">
+    /// The floor step, and neither controller was tracked; the forward step, and the head looked up or down too far.
+    /// </exception>
     public static IReadOnlyList<RoomSetup> Corrected(
         IReadOnlyList<TrackedOrigin> origins, RoomStep step, XrPoses poses, string? universe, DateTimeOffset now)
     {
@@ -124,6 +135,10 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
         {
             floorY = RoomSetupMath.FloorY(poses.Left, poses.Right)
                 ?? throw new MiradorException("Neither controller was tracked. Turn one on, lay it on the floor and measure again.");
+        }
+        else if (!RoomSetupMath.LooksAhead(poses.Head))
+        {
+            throw new MiradorException("Look straight ahead, then Set forward.");
         }
         else
         {
