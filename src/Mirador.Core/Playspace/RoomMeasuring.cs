@@ -143,7 +143,7 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
                 ?? throw new MiradorException("Neither controller was tracked. Turn one on, lay it on the floor and measure again.");
             if (poses.Head.Y - (floorY + RoomSetupMath.ControllerRestHeightM) < FloorBelowHeadM)
             {
-                throw new MiradorException("The controller was as high as your head. Lay it on the floor, then Set the floor.");
+                throw new MiradorException("The controller wasn't well below the headset. Lay it on the floor, then Measure floor.");
             }
         }
         else if (!RoomSetupMath.LooksAhead(poses.Head))
