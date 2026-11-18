@@ -889,27 +889,33 @@ public sealed class SessionController(SessionDeps deps)
     /// Takes the run's libmonado connection from readers, then closes it on a background thread; nothing opens one for
     /// the run afterwards. Called before Monado is stopped, and as soon as it is seen to have ended. The task completes
     /// once the connection is closed, which waits for a call under way: one stuck in Monado returns only once Monado
-    /// has ended.
+    /// has ended. Called again (Monado ended by itself, then the run's end), it gives the same close.
     /// </summary>
     private Task CloseLibmonado(Run run)
     {
         SharedMonadoClient? client;
+        Task closing;
         lock (gate)
         {
             run.LibmonadoClosed = true;
             client = run.Libmonado;
             run.Libmonado = null;
             run.LibmonadoProblem = null;
+            if (client is not null)
+            {
+                client.EndCalls();
+                run.LibmonadoClosing = Task.Run(client.Close);
+            }
+
+            closing = run.LibmonadoClosing ?? Task.CompletedTask;
         }
 
-        if (client is null)
+        if (client is not null)
         {
-            return Task.CompletedTask;
+            RaiseChanged();
         }
 
-        client.EndCalls();
-        RaiseChanged();
-        return Task.Run(client.Close);
+        return closing;
     }
 
     /// <summary>Looks for Monado's pipe every 100 ms until it is there, the service ends, or <see cref="StartTimeout"/> has passed.</summary>
@@ -1607,6 +1613,9 @@ public sealed class SessionController(SessionDeps deps)
 
         /// <summary>The run's libmonado connection was closed, or the run ended: no connection is kept for it afterwards.</summary>
         public bool LibmonadoClosed { get; set; }
+
+        /// <summary>The close of the run's libmonado connection, once one began; null before.</summary>
+        public Task? LibmonadoClosing { get; set; }
 
         public Action<string>? OnLine { get; set; }
 
