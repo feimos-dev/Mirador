@@ -48,7 +48,7 @@ public static class ElevatedRequestCheck
             return VariablesNotApproved;
         }
 
-        var forThisMonado = start.Build.Length == 0
+        var forThisMonado = string.IsNullOrEmpty(start.Build)
             ? record.Commit == ApprovedBuilds.BundledCommit
             : start.Build == start.ProfileId && record.Commit != ApprovedBuilds.BundledCommit;
         if (!forThisMonado)

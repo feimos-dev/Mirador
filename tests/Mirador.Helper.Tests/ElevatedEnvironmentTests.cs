@@ -24,15 +24,16 @@ public class ElevatedEnvironmentTests
     [Fact]
     public void Approved_variables_come_last_and_win()
     {
+        // Every name the helper sets itself is refused (ElevatedVariables), so they only add to it.
         var plain = Build(module: PimaxEnvironment.ModuleId);
         var env = ElevatedEnvironment.Build(
             Start(module: PimaxEnvironment.ModuleId), Folders, ServerDir, SteamVrPath,
-            approvedVariables: [new("steamvr_lh_enable", "0"), new("PIMAX_P3C_LOG", "debug")]);
+            approvedVariables: [new("XRT_LOG", "debug"), new("PIMAX_P3C_LOG", "debug")]);
 
-        Assert.Equal("0", env["STEAMVR_LH_ENABLE"]);
-        Assert.Equal("steamvr_lh_enable", env.Keys.Single(k => string.Equals(k, "STEAMVR_LH_ENABLE", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("debug", env["XRT_LOG"]);
         Assert.Equal("debug", env["PIMAX_P3C_LOG"]);
-        Assert.Equal(plain.Count + 1, env.Count);
+        Assert.Equal(plain.Count + 2, env.Count);
+        Assert.Equal(["XRT_LOG", "PIMAX_P3C_LOG"], env.Keys.TakeLast(2));
     }
 
     [Fact]

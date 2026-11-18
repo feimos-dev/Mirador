@@ -129,8 +129,10 @@ public static class ElevatedEnvironment
                 throw new ArgumentException("A headless Monado runs without a headset module.", nameof(start));
             }
 
-            Set(env, "XRT_COMPOSITOR_NULL", "1");
-            Set(env, "SIMULATED_ENABLE", "1");
+            foreach (var (name, value) in HeadlessEnvironment.Variables)
+            {
+                Set(env, name, value);
+            }
         }
 
         // The profile's own variables last, so they win, as they do when Monado runs as the user.

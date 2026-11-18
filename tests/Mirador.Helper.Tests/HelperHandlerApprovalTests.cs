@@ -226,6 +226,15 @@ public sealed class HelperHandlerApprovalTests : IDisposable
     }
 
     [Fact]
+    public void A_start_whose_build_is_null_is_a_start_of_the_bundled_monado()
+    {
+        ApprovedBuilds.Approve(Finn.Value, "p1", ApprovedBuilds.BundledCommit, "", App, store, Approved);
+
+        Assert.Null(Check(StartWith("p1", Approved, build: null!), store, out var variables));
+        Assert.Equal(2, variables.Count);
+    }
+
+    [Fact]
     public void A_start_without_variables_needs_no_approval_of_them()
     {
         Assert.Null(Check(StartWith("p1", null), store, out var none));
