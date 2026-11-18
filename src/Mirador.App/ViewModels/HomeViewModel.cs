@@ -23,6 +23,12 @@ namespace Mirador.App.ViewModels;
 /// </summary>
 public sealed partial class HomeViewModel : ObservableObject
 {
+    /// <summary>How often Home reads Monado's devices through libmonado while it shows and Monado runs.</summary>
+    private static readonly TimeSpan DevicePollInterval = TimeSpan.FromSeconds(3);
+
+    /// <summary>The keys of the session's own status lines (<see cref="SessionController.Status"/>); the module's lines follow them.</summary>
+    private static readonly HashSet<string> SessionLineKeys = ["monado", "apps", "tracking", "standin"];
+
     private readonly AppHost host;
     private readonly DispatcherQueue ui;
     private CancellationTokenSource? checking;
@@ -31,6 +37,12 @@ public sealed partial class HomeViewModel : ObservableObject
     private IDisposable? listening;
     private bool pageShown;
     private int stationsRefreshQueued;
+    private CancellationTokenSource? devicePolling;
+    private bool readingDevices;
+
+    // Monado's devices as last read through libmonado (or the line saying why there is no libmonado), shown between
+    // the session's lines and the module's.
+    private IReadOnlyList<StatusLine> deviceLines = [];
 
     // The selected profile as it was last read (LoadProfiles) or picked here, so that the base stations' frequent
     // changes don't read profiles.json each time; null while the profiles couldn't be read.
@@ -238,12 +250,106 @@ public sealed partial class HomeViewModel : ObservableObject
 
     /// <summary>
     /// Home listens to the base stations while it is the current page, the base stations card shows and the window is on
-    /// screen; <paramref name="shown"/> is the first and the last of those.
+    /// screen; <paramref name="shown"/> is the first and the last of those. Monado's devices are read while it shows and
+    /// Monado runs.
     /// </summary>
     public void SetShown(bool shown)
     {
         pageShown = shown;
         UpdateListening();
+        UpdateDevicePolling();
+    }
+
+    /// <summary>
+    /// Reads Monado's devices every <see cref="DevicePollInterval"/> while Home shows and Monado is starting or running,
+    /// and stops otherwise. Stopping clears the device lines.
+    /// </summary>
+    private void UpdateDevicePolling()
+    {
+        var want = pageShown && State is SessionState.Starting or SessionState.Running;
+        if (want == (devicePolling is not null))
+        {
+            return;
+        }
+
+        if (want)
+        {
+            devicePolling = new CancellationTokenSource();
+            _ = PollDevicesAsync(devicePolling.Token);
+        }
+        else
+        {
+            devicePolling!.Cancel();
+            devicePolling.Dispose();
+            devicePolling = null;
+            ShowDeviceLines([]);
+        }
+    }
+
+    private async Task PollDevicesAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(DevicePollInterval);
+        try
+        {
+            do
+            {
+                await ReadDevicesAsync(ct);
+            }
+            while (await timer.WaitForNextTickAsync(ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // Home went away or Monado stopped.
+        }
+    }
+
+    /// <summary>
+    /// Reads the devices through the session's libmonado connection on a background thread (it talks to Monado), or
+    /// shows why there is none. One read at a time: while a read waits for Monado, no other starts.
+    /// </summary>
+    private async Task ReadDevicesAsync(CancellationToken ct)
+    {
+        if (readingDevices)
+        {
+            return;
+        }
+
+        readingDevices = true;
+        try
+        {
+            IReadOnlyList<StatusLine> lines;
+            if (host.Session.Monado is { } monado)
+            {
+                // Devices() never throws: a closed connection or one Monado doesn't answer gives no devices.
+                lines = DeviceStatus.Lines(await Task.Run(() => monado.Devices(), CancellationToken.None));
+            }
+            else if (host.Session.MonadoClientProblem is { } problem)
+            {
+                lines = [new StatusLine("devices", "Devices", StatusLevel.Info, problem)];
+            }
+            else
+            {
+                lines = [];
+            }
+
+            if (!ct.IsCancellationRequested)
+            {
+                ShowDeviceLines(lines);
+            }
+        }
+        finally
+        {
+            readingDevices = false;
+        }
+    }
+
+    private void ShowDeviceLines(IReadOnlyList<StatusLine> lines)
+    {
+        if (!lines.SequenceEqual(deviceLines))
+        {
+            deviceLines = lines;
+            RefreshStatus();
+        }
     }
 
     /// <summary>
@@ -544,6 +650,13 @@ public sealed partial class HomeViewModel : ObservableObject
         }
 
         RefreshStatus();
+        UpdateDevicePolling();
+        if (devicePolling is { } polling)
+        {
+            // The connection or its problem may have changed: show it now, not at the next tick.
+            _ = ReadDevicesAsync(polling.Token);
+        }
+
         RefreshRuntime();
         if (State == SessionState.Stopped && previous != SessionState.Stopped)
         {
@@ -555,7 +668,10 @@ public sealed partial class HomeViewModel : ObservableObject
 
     private void RefreshStatus()
     {
-        var lines = host.Session.Status.Select(StatusItem.From).ToList();
+        var session = host.Session.Status.ToList();
+        var moduleLinesAt = session.FindLastIndex(line => SessionLineKeys.Contains(line.Key)) + 1;
+        session.InsertRange(moduleLinesAt, deviceLines);
+        var lines = session.Select(StatusItem.From).ToList();
         if (!lines.SequenceEqual(Status))
         {
             Status.Clear();
