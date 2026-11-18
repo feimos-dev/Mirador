@@ -54,6 +54,7 @@
                         Height="20"
                         IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
                     <Button Command="{x:Bind ViewModel.CheckDisplayCommand}" Content="Check" />
+                    <Button Command="{x:Bind ViewModel.FixDirectModeCommand}" Content="Fix direct mode" />
                 </StackPanel>
             </toolkit:SettingsCard>
             <!-- The newest "Verify build for Windows" result, step by step; the run's log is the Verify tab below. -->

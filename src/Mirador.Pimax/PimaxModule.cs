@@ -19,6 +19,8 @@ namespace Mirador.Pimax;
 /// <param name="SteamVrDir">SteamVR's folder (<see cref="DreamAirChecks.FindSteamVr"/>).</param>
 /// <param name="BlobVariant">The eye geometry variant to use for a state; <see cref="EyeBlobVariants.Tested"/> until Mirador can tell.</param>
 /// <param name="PresentDevices">The USB devices plugged in now, to tell the Pimax model apart; null: none known (the Dream Air's steps).</param>
+/// <param name="Monitors">The monitors Windows lists (<see cref="HeadsetMonitor.List"/>), to see the headset on the desktop; null: not looked at.</param>
+/// <param name="MonadoRuns">Whether Monado runs now; the headset on the desktop is only a problem while it doesn't. Null: it doesn't.</param>
 public sealed record PimaxDeps(
     IRegistryReader Registry,
     Func<ProcessSpec, IConsoleProcess> StartConsole,
@@ -28,7 +30,9 @@ public sealed record PimaxDeps(
     Func<string?> NvidiaWindowsVersion,
     Func<string?> SteamVrDir,
     Func<DreamAirState, string> BlobVariant,
-    Func<IReadOnlySet<UsbId>>? PresentDevices = null);
+    Func<IReadOnlySet<UsbId>>? PresentDevices = null,
+    Func<IReadOnlyList<MonitorEntry>>? Monitors = null,
+    Func<bool>? MonadoRuns = null);
 
 /// <summary>
 /// The Pimax Dream Air: checks the PC, stops Pimax's software for the session and starts it again after, checks direct
@@ -46,6 +50,9 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     /// </summary>
     public static IReadOnlyList<EnvVar> FixedEnvironment { get; } =
         [.. DreamAirEnvironment.ModuleVariables.Select(v => new EnvVar(v.Key, v.Value))];
+
+    /// <summary>The label of the check that finds the headset on the desktop; Home and Diagnostics offer the fix beside it.</summary>
+    public const string DirectModeOffLabel = "Direct mode";
 
     public string Id => ModuleId;
 
@@ -107,6 +114,13 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
                         "Use a profile whose Monado has a driver for it, and report how it went."));
                 }
 
+                if (HeadsetShowsAsMonitor())
+                {
+                    results.Add(new CheckResult(
+                        DirectModeOffLabel, StatusLevel.Warning,
+                        "The headset shows as a normal monitor, so Monado can't use it. Fix direct mode turns it back into a headset display."));
+                }
+
                 if (model.EyeSteps && BlobChoice.Resolve(state, null).NeedsOwner)
                 {
                     results.Add(new CheckResult(
@@ -119,6 +133,63 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
                 return results;
             },
             ct);
+
+    /// <summary>
+    /// Whether the headset is listed among the desktop's monitors while Monado doesn't run: direct mode is off for it
+    /// (Pimax Play or SteamVR handed it back to Windows). A list that can't be read counts as no.
+    /// </summary>
+    private bool HeadsetShowsAsMonitor()
+    {
+        if (deps.Monitors is null || Safe(() => deps.MonadoRuns?.Invoke() ?? false))
+        {
+            return false;
+        }
+
+        return Safe(() => HeadsetMonitor.HeadsetOnDesktop(deps.Monitors())) is true;
+    }
+
+    /// <summary>
+    /// "Fix direct mode" (run it through <c>SessionController.RunWhileStoppedAsync</c>): stops Pimax's software, which
+    /// has the headset on the desktop, runs <c>mirador-display-check --enable-direct-mode</c>, and starts Pimax's
+    /// service again if it ran.
+    /// </summary>
+    /// <returns>Null when direct mode is on again; otherwise the problem, with the check's advice, in its own words.</returns>
+    public async Task<string?> FixDirectModeAsync(ModuleContext ctx, CancellationToken ct)
+    {
+        LayerFiles layer;
+        try
+        {
+            layer = DirectModeLayer.Locate(deps.BundledLayerDir);
+        }
+        catch (MiradorException e)
+        {
+            return e.Message;
+        }
+
+        var running = ctx.Processes.Snapshot();
+        var stop = await StopPimaxAsync(ctx, running).ConfigureAwait(false);
+        if (!stop.Ok)
+        {
+            return stop.Error ?? "Pimax's software couldn't be stopped.";
+        }
+
+        var wasRunning = stop.WasRunning ?? (!stop.NotDelivered && ServiceRuns(running));
+        string? problem;
+        try
+        {
+            var check = await DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct, "--enable-direct-mode").ConfigureAwait(false);
+            problem = check.Pass ? null : check.WhatToDo is { } advice ? $"{check.Message} {advice}" : check.Message;
+        }
+        finally
+        {
+            if (wasRunning)
+            {
+                await ctx.Helper.SendAsync(HelperCommand.StartPimax, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
+        return problem;
+    }
 
     public async Task<ModuleSession> BeforeStartAsync(
         ModuleContext ctx, Profile profile, IProgress<string> progress, Action<IReadOnlyDictionary<string, string>> saveRecovery, CancellationToken ct)

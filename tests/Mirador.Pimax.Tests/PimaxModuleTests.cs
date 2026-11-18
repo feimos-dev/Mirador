@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
 using Mirador.Core;
+using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Monado;
@@ -58,7 +59,7 @@ public sealed class PimaxModuleTests : IDisposable
         {
             if (spec.FileName.EndsWith(DirectModeLayer.CheckExeName, StringComparison.Ordinal))
             {
-                steps.Add("display check");
+                steps.Add(spec.Arguments.Length == 0 ? "display check" : "display check " + spec.Arguments);
                 var display = new FakeConsole(check.Lines);
                 display.End(check.ExitCode);
                 return display;
@@ -90,7 +91,13 @@ public sealed class PimaxModuleTests : IDisposable
         {
             usbQueries++;
             return usb.Present();
-        }));
+        },
+        () => monitors,
+        () => monadoRuns));
+
+    private IReadOnlyList<MonitorEntry> monitors = [];
+
+    private bool monadoRuns;
 
     private int usbQueries;
 
@@ -533,6 +540,77 @@ public sealed class PimaxModuleTests : IDisposable
         Assert.All(results.SkipLast(1), r => Assert.Equal(StatusLevel.Ok, r.Level));
         Assert.Equal("Comes with Mirador", results[^2].Text);
         Assert.Equal(StatusLevel.Warning, results[^1].Level); // nothing known about the variant yet
+    }
+
+    private const string HeadsetMonitorId = @"\\?\DISPLAY#PVR1019#5&abc&0&UID4352#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}";
+
+    [Fact]
+    public async Task A_headset_on_the_desktop_gives_the_direct_mode_warning()
+    {
+        monitors = [new MonitorEntry(HeadsetMonitorId, true)];
+
+        var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
+
+        var warning = Assert.Single(results, r => r.Label == PimaxModule.DirectModeOffLabel);
+        Assert.Equal("Direct mode", warning.Label);
+        Assert.Equal(StatusLevel.Warning, warning.Level);
+        Assert.Equal(
+            "The headset shows as a normal monitor, so Monado can't use it. Fix direct mode turns it back into a headset display.",
+            warning.Text);
+    }
+
+    [Fact]
+    public async Task No_warning_while_the_headset_is_off_the_desktop()
+    {
+        monitors = [new MonitorEntry(HeadsetMonitorId, false)];
+
+        var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
+
+        Assert.DoesNotContain(results, r => r.Label == PimaxModule.DirectModeOffLabel);
+    }
+
+    [Fact]
+    public async Task No_warning_while_monado_runs()
+    {
+        monitors = [new MonitorEntry(HeadsetMonitorId, true)];
+        monadoRuns = true;
+
+        var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
+
+        Assert.DoesNotContain(results, r => r.Label == PimaxModule.DirectModeOffLabel);
+    }
+
+    [Fact]
+    public async Task Fix_stops_pimax_first_then_runs_the_check_with_enable_direct_mode()
+    {
+        helper.Replies[HelperCommand.StopPimax] = new HelperReply(true, WasRunning: true);
+        check = (["PASS: direct mode is on for the headset."], 0);
+
+        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Equal(["StopPimax", "display check --enable-direct-mode", "StartPimax"], steps);
+    }
+
+    [Fact]
+    public async Task A_failed_fix_gives_the_checks_message_and_advice_as_they_are()
+    {
+        check = (["FAIL: NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5", "what to do: run this as administrator."], 1);
+
+        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+
+        Assert.Equal("NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5 run this as administrator.", problem);
+    }
+
+    [Fact]
+    public async Task A_fix_that_cant_stop_pimax_runs_nothing()
+    {
+        helper.Replies[HelperCommand.StopPimax] = new HelperReply(false, "Mirador's helper service isn't running.") { NotDelivered = true };
+
+        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+
+        Assert.Equal("Mirador's helper service isn't running.", problem);
+        Assert.DoesNotContain(steps, t => t.StartsWith("display check", StringComparison.Ordinal));
     }
 
     [Fact]

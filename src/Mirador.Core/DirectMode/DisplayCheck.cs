@@ -30,16 +30,17 @@ public static class DisplayCheck
 {
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
 
-    /// <summary>Runs the check at <paramref name="exe"/> and reads its verdict. Never throws for a failed check.</summary>
+    /// <summary>Runs the check at <paramref name="exe"/> with <paramref name="arguments"/> and reads its verdict. Never throws for a failed check.</summary>
     /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the check was ended first.</exception>
-    public static async Task<DisplayCheckResult> RunAsync(string exe, Func<ProcessSpec, IConsoleProcess> start, CancellationToken ct)
+    public static async Task<DisplayCheckResult> RunAsync(
+        string exe, Func<ProcessSpec, IConsoleProcess> start, CancellationToken ct, string arguments = "")
     {
         var lines = new List<string>();
         int exitCode;
         try
         {
             using var process = start(new ProcessSpec(
-                exe, "", Path.GetDirectoryName(exe) ?? ".", ConsoleProcess.CurrentEnvironment()));
+                exe, arguments, Path.GetDirectoryName(exe) ?? ".", ConsoleProcess.CurrentEnvironment()));
             process.Line += line =>
             {
                 lock (lines)

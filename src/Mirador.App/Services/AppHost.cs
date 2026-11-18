@@ -87,7 +87,9 @@ public sealed class AppHost : IAsyncDisposable
             NvidiaDriver.CurrentWindowsVersion,
             DreamAirChecks.FindSteamVr,
             state => BlobChoice.Resolve(state, null).Variant,
-            () => Usb.Present()));
+            () => Usb.Present(),
+            HeadsetMonitor.List,
+            () => Session!.State != SessionState.Stopped));
         Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
         OpenVr = new OpenVrGames(new OpenVrPaths(OpenVrPaths.DefaultFile, OpenComposite.Folder), OpenComposite);
