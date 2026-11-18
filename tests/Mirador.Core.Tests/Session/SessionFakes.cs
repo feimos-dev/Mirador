@@ -216,6 +216,9 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
 
     public bool SessionFileExistedAtLaunch { get; private set; }
 
+    /// <summary>Runs as each launch begins, to look at what the Start did before it.</summary>
+    public Action? OnStart { get; set; }
+
     public int Starts
     {
         get
@@ -241,6 +244,7 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
     public IRunningProcess Start(ProcessSpec spec)
     {
         steps.Add("launch");
+        OnStart?.Invoke();
         lock (specs)
         {
             specs.Add(spec);
@@ -625,9 +629,10 @@ internal sealed class Harness : IAsyncDisposable
     /// and runs them through <see cref="Launcher"/>.</param>
     /// <param name="approvedCopy">The locator's lookup of a build's approved copy; null: no build is approved.</param>
     /// <param name="elevationFix">Whether Verify found the elevation fix in a build; null: never.</param>
+    /// <param name="folderBackupLimit">With a value, the session copies <see cref="MonadoFolder"/> at each Start, up to that many bytes.</param>
     public Harness(
         ISessionHook? hook = null, bool? installedCopy = null, Func<Profile, MonadoInstall, Mirador.Ipc.ApprovedBuild?>? approvedCopy = null,
-        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false)
+        Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false, long? folderBackupLimit = null)
     {
         Root = Path.Combine(dir.Path, "Zoë's data");
         Paths = new AppPaths(Path.Combine(Root, "Mirador"));
@@ -684,7 +689,10 @@ internal sealed class Harness : IAsyncDisposable
                 BundledLayerDir: BundledLayer,
                 ElevationFixVerified: elevationFix,
                 ControllersOffAtStop: () => controllersOffAtStop,
-                OpenLibmonado: Libmonado.Open),
+                OpenLibmonado: Libmonado.Open,
+                FolderBackups: folderBackupLimit is { } limit
+                    ? new MonadoFolderBackups(MonadoFolder, Paths.BackupsDir, Time, maxBytes: limit)
+                    : null),
             isStandIn: path => path.StartsWith(StandInImages, StringComparison.OrdinalIgnoreCase));
 
         Controller.Changed += () => Changes.Enqueue(Controller.State);
@@ -719,6 +727,9 @@ internal sealed class Harness : IAsyncDisposable
     public string BundledManifest { get; }
 
     public string BundledServer { get; }
+
+    /// <summary>The Monado folder the session's backups copy (with <c>folderBackupLimit</c> given).</summary>
+    public string MonadoFolder => Path.Combine(Root, "monado");
 
     /// <summary>The bundled Monado's runtime DLL folder, with the stand-in's <c>service</c> folder below it.</summary>
     public string RuntimeDir => Path.GetDirectoryName(BundledServer)!;

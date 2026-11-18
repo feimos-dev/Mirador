@@ -804,6 +804,7 @@ public sealed class SessionController(SessionDeps deps)
         // An approved build runs from its approved copy, the same files as the runtime games load from it, whether the
         // helper runs it as administrator or it runs as the user.
         var serviceExe = install.Approved is { } approved ? Path.Combine(approved.ServerDir, "monado-service.exe") : install.ServiceExe;
+        BackUpMonadoFolder();
         var launcher = ChooseLauncher(install, profile, module, run.Settings);
         var process = launcher.Start(new ProcessSpec(serviceExe, "", Path.GetDirectoryName(serviceExe)!, environment));
         run.Process = process;
@@ -916,6 +917,33 @@ public sealed class SessionController(SessionDeps deps)
         }
 
         return closing;
+    }
+
+    /// <summary>
+    /// Copies Monado's folder before Monado runs, when it changed since the last copy. It never stops the Start: a copy
+    /// that can't be taken (a file held, the folder too big) is a warning.
+    /// </summary>
+    private void BackUpMonadoFolder()
+    {
+        if (deps.FolderBackups is not { } backups)
+        {
+            return;
+        }
+
+        string? problem;
+        try
+        {
+            backups.SnapshotIfChanged(out problem);
+        }
+        catch (Exception e)
+        {
+            problem = $"Mirador couldn't back up Monado's folder ({Trimmed(e.Message)}).";
+        }
+
+        if (problem is not null)
+        {
+            RaiseWarning(new SessionWarning("backup", problem));
+        }
     }
 
     /// <summary>Looks for Monado's pipe every 100 ms until it is there, the service ends, or <see cref="StartTimeout"/> has passed.</summary>

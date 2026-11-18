@@ -19,7 +19,7 @@ public sealed class AppPaths(string root)
 
     public string GeometryDir { get; } = Path.Combine(root, "geometry");
     public string ChecksDir { get; } = Path.Combine(root, "checks");
-    public string BackupsDir { get; } = Path.Combine(root, "calibration-backups");
+    public string BackupsDir { get; } = Path.Combine(root, "backups");
 
     /// <summary>Where branch profiles are built: <c>Builds\&lt;profile id&gt;\</c> with <c>src</c>, <c>build</c> and <c>install</c>.</summary>
     public string BuildsDir { get; } = Path.Combine(root, "Builds");

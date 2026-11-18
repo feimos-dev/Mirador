@@ -1530,6 +1530,35 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_start_backs_up_monados_folder_before_launching_it()
+    {
+        await using var h = new Harness(folderBackupLimit: 1_000_000);
+        Directory.CreateDirectory(h.MonadoFolder);
+        File.WriteAllText(Path.Combine(h.MonadoFolder, "config_v0.json"), "{}");
+        var backupsAtLaunch = -1;
+        h.Launcher.OnStart = () => backupsAtLaunch = Directory.GetDirectories(Path.Combine(h.Paths.BackupsDir, "monado")).Length;
+
+        await h.StartRunningAsync();
+
+        Assert.Equal(1, backupsAtLaunch);
+        Assert.Empty(h.Warnings);
+    }
+
+    [Fact]
+    public async Task A_backup_that_cannot_be_taken_is_a_warning_and_the_start_goes_on()
+    {
+        await using var h = new Harness(folderBackupLimit: 1);
+        Directory.CreateDirectory(h.MonadoFolder);
+        File.WriteAllText(Path.Combine(h.MonadoFolder, "config_v0.json"), "more than a byte");
+
+        await h.StartRunningAsync();
+
+        var warning = Assert.Single(h.Warnings);
+        Assert.Equal("backup", warning.Key);
+        Assert.Equal(1, h.Launcher.Starts);
+    }
+
+    [Fact]
     public async Task No_libmonado_shows_the_problem()
     {
         await using var h = new Harness();

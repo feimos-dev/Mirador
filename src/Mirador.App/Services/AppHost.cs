@@ -70,8 +70,8 @@ public sealed class AppHost : IAsyncDisposable
         Processes = new SystemProcessList();
         Context = new ModuleContext(paths, Helper, Processes, Usb, TimeProvider.System);
         DreamAirState = new DreamAirStateStore(paths.DreamAirFile);
-        Calibrations = new CalibrationStore(
-            CalibrationStore.DefaultMonadoDir, paths.BackupsDir, TimeProvider.System, () => Session!.State != SessionState.Stopped);
+        FolderBackups = new MonadoFolderBackups(
+            MonadoFolderBackups.DefaultMonadoDir, paths.BackupsDir, TimeProvider.System, () => Session!.State != SessionState.Stopped);
 
         var dreamAir = new PimaxModule(new PimaxDeps(
             new WindowsRegistryReader(),
@@ -82,7 +82,6 @@ public sealed class AppHost : IAsyncDisposable
             NvidiaDriver.CurrentWindowsVersion,
             DreamAirChecks.FindSteamVr,
             state => BlobChoice.Resolve(state, null).Variant,
-            Calibrations,
             () => Usb.Present()));
         Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
@@ -121,7 +120,8 @@ public sealed class AppHost : IAsyncDisposable
             ElevatedInstalledCopy: () => IsInstalledCopy(askHelper: true),
             BundledLayerDir: Path.Combine(appDir, "layer"),
             ElevationFixVerified: ElevationFixVerified,
-            ControllersOffAtStop: () => StationSettings().ControllersOffAtStop));
+            ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
+            FolderBackups: FolderBackups));
     }
 
     /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed (Mirador.md §4.10 item 46).</summary>
@@ -235,8 +235,8 @@ public sealed class AppHost : IAsyncDisposable
 
     public DreamAirStateStore DreamAirState { get; }
 
-    /// <summary>The eye calibrations Monado uses, and Mirador's copies of them.</summary>
-    public CalibrationStore Calibrations { get; }
+    /// <summary>Mirador's dated copies of Monado's folder.</summary>
+    public MonadoFolderBackups FolderBackups { get; }
 
     /// <summary>Raised on the UI thread after the profiles or the selected one changed (Home, the Profiles page).</summary>
     public event Action? ProfilesChanged;

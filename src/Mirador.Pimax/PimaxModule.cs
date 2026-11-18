@@ -18,7 +18,6 @@ namespace Mirador.Pimax;
 /// <param name="NvidiaWindowsVersion">The NVIDIA driver's Windows version (<see cref="NvidiaDriver.CurrentWindowsVersion"/>).</param>
 /// <param name="SteamVrDir">SteamVR's folder (<see cref="DreamAirChecks.FindSteamVr"/>).</param>
 /// <param name="BlobVariant">The eye geometry variant to use for a state; <see cref="EyeBlobVariants.Tested"/> until Mirador can tell.</param>
-/// <param name="Calibration">The eye calibrations' copies, taken before each Start and after each session; null: none.</param>
 /// <param name="PresentDevices">The USB devices plugged in now, to tell the Pimax model apart; null: none known (the Dream Air's steps).</param>
 public sealed record PimaxDeps(
     IRegistryReader Registry,
@@ -29,7 +28,6 @@ public sealed record PimaxDeps(
     Func<string?> NvidiaWindowsVersion,
     Func<string?> SteamVrDir,
     Func<DreamAirState, string> BlobVariant,
-    CalibrationStore? Calibration = null,
     Func<IReadOnlySet<UsbId>>? PresentDevices = null);
 
 /// <summary>
@@ -55,7 +53,7 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 
     public string WindowsTools =>
         "Mirador stops Pimax's software while Monado runs, drives the headset's display through NVIDIA direct mode with Mirador's Vulkan layer, " +
-        "and for the Dream Air uploads the eye geometry and keeps backups of the eye calibration.";
+        "and for the Dream Air uploads the eye geometry.";
 
     /// <summary>The plugged-in model's tracking: SteamVR's Lighthouse driver for the Dream Airs, not for the Crystals.</summary>
     public bool UsesSteamVrLighthouse => Model().Lighthouse;
@@ -87,7 +85,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     public bool IsPresent(IReadOnlySet<UsbId> devices) =>
         PimaxModels.Detect(devices) is not null || devices.Contains(DreamAirIds.EyeTracker);
 
-    /// <summary>The checks of <see cref="DreamAirChecks"/>, then the layer's.</summary>
     /// <summary>The checks of <see cref="DreamAirChecks"/>, the layer's, and a warning while the headset's variant isn't known.</summary>
     public Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, Profile profile, CancellationToken ct) =>
         Task.Run<IReadOnlyList<CheckResult>>(
@@ -156,7 +153,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
         }
 
         ct.ThrowIfCancellationRequested();
-        var snapshotProblem = model.EyeSteps ? SnapshotCalibrations(deps.Calibration) : null;
         progress.Report("Stopping Pimax's software…");
 
         // Saved before asking: Mirador may be killed, or hear no answer, while the helper stops the service.
@@ -201,10 +197,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             {
                 progress.Report("Uploading the eye geometry…");
                 upload = await deps.Geometry.UploadAsync(pimax!, variant, ct).ConfigureAwait(false);
-                if (snapshotProblem is not null)
-                {
-                    warnings.Add(new SessionWarning("calibration", snapshotProblem));
-                }
 
                 if (RememberTracker(upload.TrackerSerial))
                 {
@@ -213,8 +205,7 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             }
 
             return new DreamAirSession(
-                ctx, EnvironmentFor(model), wasRunning, upload, model.EyeSteps ? () => SnapshotCalibrations(deps.Calibration) : null, warnings, model.Name,
-                headsetThere);
+                ctx, EnvironmentFor(model), wasRunning, upload, warnings, model.Name, headsetThere);
         }
         catch
         {
@@ -392,33 +383,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return false;
-        }
-    }
-
-    /// <summary>
-    /// Keeps a copy of every tracker's calibration that changed (Monado may have replaced one with the tracker's own).
-    /// Never fails a Start or a Stop: a copy that can't be made is only missing from the list.
-    /// </summary>
-    /// <returns>Null, or what went wrong, for a warning: Monado may replace a calibration that has no copy then.</returns>
-    internal static string? SnapshotCalibrations(CalibrationStore? store)
-    {
-        if (store is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            foreach (var serial in store.Serials())
-            {
-                store.SnapshotIfChanged(serial);
-            }
-
-            return null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return $"Mirador couldn't keep a copy of the eye calibration ({e.Message.Trim().TrimEnd('.')}).";
         }
     }
 

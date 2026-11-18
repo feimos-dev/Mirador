@@ -115,6 +115,7 @@ public partial class App : Application
         };
         AppHost.RecordAppPath();
         _ = Task.Run(Host.Session.PlaceStandIn);
+        _ = Task.Run(BackUpMonadoFolder);
 
         ShowFirstWindow();
 
@@ -201,6 +202,23 @@ public partial class App : Application
         var outcome = await Host.Session.StartAsync(reason, CancellationToken.None);
         Ui.TryEnqueue(() => Report(outcome, reason));
         return outcome;
+    }
+
+    /// <summary>Copies Monado's folder at launch when it changed since the last copy; a copy that can't be taken goes to the log.</summary>
+    private void BackUpMonadoFolder()
+    {
+        try
+        {
+            Host.FolderBackups.SnapshotIfChanged(out var problem);
+            if (problem is not null)
+            {
+                AppLog.Write(problem);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Mirador couldn't back up Monado's folder", ex);
+        }
     }
 
     /// <summary>
