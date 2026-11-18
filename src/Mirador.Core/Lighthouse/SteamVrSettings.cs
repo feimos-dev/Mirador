@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -77,7 +78,9 @@ public sealed class SteamVrSettings(string vrsettingsPath, string backupDir, Tim
             }
         }
 
-        var text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        // As SteamVR writes it: three spaces, and characters as they are.
+        var text = root.ToJsonString(
+            new JsonSerializerOptions { WriteIndented = true, IndentSize = 3, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         var temp = vrsettingsPath + ".mirador-new";
         File.WriteAllText(temp, text);
         try
@@ -112,10 +115,12 @@ public sealed class SteamVrSettings(string vrsettingsPath, string backupDir, Tim
 
         try
         {
-            return JsonNode.Parse(File.ReadAllText(vrsettingsPath)) as JsonObject
+            var root = JsonNode.Parse(File.ReadAllText(vrsettingsPath)) as JsonObject
                 ?? throw new SteamVrSettingsException($"SteamVR's settings ({vrsettingsPath}) aren't a JSON object, so Mirador leaves them as they are.");
+            _ = root.Count; // reads the whole object here, so that a duplicate key fails here too
+            return root;
         }
-        catch (JsonException e)
+        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
         {
             throw new SteamVrSettingsException($"Mirador couldn't read SteamVR's settings ({vrsettingsPath}): {e.Message.Trim().TrimEnd('.')}. It leaves them as they are.", e);
         }

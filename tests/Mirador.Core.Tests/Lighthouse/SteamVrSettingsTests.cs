@@ -100,6 +100,18 @@ public sealed class SteamVrSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Text_is_written_as_steamvr_writes_it()
+    {
+        Write("""{ "steamvr" : { "mirrorViewGeometry" : "Gerät <A&B> +1'" } }""");
+
+        Settings().SetAutoLaunchOnButton(false);
+
+        var text = System.IO.File.ReadAllText(File);
+        Assert.Contains("\"Gerät <A&B> +1'\"", text);
+        Assert.Contains("\n   \"steamvr\":", text.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
     public void Removing_restores_a_file_without_the_key()
     {
         Write(Typical);
@@ -145,6 +157,7 @@ public sealed class SteamVrSettingsTests : IDisposable
     [InlineData("{ // a comment\n \"power\" : {} }")]
     [InlineData("[ 1, 2 ]")]
     [InlineData("{ \"power\" : 5 }")]
+    [InlineData("{ \"power\" : {}, \"power\" : {} }")]
     public void Malformed_json_is_never_overwritten(string text)
     {
         Write(text);
