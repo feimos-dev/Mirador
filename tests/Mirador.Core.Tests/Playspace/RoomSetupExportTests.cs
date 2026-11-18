@@ -12,7 +12,10 @@ public sealed class RoomSetupExportTests : IDisposable
     private static readonly DateTimeOffset Taken = new(2026, 11, 18, 9, 30, 0, TimeSpan.Zero);
     private static readonly MonadoPose Lifted = MonadoPose.Identity with { Y = 0.1f };
 
-    /// <summary>One space with SteamVR's room setup (30); the space in use is listed first, without one.</summary>
+    /// <summary>
+    /// One space with SteamVR's room setup (30, not at the origin and turned): steamvr_lh uses it now. The space in use
+    /// is listed first, without one.
+    /// </summary>
     private const string Vrchap = """
         {
            "jsonid" : "chaperone_info",
@@ -21,7 +24,7 @@ public sealed class RoomSetupExportTests : IDisposable
                  "collision_bounds" : [],
                  "play_area" : [ 2, 2 ],
                  "seated" : { "translation" : [ 0, 0, 0 ], "yaw" : 0 },
-                 "standing" : { "translation" : [ 0, 0, 0 ], "yaw" : 0 },
+                 "standing" : { "translation" : [ 0.25, -1.5, 0.125 ], "yaw" : 1 },
                  "time" : "Tue Nov 18 09:30:00 2026",
                  "universeID" : "30"
               }
@@ -100,9 +103,13 @@ public sealed class RoomSetupExportTests : IDisposable
 
         RoomSetupExport.Run(steam.Path, steam.File("backups"), Universe, store, TimeProvider.System);
 
-        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), Universe)!.Value;
-        Assert.Equal(0.1f, translation[1], 1e-5f);
-        Assert.Equal(0, yaw, 1e-5f);
+        // The space now holds what was in use: Mirador's offset on top of 30's room setup.
+        var placed = Placed(Universe);
+        var expected = RoomSetupMath.Transform(Lifted, SteamVrRoom.ChaperonePose([0.25f, -1.5f, 0.125f], 1));
+        Assert.Equal(expected.X, placed.X, 1e-4f);
+        Assert.Equal(expected.Y, placed.Y, 1e-4f);
+        Assert.Equal(expected.Z, placed.Z, 1e-4f);
+        Assert.Equal(1, MathF.Abs((expected.Qy * placed.Qy) + (expected.Qw * placed.Qw)), 1e-4f);
 
         // This space now gets no offset from Mirador; the setup taken without a space stays for the others.
         Assert.Equal(new RoomSetup(Origin, null, Lifted, Taken), store.Get(Origin, null));
@@ -127,9 +134,17 @@ public sealed class RoomSetupExportTests : IDisposable
         Assert.Equal(MonadoPose.Identity, client.Set);
 
         // Exporting again writes nothing more on top.
+        var once = Placed(Universe);
         RoomSetupExport.Run(steam.Path, steam.File("backups"), Universe, store, TimeProvider.System);
-        var (translation, _) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), Universe)!.Value;
-        Assert.Equal(0.1f, translation[1], 1e-5f);
+        Assert.Equal(once.Y, Placed(Universe).Y, 1e-5f);
+        Assert.Equal(once.X, Placed(Universe).X, 1e-5f);
+    }
+
+    /// <summary>Where steamvr_lh's chaperone for <paramref name="universe"/> puts a device at the driver's origin.</summary>
+    private MonadoPose Placed(string universe)
+    {
+        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), universe)!.Value;
+        return SteamVrRoom.ChaperonePose(translation, yaw);
     }
 
     [Fact]

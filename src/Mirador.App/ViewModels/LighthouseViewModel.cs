@@ -482,8 +482,10 @@ public sealed partial class LighthouseViewModel : ObservableObject
     {
         var steam = AppHost.SteamDir();
         var universe = steam is null ? null : host.CurrentUniverse().Id;
-        var refusal = RoomSetupExport.Refusal(
-            SteamVrStillRunning() is not null, host.Session.State != SessionState.Stopped, steam, universe, host.RoomSetups);
+        // Monado started by Mirador, or any monado-service (one started outside Mirador too).
+        var monadoRunning = host.Session.State != SessionState.Stopped
+            || host.Processes.Snapshot().Any(p => string.Equals(p.Name, "monado-service", StringComparison.OrdinalIgnoreCase));
+        var refusal = RoomSetupExport.Refusal(SteamVrStillRunning() is not null, monadoRunning, steam, universe, host.RoomSetups);
         return refusal is null ? (null, RoomSetupExport.QuestionFor(steam!, universe!)) : (refusal, null);
     }
 

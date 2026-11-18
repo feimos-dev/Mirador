@@ -408,12 +408,42 @@ public class SteamVrRoomTests
     }
 
     [Fact]
+    public void An_export_builds_on_the_room_setup_steamvr_uses_now()
+    {
+        // The space in use has no entry; steamvr_lh applies 30's (translation [0.25, −1.5, 0.125], yaw 1) now, and Mirador's
+        // offset was measured on top of that. After the export steamvr_lh applies the new entry alone.
+        using var steam = SteamWith(TwoSpaces, "1793836993", "30", "2");
+        var (usedTranslation, usedYaw) = SteamVrRoom.Standing(TwoSpaces, "30")!.Value;
+        var offset = RoomSetupMath.Correct(MonadoPose.Identity, -0.08f, 0.4f);
+
+        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1793836993", offset, () => { }, TimeProvider.System);
+
+        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), "1793836993")!.Value;
+        MonadoPose[] devices = [MonadoPose.Identity, new(0.1f, 0.6f, 0.05f, 0.79f, -0.3f, 1.6f, 0.2f), new(0, 0, 0, 1, 1, 0.05f, -2)];
+        foreach (var raw in devices)
+        {
+            var before = RoomSetupMath.Transform(offset, RoomSetupMath.Transform(SteamVrRoom.ChaperonePose(usedTranslation, usedYaw), raw));
+            var after = RoomSetupMath.Transform(SteamVrRoom.ChaperonePose(translation, yaw), raw);
+            Assert.Equal(before.X, after.X, 1e-4f);
+            Assert.Equal(before.Y, after.Y, 1e-4f);
+            Assert.Equal(before.Z, after.Z, 1e-4f);
+            var dot = (before.Qx * after.Qx) + (before.Qy * after.Qy) + (before.Qz * after.Qz) + (before.Qw * after.Qw);
+            Assert.Equal(1, MathF.Abs(dot), 1e-4f);
+        }
+
+        // 30's own entry is as it was.
+        Assert.Equal(TwoSpacesEntry30(), Entry(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), "30").ToJsonString());
+    }
+
+    private static string TwoSpacesEntry30() => Entry(TwoSpaces, "30").ToJsonString();
+
+    [Fact]
     public void An_export_steamvr_still_wouldnt_use_is_refused()
     {
         // 30 is listed before the space in use and has an entry: steamvr_lh would still take 30.
         using var steam = SteamWith(TwoSpaces, "30", "1793836993", "2");
         const string refusal =
-            "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Set it up on the Lighthouse page. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
+            "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
         Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "1793836993"));
         var cleared = false;
 

@@ -114,6 +114,10 @@ public static class SteamVrRoom
     /// <summary>The name upstream Monado's <c>steamvr_lh</c> driver gives its tracking origin.</summary>
     public const string LighthouseOrigin = "SteamVR Lighthouse Tracking";
 
+    /// <summary>Why an export wouldn't help: <c>steamvr_lh</c> would still take an earlier universe's room setup.</summary>
+    public const string StillOtherSpace =
+        "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
+
     /// <summary>Why an export can't add a room setup: SteamVR's file has no entry to copy the structure of.</summary>
     public const string NoRoomSetupToCopy = "SteamVR has no room setup to copy; run SteamVR's Room Setup once.";
 
@@ -223,8 +227,8 @@ public static class SteamVrRoom
     }
 
     /// <summary>
-    /// Writes <paramref name="offset"/>, applied on top of SteamVR's room setup of <paramref name="universe"/>, into
-    /// SteamVR's file, then calls <paramref name="clearOwn"/> to drop Mirador's own copy, so that never both apply. The
+    /// Writes <paramref name="offset"/>, applied on top of the room setup <c>steamvr_lh</c> applies now (that of the
+    /// universe it picks, which may be another one), into SteamVR's file as the room setup of <paramref name="universe"/>, then calls <paramref name="clearOwn"/> to drop Mirador's own copy, so that never both apply. The
     /// file is copied to <c>chaperone_info.vrchap.mirador-&lt;yyyyMMdd-HHmmss&gt;</c> in <paramref name="backupDir"/>
     /// first, and written aside, then moved over the old one, only if it is still as it was read. It is refused when
     /// <c>steamvr_lh</c> wouldn't use the result (<see cref="ExportRefusal"/>), and checked again once written. When that
@@ -252,8 +256,11 @@ public static class SteamVrRoom
             throw new MiradorException(refusal);
         }
 
+        // Mirador's offset was measured on top of the chaperone steamvr_lh applies now: the room setup of the universe it
+        // picks, which may be another one than this (this one without an entry yet), or none.
         var text = Encoding.UTF8.GetString(original);
-        var (translation, yaw) = Standing(text, universe) ?? ([0, 0, 0], 0);
+        var inUse = SteamVrLhPick(Read(steamDir).Universes, RoomSetups(text));
+        var (translation, yaw) = (inUse is null ? null : Standing(text, inUse)) ?? ([0, 0, 0], 0);
         var (newTranslation, newYaw) = StandingFor(offset, translation, yaw);
         var written = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(WithStanding(text, universe, newTranslation, newYaw));
 
@@ -356,7 +363,7 @@ public static class SteamVrRoom
         var withThis = new HashSet<string>(roomSetups, StringComparer.Ordinal) { universe };
         return SteamVrLhPick(universes, withThis) == universe
             ? null
-            : $"{RoomSetupWarning.OtherSpace} Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
+            : StillOtherSpace;
     }
 
     /// <summary>The object entries of <c>universes</c>.</summary>
