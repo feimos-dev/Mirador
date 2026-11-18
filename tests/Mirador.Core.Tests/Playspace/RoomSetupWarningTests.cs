@@ -104,7 +104,7 @@ public class RoomSetupWarningTests
         Assert.False(RoomSetupWarning.BaseChanged(setups, "1500000001", base30 with { Y = -1.2f }, false));
         Assert.False(RoomSetupWarning.BaseChanged(setups, "1500000001", null, true));
 
-        // A setup kept before Mirador noted the base, or another origin's, says nothing.
+        // A setup without a base, or another origin's, says nothing.
         Assert.False(RoomSetupWarning.BaseChanged([new(origin, "1500000001", MonadoPose.Identity, Taken)], "1500000001", base30, true));
         Assert.False(RoomSetupWarning.BaseChanged([new("Pimax", "1500000001", MonadoPose.Identity, Taken, base30)], "1500000001", SteamVrBase.None, true));
 

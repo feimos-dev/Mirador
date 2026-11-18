@@ -170,7 +170,7 @@ public sealed class RoomSetupExportTests : IDisposable
         store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1)));
         Assert.Null(Refusal());
 
-        // A setup kept before Mirador noted the base is exported as it is.
+        // A setup without a base is exported as it is.
         store.Set(new RoomSetup(Origin, Universe, Lifted, Taken));
         Assert.Null(Refusal());
     }
