@@ -59,4 +59,18 @@ public class DeviceStatusTests
 
     [Fact]
     public void No_devices_give_no_lines() => Assert.Empty(DeviceStatus.Lines([]));
+
+    [Fact]
+    public void The_serial_follows_the_name()
+    {
+        var lines = DeviceStatus.Lines([
+            new MonadoDevice(0, "head", "Pimax Dream Air", "XR5DA-P501", 0, false, false, 0),
+            new MonadoDevice(1, "left", "Index Controller L", "LHR-1A2B3C4D", 0, true, false, 0.8f),
+            new MonadoDevice(2, "right", "Index Controller R", "", 0, true, true, 0.5f),
+        ]);
+
+        Assert.Equal(
+            ["Pimax Dream Air, serial XR5DA-P501", "Index Controller L, serial LHR-1A2B3C4D, 80%", "Index Controller R, 50% (charging)"],
+            lines.Select(l => l.Text));
+    }
 }

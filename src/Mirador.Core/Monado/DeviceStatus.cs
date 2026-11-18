@@ -23,8 +23,8 @@ public static class DeviceStatus
 
     /// <summary>
     /// One <see cref="StatusLevel.Ok"/> line per device: those with a role in role order, then the others in index
-    /// order. A device given under two roles is listed once, under the first. The text is the device's name, with its
-    /// battery ("Index Controller L, 87% (charging)") when it has one.
+    /// order. A device given under two roles is listed once, under the first. The text is the device's name, then its
+    /// serial and its battery when it has them ("Index Controller L, serial LHR-1A2B3C4D, 87% (charging)").
     /// </summary>
     public static IReadOnlyList<StatusLine> Lines(IReadOnlyList<MonadoDevice> devices)
     {
@@ -55,6 +55,11 @@ public static class DeviceStatus
     private static StatusLine Line(MonadoDevice device, string label)
     {
         var text = device.Name;
+        if (!string.IsNullOrWhiteSpace(device.Serial))
+        {
+            text += ", serial " + device.Serial;
+        }
+
         if (device.HasBattery)
         {
             var percent = (int)Math.Round(Math.Clamp(device.Charge, 0f, 1f) * 100, MidpointRounding.AwayFromZero);
