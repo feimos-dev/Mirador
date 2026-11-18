@@ -244,4 +244,19 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         earlier.Restore(earlier.Backups()[0]);
         Assert.Contains(earlier.Backups(), b => File.ReadAllText(Path.Combine(b.Dir, "files", "config_v0.json")) == "replaced by the restore");
     }
+
+    [Fact]
+    public void A_newest_copy_whose_manifest_lists_no_files_does_not_stop_the_next()
+    {
+        WriteFirstState();
+        var broken = Path.Combine(BackupsDir, "monado", "20991231-235959");
+        Directory.CreateDirectory(Path.Combine(broken, "files"));
+        File.WriteAllText(Path.Combine(broken, "manifest.json"), "{}");
+        var backups = Backups();
+
+        var made = backups.SnapshotIfChanged(out var problem);
+
+        Assert.Null(problem);
+        Assert.NotNull(made);
+    }
 }

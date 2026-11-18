@@ -412,7 +412,10 @@ public sealed class MonadoFolderBackups(
     {
         try
         {
-            return JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(dir, ManifestName)), FolderBackupJsonContext.Default.FolderManifest);
+            // A manifest without its file list (such as "{}") counts as none.
+            return JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(dir, ManifestName)), FolderBackupJsonContext.Default.FolderManifest) is { Files: not null } manifest
+                ? manifest
+                : null;
         }
         catch (JsonException)
         {
