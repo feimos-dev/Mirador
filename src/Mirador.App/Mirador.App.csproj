@@ -13,6 +13,8 @@
     <ApplicationIcon>Assets\Mirador.ico</ApplicationIcon>
     <!-- Program.cs has Main: the elevated runtime switch and the second-instance hand-over come before any WinUI. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <!-- Collection expressions as read-only lists: a concern only for a trimmed or AOT app, which Mirador isn't. -->
+    <NoWarn>$(NoWarn);CsWinRT1032</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\*.ico;Assets\*.png" CopyToOutputDirectory="PreserveNewest" />
