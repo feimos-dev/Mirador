@@ -486,6 +486,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
                 problem = $"Saved, but not approved: {refusal}";
             }
         }
+        else if (profile.RunAsAdministrator && ElevatedChoice.ApprovalProblem(profile) is { } blocked)
+        {
+            // No prompt: it couldn't make this profile run as administrator.
+            problem = $"Saved, but it runs as you: {blocked}";
+        }
         else if (needsConsent)
         {
             var code = await ElevatedMonado.AllowAsync();
