@@ -12,9 +12,9 @@ public class BranchLinkTests
     [InlineData("https://gitlab.freedesktop.org/monado/monado", "https://gitlab.freedesktop.org/monado/monado.git", "main")]
     [InlineData("https://gitlab.freedesktop.org/monado/monado.git", "https://gitlab.freedesktop.org/monado/monado.git", "main")]
     [InlineData("https://gitlab.com/group/sub/monado/-/tree/feature/x", "https://gitlab.com/group/sub/monado.git", "feature/x")]
-    [InlineData("https://github.com/fzeruhn/monado/tree/dream-air", "https://github.com/fzeruhn/monado.git", "dream-air")]
-    [InlineData("https://github.com/fzeruhn/monado/pull/7", "https://github.com/fzeruhn/monado.git", "refs/pull/7/head")]
-    [InlineData("  https://github.com/fzeruhn/monado  ", "https://github.com/fzeruhn/monado.git", "main")]
+    [InlineData("https://github.com/feimos-dev/monado/tree/dream-air", "https://github.com/feimos-dev/monado.git", "dream-air")]
+    [InlineData("https://github.com/feimos-dev/monado/pull/7", "https://github.com/feimos-dev/monado.git", "refs/pull/7/head")]
+    [InlineData("  https://github.com/feimos-dev/monado  ", "https://github.com/feimos-dev/monado.git", "main")]
     public void Links_give_the_repository_and_the_ref(string link, string url, string gitRef)
     {
         Assert.Equal((url, gitRef), BranchLink.Parse(link));
@@ -26,14 +26,14 @@ public class BranchLinkTests
     [InlineData("file:///C:/Users/finn/monado")]
     [InlineData("http://gitlab.freedesktop.org/monado/monado")]
     [InlineData("ssh://git@gitlab.freedesktop.org/monado/monado.git")]
-    [InlineData("git@github.com:fzeruhn/monado.git")]
+    [InlineData("git@github.com:feimos-dev/monado.git")]
     [InlineData("ext::sh -c touch% /tmp/x")]
     [InlineData("https://github.com/")]
     [InlineData("https://gitlab.freedesktop.org/monado/monado/-/issues/5")]
     [InlineData("https://github.com/a/b/tree/--upload-pack=evil")]
-    [InlineData("https://github.com/fzeruhn/monado/commit/0123456789abcdef0123456789abcdef01234567")]
-    [InlineData("https://github.com/fzeruhn/monado/blob/main/README.md")]
-    [InlineData("https://github.com/fzeruhn/monado/releases")]
+    [InlineData("https://github.com/feimos-dev/monado/commit/0123456789abcdef0123456789abcdef01234567")]
+    [InlineData("https://github.com/feimos-dev/monado/blob/main/README.md")]
+    [InlineData("https://github.com/feimos-dev/monado/releases")]
     public void Other_links_are_refused(string link)
     {
         Assert.Throws<MiradorException>(() => BranchLink.Parse(link));
@@ -123,18 +123,18 @@ public class BranchSourceStoreTests
 
     [Theory]
     [InlineData("https://gitlab.freedesktop.org/monado/monado/-/merge_requests/3107")]
-    [InlineData("https://github.com/fzeruhn/monado/pull/4")]
-    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado/-/commit/49769371a0b2c3d4e5f60718293a4b5c6d7e8f90")]
-    [InlineData("https://github.com/fzeruhn/monado/commit/49769371a")]
-    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado/-/tree/pimax-p3c-windows")]
-    [InlineData("https://github.com/fzeruhn/monado/tree/dream-air")]
+    [InlineData("https://github.com/feimos-dev/monado/pull/4")]
+    [InlineData("https://gitlab.freedesktop.org/feimos/monado/-/commit/49769371a0b2c3d4e5f60718293a4b5c6d7e8f90")]
+    [InlineData("https://github.com/feimos-dev/monado/commit/49769371a")]
+    [InlineData("https://gitlab.freedesktop.org/feimos/monado/-/tree/pimax-p3c-windows")]
+    [InlineData("https://github.com/feimos-dev/monado/tree/dream-air")]
     public void Links_naming_a_merge_request_commit_or_branch_name_their_branch(string link) =>
         Assert.True(BranchLink.NamesItsBranch(link));
 
     [Theory]
-    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado")]
-    [InlineData("https://gitlab.freedesktop.org/fzeruhn/monado.git")]
-    [InlineData("  https://github.com/fzeruhn/monado  ")]
+    [InlineData("https://gitlab.freedesktop.org/feimos/monado")]
+    [InlineData("https://gitlab.freedesktop.org/feimos/monado.git")]
+    [InlineData("  https://github.com/feimos-dev/monado  ")]
     [InlineData("")]
     [InlineData("not a link")]
     public void A_repository_link_does_not_name_its_branch(string link) =>

@@ -48,7 +48,7 @@ public class MonadoInstallerTests : IDisposable
     private static HttpResponseMessage Json(string text) => new(HttpStatusCode.OK) { Content = new StringContent(text, Encoding.UTF8, "application/json") };
 
     private string ListJson() => "[" + string.Join(",", listed.Select(r =>
-        $$"""{"tag_name":"{{r.Version}}","prerelease":true,"draft":false,"published_at":"2026-11-{{r.Version[15..17]}}T03:40:00Z","assets":[{"name":"{{r.Version}}.zip","browser_download_url":"https://github.com/fzeruhn/Mirador/releases/download/{{r.Version}}/{{r.Version}}.zip","digest":"sha256:{{r.Sha}}"}]}""")) + "]";
+        $$"""{"tag_name":"{{r.Version}}","prerelease":true,"draft":false,"published_at":"2026-11-{{r.Version[15..17]}}T03:40:00Z","assets":[{"name":"{{r.Version}}.zip","browser_download_url":"https://github.com/feimos-dev/Mirador/releases/download/{{r.Version}}/{{r.Version}}.zip","digest":"sha256:{{r.Sha}}"}]}""")) + "]";
 
     /// <summary>Publishes a build: a zip with Monado's install layout (or <paramref name="entries"/>), listed with its hash.</summary>
     private void Publish(string version, Dictionary<string, string>? entries = null, string? listedSha = null)
@@ -72,7 +72,7 @@ public class MonadoInstallerTests : IDisposable
 
         var bytes = memory.ToArray();
         listed.Add((version, listedSha ?? Convert.ToHexStringLower(SHA256.HashData(bytes))));
-        github.Answers[$"https://github.com/fzeruhn/Mirador/releases/download/{version}/{version}.zip"] =
+        github.Answers[$"https://github.com/feimos-dev/Mirador/releases/download/{version}/{version}.zip"] =
             () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
     }
 
@@ -327,7 +327,7 @@ public class MonadoInstallerTests : IDisposable
 public class MonadoReleaseListTests
 {
     private static string Release(string tag, bool prerelease = true, bool draft = false, string? url = null, string digest = "sha256:" + "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12", string? name = null) =>
-        $$"""{"tag_name":"{{tag}}","prerelease":{{(prerelease ? "true" : "false")}},"draft":{{(draft ? "true" : "false")}},"published_at":"2026-11-10T03:40:00Z","assets":[{"name":"{{name ?? tag + ".zip"}}","browser_download_url":"{{url ?? $"https://github.com/fzeruhn/Mirador/releases/download/{tag}/{tag}.zip"}}","digest":"{{digest}}"}]}""";
+        $$"""{"tag_name":"{{tag}}","prerelease":{{(prerelease ? "true" : "false")}},"draft":{{(draft ? "true" : "false")}},"published_at":"2026-11-10T03:40:00Z","assets":[{"name":"{{name ?? tag + ".zip"}}","browser_download_url":"{{url ?? $"https://github.com/feimos-dev/Mirador/releases/download/{tag}/{tag}.zip"}}","digest":"{{digest}}"}]}""";
 
     [Fact]
     public void Only_listed_builds_with_their_zip_and_digest_count()

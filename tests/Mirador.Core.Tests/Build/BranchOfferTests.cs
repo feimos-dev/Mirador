@@ -4,8 +4,8 @@ namespace Mirador.Core.Tests.Build;
 
 public class BranchOfferTests
 {
-    private const string Url = "https://gitlab.freedesktop.org/fzeruhn/monado.git";
-    private const string Other = "https://github.com/fzeruhn/monado.git";
+    private const string Url = "https://gitlab.freedesktop.org/feimos/monado.git";
+    private const string Other = "https://github.com/feimos-dev/monado.git";
 
     private static FakeCommandRunner Runner(params string[] heads) => new()
     {

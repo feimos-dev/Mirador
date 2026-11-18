@@ -4,7 +4,7 @@ namespace Mirador.Core.Tests.Build;
 
 public class GitRemoteTests
 {
-    private const string Url = "https://gitlab.freedesktop.org/fzeruhn/monado.git";
+    private const string Url = "https://gitlab.freedesktop.org/feimos/monado.git";
 
     [Fact]
     public void Parse_heads_lists_branch_names_in_order()
@@ -24,7 +24,7 @@ public class GitRemoteTests
             + "3333333333333333333333333333333333333333\trefs/tags/v1.0\n"
             + "4444444444444444444444444444444444444444\trefs/tags/v1.0^{}\n"
             + "5555555555555555555555555555555555555555\trefs/merge-requests/3107/head\n"
-            + "warning: redirecting to https://gitlab.freedesktop.org/fzeruhn/monado.git/\n"
+            + "warning: redirecting to https://gitlab.freedesktop.org/feimos/monado.git/\n"
             + "\n";
 
         Assert.Equal(["main"], GitRemote.ParseHeads(output));

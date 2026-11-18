@@ -9,7 +9,7 @@ namespace Mirador.Core.Tests.OpenVr;
 
 public sealed class OpenCompositeInstallTests : IDisposable
 {
-    private const string Url = "https://github.com/fzeruhn/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe";
+    private const string Url = "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe";
     private const string Source = "OpenLamina 2026.11.20, commit 75342495640501953fc2c17f73eeb4d124e8528e\n";
     private static readonly byte[] Setup = [0x4D, 0x5A, 1, 2, 3, 4];
 
@@ -40,7 +40,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
     private OpenCompositeInstall Install => new(Folder, runner);
 
     private static Release Rel(string? url = Url, string? sha = null, string tag = "v2026.11.20") =>
-        new(tag, "https://github.com/fzeruhn/OpenLamina/releases/tag/" + tag, url, sha ?? Convert.ToHexStringLower(SHA256.HashData(Setup)));
+        new(tag, "https://github.com/feimos-dev/OpenLamina/releases/tag/" + tag, url, sha ?? Convert.ToHexStringLower(SHA256.HashData(Setup)));
 
     private Task<InstallOutcome> RunAsync(Release release) =>
         Install.InstallAsync(new HttpClient(answer), release, Downloads, CancellationToken.None);
@@ -73,7 +73,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
     }
 
     [Theory]
-    [InlineData("http://github.com/fzeruhn/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe")]
+    [InlineData("http://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe")]
     [InlineData("https://example.com/OpenLamina-Setup.exe")]
     [InlineData(null)]
     public async Task An_installer_not_on_github_is_never_fetched(string? url)

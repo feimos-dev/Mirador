@@ -17,7 +17,7 @@ public sealed record MonadoRelease(string Version, string ZipUrl, string ZipSha2
 public static class MonadoReleaseList
 {
     /// <summary>Mirador's repository, where the weekly build is published.</summary>
-    public const string Repository = "fzeruhn/Mirador";
+    public const string Repository = "feimos-dev/Mirador";
 
     /// <summary>The releases list, newest first.</summary>
     public const string ApiUrl = $"https://api.github.com/repos/{Repository}/releases?per_page=100";
