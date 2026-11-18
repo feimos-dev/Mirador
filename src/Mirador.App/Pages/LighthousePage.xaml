@@ -164,6 +164,12 @@
                 Text="{x:Bind ViewModel.RoomSetupUnavailable, Mode=OneWay}"
                 TextWrapping="Wrap"
                 Visibility="{x:Bind ViewModel.HasRoomSetupUnavailable, Mode=OneWay}" />
+            <InfoBar
+                IsClosable="False"
+                IsOpen="{x:Bind ViewModel.HasMissingRoomSetup, Mode=OneWay}"
+                Message="{x:Bind ViewModel.MissingRoomSetup, Mode=OneWay}"
+                Severity="Warning"
+                Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
             <TextBlock
                 Margin="1,0,0,4"
                 Text="{x:Bind vm:LighthouseViewModel.RoomSetupRestartNote}"

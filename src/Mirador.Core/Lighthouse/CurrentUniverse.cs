@@ -56,30 +56,8 @@ public static class CurrentUniverse
     /// </summary>
     public static UniversePick FromSteam(string? steamDir, IReadOnlyList<KnownStation> stations)
     {
-        if (steamDir is null)
-        {
-            return new UniversePick(null, false);
-        }
-
-        return Pick(
-            SteamVrRoom.Universes(ReadOrEmpty(SteamVrRoom.LighthousedbPath(steamDir))),
-            SteamVrRoom.RoomSetups(ReadOrEmpty(SteamVrRoom.ChaperoneInfoPath(steamDir))),
-            stations);
-    }
-
-    /// <summary>The file's text; empty when it is missing or can't be read. Shared, as SteamVR may be writing it.</summary>
-    private static string ReadOrEmpty(string path)
-    {
-        try
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            return reader.ReadToEnd();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return "";
-        }
+        var (universes, roomSetups) = SteamVrRoom.Read(steamDir);
+        return Pick(universes, roomSetups, stations);
     }
 
     /// <summary>The 8 hex digits of a second-generation station's name (<c>LHB-XXXXXXXX</c>); null for any other name.</summary>

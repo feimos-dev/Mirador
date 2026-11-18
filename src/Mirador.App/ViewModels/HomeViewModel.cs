@@ -80,6 +80,7 @@ public sealed partial class HomeViewModel : ObservableObject
         OnSessionChanged();
         RefreshStations();
         CheckSteamVrButtonStart();
+        CheckRoomSetup();
     }
 
     public ObservableCollection<ProfileItem> Profiles { get; } = [];
@@ -251,6 +252,7 @@ public sealed partial class HomeViewModel : ObservableObject
         LoadProfiles();
         RefreshRuntime();
         RefreshStations();
+        CheckRoomSetup();
         GpuSchedulingNotice = Core.Gpu.GpuScheduling.Notice(Core.Gpu.GpuScheduling.Now());
         _ = RunChecksAsync();
     }
@@ -543,6 +545,7 @@ public sealed partial class HomeViewModel : ObservableObject
                 }
 
                 selected = picked;
+                CheckRoomSetup();
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -1032,6 +1035,32 @@ public sealed partial class HomeViewModel : ObservableObject
         else
         {
             ShowNotice("room-setup", "Room setup", problem, InfoBarSeverity.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Whether the Lighthouse space in use has a room setup, from SteamVR's files and Mirador's own (read off the UI
+    /// thread, without starting Monado): at launch, when Home shows, when the profile changes and after a room setup step.
+    /// The notice stays while it is true; it isn't the one for a room setup that couldn't be applied.
+    /// </summary>
+    public void CheckRoomSetup() => _ = CheckRoomSetupAsync();
+
+    private async Task CheckRoomSetupAsync()
+    {
+        const string key = "room-setup-missing";
+        var warning = await Task.Run(host.MissingRoomSetup);
+        var existing = Notices.FirstOrDefault(n => n.Key == key);
+        if (warning is null)
+        {
+            RemoveNotice(key);
+        }
+        else if (existing is null)
+        {
+            Notices.Add(new NoticeItem(key, "Room setup", warning, InfoBarSeverity.Warning, IsClosable: false));
+        }
+        else if (existing.Message != warning)
+        {
+            Notices[Notices.IndexOf(existing)] = existing with { Message = warning };
         }
     }
 

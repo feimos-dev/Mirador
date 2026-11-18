@@ -24,6 +24,15 @@ public static class SteamVrRoom
     public static string ChaperoneInfoPath(string steamDir) => Path.Combine(steamDir, "config", "chaperone_info.vrchap");
 
     /// <summary>
+    /// The universes and the room setups in Steam's files as they are now. A file that is missing or can't be read
+    /// counts as empty; without Steam (<paramref name="steamDir"/> null) there are none.
+    /// </summary>
+    public static (IReadOnlyList<LighthouseUniverse> Universes, IReadOnlySet<string> RoomSetups) Read(string? steamDir) =>
+        steamDir is null
+            ? ([], new HashSet<string>())
+            : (Universes(ReadOrEmpty(LighthousedbPath(steamDir))), RoomSetups(ReadOrEmpty(ChaperoneInfoPath(steamDir))));
+
+    /// <summary>
     /// The universes in <c>known_universes</c>, in the file's order, with the <c>base_serial_number</c> of each entry
     /// in their <c>base_stations</c>. Entries without an id are left out.
     /// </summary>
@@ -58,6 +67,21 @@ public static class SteamVrRoom
     /// </summary>
     public static string? SteamVrLhPick(IReadOnlyList<LighthouseUniverse> universes, IReadOnlySet<string> roomSetups) =>
         universes.FirstOrDefault(u => roomSetups.Contains(u.Id))?.Id;
+
+    /// <summary>The file's text; empty when it is missing or can't be read. Shared, as SteamVR may be writing it.</summary>
+    private static string ReadOrEmpty(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return "";
+        }
+    }
 
     /// <summary>The file's root object; null when the text isn't a JSON object.</summary>
     private static JsonObject? Parse(string json)

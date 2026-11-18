@@ -1,0 +1,109 @@
+using Mirador.Core.BaseStations;
+using Mirador.Core.Lighthouse;
+using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Playspace;
+using Mirador.Tests;
+
+namespace Mirador.Core.Tests.Playspace;
+
+public class RoomSetupWarningTests
+{
+    private const string NoSetup =
+        "No room setup for this space: the floor and forward direction may be wrong in games. Set it up on the Lighthouse page.";
+
+    private const string OtherSpace =
+        "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Set it up on the Lighthouse page.";
+
+    private static readonly DateTimeOffset Taken = new(2026, 11, 18, 9, 30, 0, TimeSpan.Zero);
+
+    private static readonly IReadOnlySet<string> SteamVrSetups = new HashSet<string> { "2", "30", "31", "1779499028" };
+
+    [Fact]
+    public void Mirador_having_a_setup_gives_no_warning()
+    {
+        Assert.Null(RoomSetupWarning.For(new UniversePick("1793836993", false), SteamVrSetups, miradorHasSetup: true, profileUsesSteamVrLh: true));
+        Assert.Null(RoomSetupWarning.For(new UniversePick("1793836993", true), SteamVrSetups, miradorHasSetup: true, profileUsesSteamVrLh: true));
+        Assert.Null(RoomSetupWarning.For(new UniversePick(null, false), new HashSet<string>(), miradorHasSetup: true, profileUsesSteamVrLh: false));
+    }
+
+    [Fact]
+    public void Steamvr_lhs_room_setup_of_this_space_gives_no_warning()
+    {
+        Assert.Null(RoomSetupWarning.For(new UniversePick("30", false), SteamVrSetups, miradorHasSetup: false, profileUsesSteamVrLh: true));
+    }
+
+    [Fact]
+    public void No_setup_warns()
+    {
+        Assert.Equal(NoSetup, RoomSetupWarning.For(new UniversePick("99", false), SteamVrSetups, false, true));
+        Assert.Equal(NoSetup, RoomSetupWarning.For(new UniversePick(null, false), SteamVrSetups, false, true));
+
+        // SteamVR's file counts only when Monado's steamvr_lh driver reads it.
+        Assert.Equal(NoSetup, RoomSetupWarning.For(new UniversePick("30", false), SteamVrSetups, false, false));
+    }
+
+    [Fact]
+    public void Another_spaces_steamvr_setup_in_use_warns()
+    {
+        Assert.Equal(OtherSpace, RoomSetupWarning.For(new UniversePick("1793836993", true), SteamVrSetups, false, true));
+
+        // Even when this space has an entry too: steamvr_lh takes the first one it finds.
+        Assert.Equal(OtherSpace, RoomSetupWarning.For(new UniversePick("31", true), SteamVrSetups, false, true));
+
+        // Without steamvr_lh no SteamVR room setup is used at all.
+        Assert.Equal(NoSetup, RoomSetupWarning.For(new UniversePick("1793836993", true), SteamVrSetups, false, false));
+    }
+
+    [Fact]
+    public void Finns_case_warns()
+    {
+        // Universe 1793836993 holds the stations Mirador knows and has no SteamVR room setup; the others have one.
+        var universes = SteamVrRoom.Universes("""
+            { "known_universes" : [
+                { "base_stations" : [ { "base_serial_number" : 3735928559 } ], "id" : "1793836993" },
+                { "base_stations" : [], "id" : "2" },
+                { "base_stations" : [], "id" : "30" },
+                { "base_stations" : [], "id" : "31" },
+                { "base_stations" : [], "id" : "1779499028" } ] }
+            """);
+        var pick = CurrentUniverse.Pick(universes, SteamVrSetups, [new KnownStation("AA:BB:CC:DD:EE:01", "LHB-DEADBEEF")]);
+
+        Assert.Equal(new UniversePick("1793836993", true), pick);
+        Assert.Equal(OtherSpace, RoomSetupWarning.For(pick, SteamVrSetups, miradorHasSetup: false, profileUsesSteamVrLh: true));
+    }
+
+    [Fact]
+    public void Mirador_has_a_setup_for_the_space_or_one_taken_without_a_space()
+    {
+        RoomSetup Setup(string origin, string? universe) => new(origin, universe, MonadoPose.Identity, Taken);
+
+        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "1793836993")], "1793836993"));
+        Assert.True(RoomSetupWarning.HasSetup([Setup("simulated", null)], "1793836993"));
+        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", null)], null));
+        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], "1793836993"));
+        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], null));
+        Assert.False(RoomSetupWarning.HasSetup([], "1793836993"));
+    }
+
+    [Fact]
+    public void The_warning_is_read_from_steams_files()
+    {
+        using var steam = new TempDir();
+        Directory.CreateDirectory(steam.File("config", "lighthouse"));
+        File.WriteAllText(steam.File("config", "lighthouse", "lighthousedb.json"), """
+            { "known_universes" : [
+                { "base_stations" : [ { "base_serial_number" : 3735928559 } ], "id" : "1793836993" },
+                { "base_stations" : [], "id" : "30" } ] }
+            """);
+        File.WriteAllText(steam.File("config", "chaperone_info.vrchap"), """{ "universes" : [ { "universeID" : "30" } ] }""");
+        KnownStation[] stations = [new("AA:BB:CC:DD:EE:01", "LHB-DEADBEEF")];
+
+        Assert.Equal(OtherSpace, RoomSetupWarning.FromSteam(steam.Path, stations, [], profileUsesSteamVrLh: true));
+        Assert.Null(RoomSetupWarning.FromSteam(steam.Path, [], [], profileUsesSteamVrLh: true));
+        Assert.Null(RoomSetupWarning.FromSteam(steam.Path, stations, [new RoomSetup("steamvr_lh", "1793836993", MonadoPose.Identity, Taken)], true));
+
+        // No Steam: only Mirador's own setup counts.
+        Assert.Equal(NoSetup, RoomSetupWarning.FromSteam(null, stations, [], profileUsesSteamVrLh: true));
+        Assert.Null(RoomSetupWarning.FromSteam(null, stations, [new RoomSetup("steamvr_lh", null, MonadoPose.Identity, Taken)], true));
+    }
+}

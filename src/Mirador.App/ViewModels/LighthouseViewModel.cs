@@ -365,6 +365,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
             listening = stations.Listen();
             Refresh();
             RefreshRoomSetup();
+            _ = CheckRoomSetupAsync();
         }
         else
         {
@@ -388,6 +389,19 @@ public sealed partial class LighthouseViewModel : ObservableObject
     public partial string? RoomSetupUnavailable { get; set; }
 
     public bool HasRoomSetupUnavailable => RoomSetupUnavailable is not null;
+
+    /// <summary>The space in use has no room setup (<see cref="AppHost.MissingRoomSetup"/>); null when it has one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMissingRoomSetup))]
+    public partial string? MissingRoomSetup { get; set; }
+
+    public bool HasMissingRoomSetup => MissingRoomSetup is not null;
+
+    /// <summary>Reads whether the space in use has a room setup, off the UI thread; Home is told too.</summary>
+    private async Task CheckRoomSetupAsync()
+    {
+        MissingRoomSetup = await Task.Run(host.MissingRoomSetup);
+    }
 
     /// <summary>A step is measuring now.</summary>
     [ObservableProperty]
@@ -520,6 +534,8 @@ public sealed partial class LighthouseViewModel : ObservableObject
         {
             RoomSetupBusy = false;
             RefreshRoomSetup();
+            _ = CheckRoomSetupAsync();
+            App.Current.Home.CheckRoomSetup();
         }
     }
 

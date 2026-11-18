@@ -154,6 +154,36 @@ public sealed class AppHost : IAsyncDisposable
         Mirador.Core.Lighthouse.CurrentUniverse.FromSteam(SteamDir(), [.. Stations.Stations.Select(v => v.Station)]);
 
     /// <summary>
+    /// The warning when the Lighthouse space in use has no room setup (<see cref="RoomSetupWarning"/>), for the selected
+    /// profile; null when there is none, or when the profile doesn't use base stations. Reads SteamVR's files and
+    /// Mirador's own, never starts Monado: not on the UI thread.
+    /// </summary>
+    public string? MissingRoomSetup()
+    {
+        try
+        {
+            var profile = Profiles.Load().Selected;
+            var moduleUsesLighthouse = profile.ModuleId is { } id && Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
+            if (!profile.UsesBaseStations(moduleUsesLighthouse))
+            {
+                return null;
+            }
+
+            return RoomSetupWarning.FromSteam(
+                SteamDir(),
+                [.. Stations.Stations.Select(v => v.Station)],
+                RoomSetups.All(),
+                LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse));
+        }
+        catch (Exception e)
+        {
+            // Profiles, a module or a file that can't be read: no warning rather than a wrong one.
+            AppLog.Write("Couldn't check the room setup", e);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Raised on a pool thread after each Monado start that Mirador put its room setups into: with Home's warning when
     /// that failed, or null when it went well.
     /// </summary>
