@@ -13,9 +13,9 @@ public sealed record Release(string Tag, string Url, string? InstallerUrl, strin
 /// <summary>Asks GitHub for the latest release of Mirador and of OpenLamina, to say so on Home. It never installs anything (Mirador.md §4.4 item 13).</summary>
 public static class UpdateCheck
 {
-    public const string MiradorRepository = "fzeruhn/mirador";
+    public const string MiradorRepository = "feimos-dev/mirador";
 
-    public const string OpenCompositeRepository = "fzeruhn/OpenLamina";
+    public const string OpenCompositeRepository = "feimos-dev/OpenLamina";
 
     private const string Installer = "OpenLamina-Setup.exe";
 

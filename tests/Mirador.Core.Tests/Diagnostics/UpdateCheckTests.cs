@@ -8,8 +8,8 @@ public class UpdateCheckTests
     // Trimmed from a real answer of api.github.com/repos/{owner}/{repo}/releases/latest.
     private const string Latest = """
         {
-          "url": "https://api.github.com/repos/fzeruhn/mirador/releases/123",
-          "html_url": "https://github.com/fzeruhn/mirador/releases/tag/v0.2.0",
+          "url": "https://api.github.com/repos/feimos-dev/mirador/releases/123",
+          "html_url": "https://github.com/feimos-dev/mirador/releases/tag/v0.2.0",
           "id": 123,
           "tag_name": "v0.2.0",
           "name": "Mirador 0.2.0",
@@ -23,24 +23,24 @@ public class UpdateCheckTests
     [Fact]
     public void Parses_the_tag_and_page()
     {
-        Assert.Equal(new Release("v0.2.0", "https://github.com/fzeruhn/mirador/releases/tag/v0.2.0", null, null), UpdateCheck.ParseLatest(Latest));
+        Assert.Equal(new Release("v0.2.0", "https://github.com/feimos-dev/mirador/releases/tag/v0.2.0", null, null), UpdateCheck.ParseLatest(Latest));
     }
 
     private const string WithAsset = """
         {
-          "html_url": "https://github.com/fzeruhn/OpenLamina/releases/tag/v2026.11.20",
+          "html_url": "https://github.com/feimos-dev/OpenLamina/releases/tag/v2026.11.20",
           "tag_name": "v2026.11.20",
           "draft": false,
           "prerelease": false,
           "assets": [
             {
               "name": "SOURCE.txt",
-              "browser_download_url": "https://github.com/fzeruhn/OpenLamina/releases/download/v2026.11.20/SOURCE.txt",
+              "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SOURCE.txt",
               "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
             },
             {
               "name": "OpenLamina-Setup.exe",
-              "browser_download_url": "https://github.com/fzeruhn/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
+              "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
               "digest": "sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789"
             }
           ]
@@ -55,8 +55,8 @@ public class UpdateCheckTests
         Assert.Equal(
             new Release(
                 "v2026.11.20",
-                "https://github.com/fzeruhn/OpenLamina/releases/tag/v2026.11.20",
-                "https://github.com/fzeruhn/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
+                "https://github.com/feimos-dev/OpenLamina/releases/tag/v2026.11.20",
+                "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
                 "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"),
             release);
     }
@@ -67,7 +67,7 @@ public class UpdateCheckTests
         var json = WithAsset.Replace("\"digest\": \"sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789\"", "\"digest\": null");
 
         // Without a digest the zip can't be checked, so neither part is offered.
-        Assert.Equal(new Release("v2026.11.20", "https://github.com/fzeruhn/OpenLamina/releases/tag/v2026.11.20", null, null), UpdateCheck.ParseLatest(json));
+        Assert.Equal(new Release("v2026.11.20", "https://github.com/feimos-dev/OpenLamina/releases/tag/v2026.11.20", null, null), UpdateCheck.ParseLatest(json));
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class UpdateCheckTests
 
         Assert.True(answered);
         Assert.Equal("v0.2.0", latest!.Tag);
-        Assert.Equal("https://api.github.com/repos/fzeruhn/mirador/releases/latest", handler.Asked!.RequestUri!.ToString());
+        Assert.Equal("https://api.github.com/repos/feimos-dev/mirador/releases/latest", handler.Asked!.RequestUri!.ToString());
         Assert.Equal("Mirador/0.1.0", handler.Asked.Headers.UserAgent.ToString());
     }
 
@@ -128,7 +128,7 @@ public class UpdateCheckTests
         var handler = new Answer(HttpStatusCode.NotFound, "{}");
 
         Assert.Equal((true, null), await UpdateCheck.LatestAsync(new HttpClient(handler), UpdateCheck.OpenCompositeRepository, "0.1.0", CancellationToken.None));
-        Assert.Equal("https://api.github.com/repos/fzeruhn/OpenLamina/releases/latest", handler.Asked!.RequestUri!.ToString());
+        Assert.Equal("https://api.github.com/repos/feimos-dev/OpenLamina/releases/latest", handler.Asked!.RequestUri!.ToString());
     }
 
     [Fact]

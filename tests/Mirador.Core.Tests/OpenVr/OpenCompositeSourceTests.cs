@@ -20,7 +20,7 @@ public class OpenCompositeSourceTests
     [Fact]
     public void Reads_a_release_source_txt_from_before_the_rename()
     {
-        var source = OpenCompositeSource.Read($"OpenComposite 2026.11.06, commit {Commit}\nFrom https://github.com/fzeruhn/OpenComposite\n");
+        var source = OpenCompositeSource.Read($"OpenComposite 2026.11.06, commit {Commit}\nFrom https://github.com/feimos-dev/OpenComposite\n");
 
         Assert.NotNull(source);
         Assert.Equal("2026.11.06", source.Version);
