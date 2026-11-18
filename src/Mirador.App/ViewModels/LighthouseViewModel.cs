@@ -2,10 +2,15 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.BaseStations;
 using Mirador.Core.Lighthouse;
+using Mirador.Core.Modules;
+using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Playspace;
+using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
 
@@ -357,15 +362,278 @@ public sealed partial class LighthouseViewModel : ObservableObject
         if (shown)
         {
             stations.Changed += OnChanged;
+            host.Session.Changed += OnSessionChanged;
             listening = stations.Listen();
             Refresh();
+            RefreshRoomSetup();
+            _ = CheckRoomSetupAsync();
         }
         else
         {
             stations.Changed -= OnChanged;
+            host.Session.Changed -= OnSessionChanged;
             listening!.Dispose();
             listening = null;
         }
+    }
+
+    /// <summary>What the card says first when the measuring program's exit stops Monado ("exit on disconnect").</summary>
+    public const string RoomSetupRestartNote = "Monado stops when the measuring program closes; Mirador starts it again.";
+
+    /// <summary>Why the room setup's steps can't be used now ("Start Monado first.", no libmonado); null when they can.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRoomSetupUnavailable))]
+    [NotifyCanExecuteChangedFor(nameof(MeasureFloorCommand), nameof(SetForwardCommand))]
+    public partial string? RoomSetupUnavailable { get; set; }
+
+    public bool HasRoomSetupUnavailable => RoomSetupUnavailable is not null;
+
+    /// <summary>The space in use has no room setup (<see cref="AppHost.RoomSetupWarnings"/>); null when it has one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMissingRoomSetup))]
+    public partial string? MissingRoomSetup { get; set; }
+
+    public bool HasMissingRoomSetup => MissingRoomSetup is not null;
+
+    /// <summary>SteamVR's room setup changed since Mirador's was measured on it; null when it didn't.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChangedRoomSetup))]
+    public partial string? ChangedRoomSetup { get; set; }
+
+    public bool HasChangedRoomSetup => ChangedRoomSetup is not null;
+
+    /// <summary>Reads the room setup's warnings, for this page, off the UI thread.</summary>
+    private async Task CheckRoomSetupAsync()
+    {
+        (MissingRoomSetup, ChangedRoomSetup) = await Task.Run(host.RoomSetupWarnings);
+    }
+
+    /// <summary>A step is measuring, or an export writing, now.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(MeasureFloorCommand), nameof(SetForwardCommand))]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    public partial bool RoomSetupBusy { get; set; }
+
+    /// <summary>Whether "Export to SteamVR" can be pressed: nothing else of the room setup runs.</summary>
+    public bool CanExport => !RoomSetupBusy;
+
+    /// <summary>
+    /// Whether "Export to SteamVR" can go ahead: the question the page then asks first, or null when it can't (why not
+    /// is shown). Reads files off the UI thread.
+    /// </summary>
+    public async Task<string?> PrepareExportAsync()
+    {
+        var (refusal, question, _, _) = await Task.Run(CheckExport);
+        if (refusal is not null)
+        {
+            ShowRoomSetup(refusal, InfoBarSeverity.Warning);
+        }
+
+        return question;
+    }
+
+    /// <summary>
+    /// Writes the room setup that applies in the space in use into SteamVR's (a copy kept, written aside and moved
+    /// over), then keeps none of Mirador's own for the space, so that never both apply. Asked first by the page;
+    /// checked again here.
+    /// </summary>
+    public async Task ExportAsync()
+    {
+        RoomSetupBusy = true;
+        try
+        {
+            // While Monado is stopped and stays so: the session holds every Start (a game's too) until the export is done.
+            var refusal = await host.Session.RunWhileStoppedAsync(
+                "",
+                (_, _) => Task.Run(() =>
+                {
+                    var check = CheckExport();
+                    if (check.Refusal is null)
+                    {
+                        RoomSetupExport.Run(
+                            check.Steam!, Path.Combine(host.Paths.BackupsDir, "steamvr"), check.Universe!, host.RoomSetups, TimeProvider.System);
+                    }
+
+                    return check.Refusal;
+                }),
+                CancellationToken.None);
+            ShowRoomSetup(
+                refusal ?? "The room setup is in SteamVR's settings now, and Mirador applies none of its own in this space. Monado uses it from its next start.",
+                refusal is null ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        }
+        catch (MiradorException e)
+        {
+            ShowRoomSetup(e.Message, InfoBarSeverity.Error);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            ShowRoomSetup($"Mirador couldn't write SteamVR's room setup ({e.Message.Trim().TrimEnd('.')}). Nothing changed.", InfoBarSeverity.Error);
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Exporting the room setup failed", e);
+            ShowRoomSetup($"Mirador couldn't export the room setup: {e.Message.Trim().TrimEnd('.')}.", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            RoomSetupBusy = false;
+            _ = CheckRoomSetupAsync();
+            App.Current.Home.CheckRoomSetup();
+        }
+    }
+
+    /// <summary>
+    /// Why the export can't go ahead (<see cref="RoomSetupExport.Refusal"/>: SteamVR running, then Monado running, …),
+    /// or the question to ask. Reads files and processes: not on the UI thread.
+    /// </summary>
+    private (string? Refusal, string? Question, string? Steam, string? Universe) CheckExport()
+    {
+        var steam = AppHost.SteamDir();
+        string? universe;
+        try
+        {
+            universe = SteamVrNow.Read(steam, host.KnownStations()).Pick.Id;
+        }
+        catch (MiradorException e)
+        {
+            return (e.Message, null, steam, null);
+        }
+
+        // Monado started by Mirador, or any monado-service (one started outside Mirador too).
+        var monadoRunning = host.Session.State != SessionState.Stopped
+            || host.Processes.Snapshot().Any(p => string.Equals(p.Name, "monado-service", StringComparison.OrdinalIgnoreCase));
+        var refusal = RoomSetupExport.Refusal(SteamVrStillRunning() is not null, monadoRunning, steam, universe, host.RoomSetups);
+        return refusal is null ? (null, RoomSetupExport.QuestionFor(steam!, universe!), steam, universe) : (refusal, null, steam, universe);
+    }
+
+    /// <summary>Monado runs with "exit on disconnect": the card says what happens first.</summary>
+    [ObservableProperty]
+    public partial bool RoomSetupStopsMonado { get; set; }
+
+    /// <summary>How the last step went, or what it is doing; null before the first.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRoomSetupMessage))]
+    public partial string? RoomSetupMessage { get; set; }
+
+    public bool HasRoomSetupMessage => RoomSetupMessage is not null;
+
+    [ObservableProperty]
+    public partial InfoBarSeverity RoomSetupSeverity { get; set; }
+
+    /// <summary>"Lay a controller on the floor, then Measure floor": the lower grip is the floor.</summary>
+    [RelayCommand(CanExecute = nameof(CanMeasure))]
+    private Task MeasureFloor() => RunRoomStepAsync(RoomStep.Floor);
+
+    /// <summary>"Look straight ahead where forward should be, then Set forward": the head's direction becomes forward.</summary>
+    [RelayCommand(CanExecute = nameof(CanMeasure))]
+    private Task SetForward() => RunRoomStepAsync(RoomStep.Forward);
+
+    private bool CanMeasure() => RoomSetupUnavailable is null && !RoomSetupBusy;
+
+    private void OnSessionChanged() => ui.TryEnqueue(() =>
+    {
+        if (listening is not null)
+        {
+            RefreshRoomSetup();
+        }
+    });
+
+    /// <summary>Whether the steps can be used now, and whether Monado stops with the measuring program.</summary>
+    private void RefreshRoomSetup()
+    {
+        var session = host.Session;
+        var running = session.State == SessionState.Running;
+        RoomSetupStopsMonado = running && RoomMeasuring.StopsMonado(session.LastMiradorEnvironment);
+        RoomSetupUnavailable = session.Monado switch
+        {
+            { OffersOriginOffsets: true } => null,
+            { } => Libmonado.NotOffered,
+            null when running && session.MonadoClientProblem is { } problem => problem,
+            null when running => "Waiting for Monado's libmonado connection.",
+            null => "Start Monado first.",
+        };
+    }
+
+    /// <summary>
+    /// One step (<see cref="RoomSetupRun"/>), off the UI thread: measures, keeps the new offsets for the current Lighthouse
+    /// universe and sets them; when the measuring program's exit stopped Monado ("exit on disconnect"), Monado is started
+    /// again, also after a failure.
+    /// </summary>
+    private async Task RunRoomStepAsync(RoomStep step)
+    {
+        if (host.Session.Monado is null)
+        {
+            RefreshRoomSetup();
+            return;
+        }
+
+        RoomSetupBusy = true;
+        try
+        {
+            using var session = new SessionForRoomSetup(host);
+            var run = new RoomSetupRun(host.RoomMeasuring, host.RoomSetups, session, TimeProvider.System)
+            {
+                Log = AppLog.Write,
+            };
+            void Status(string text) => ui.TryEnqueue(() => ShowRoomSetup(text, InfoBarSeverity.Informational));
+            var outcome = await Task.Run(() => run.RunAsync(step, Status, CancellationToken.None));
+            ShowRoomSetup(outcome.Message, outcome.Level switch
+            {
+                RoomStepLevel.Success => InfoBarSeverity.Success,
+                RoomStepLevel.Warning => InfoBarSeverity.Warning,
+                _ => InfoBarSeverity.Error,
+            });
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("The room setup failed", e);
+            ShowRoomSetup($"Mirador couldn't set up the room: {e.Message.Trim().TrimEnd('.')}.", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            RoomSetupBusy = false;
+            RefreshRoomSetup();
+            _ = CheckRoomSetupAsync();
+            App.Current.Home.CheckRoomSetup();
+        }
+    }
+
+    /// <summary>The session as a room setup step uses it; Monado is started again as the Start button does.</summary>
+    private sealed class SessionForRoomSetup : IRoomSetupSession, IDisposable
+    {
+        private readonly AppHost host;
+        private volatile SessionEnd? lastEnd;
+
+        /// <summary>Follows how Monado's run ends from now on, until disposed.</summary>
+        public SessionForRoomSetup(AppHost host)
+        {
+            this.host = host;
+            host.Session.Ended += OnEnded;
+        }
+
+        public SessionEnd? LastEnd => lastEnd;
+
+        public bool Quitting => App.Current.Quitting;
+
+        public IMonadoClient? MonadoClient => host.Session.Monado;
+
+        public string? RuntimeManifest => host.Session.CurrentInstall?.Manifest;
+
+        public IReadOnlyDictionary<string, string>? MonadoEnvironment => host.Session.LastMiradorEnvironment;
+
+        public SteamVrNow? SteamVr() => host.RunUsesBaseStations() ? SteamVrNow.Read(AppHost.SteamDir(), host.KnownStations()) : null;
+
+        public Task<StartOutcome> StartMonadoAsync() => App.Current.StartAsync(StartReason.Button);
+
+        public void Dispose() => host.Session.Ended -= OnEnded;
+
+        private void OnEnded(SessionEnd end) => lastEnd = end;
+    }
+
+    private void ShowRoomSetup(string message, InfoBarSeverity severity)
+    {
+        RoomSetupMessage = message;
+        RoomSetupSeverity = severity;
     }
 
     /// <summary>Gives the station a name of the user's; null when saved, else what went wrong (the dialog stays open).</summary>

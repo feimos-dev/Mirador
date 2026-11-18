@@ -100,6 +100,36 @@ public sealed partial class LighthousePage : Page
         }
     }
 
+    /// <summary>"Export to SteamVR": refused while SteamVR or Monado runs, or when SteamVR wouldn't use it; asks first.</summary>
+    private async void OnExportToSteamVr(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (await ViewModel.PrepareExportAsync() is not { } question)
+            {
+                return;
+            }
+
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "Export to SteamVR?",
+                Content = new TextBlock { Text = question, TextWrapping = TextWrapping.Wrap },
+                PrimaryButtonText = "Export",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                await ViewModel.ExportAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Exporting the room setup failed", ex);
+        }
+    }
+
     private async void OnBluetoothSettings(object sender, RoutedEventArgs e)
     {
         try

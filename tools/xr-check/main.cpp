@@ -17,6 +17,17 @@
 // Exit code 0 when every frame was ended and enough rendered, 1 when a step failed, 2 for a bad command line, 3 on the
 // timeout.
 // The runtime is the one the OpenXR loader finds (XR_RUNTIME_JSON, else the machine's active runtime).
+//
+//   xr-check --api d3d11 --poses [--timeout 30]
+//
+// --poses runs the same D3D11 session, with left and right grip pose actions (suggested for the Khronos simple
+// controller and the Valve Index controller), until 30 focused frames had a valid head pose. Then it locates the head
+// (the VIEW space) and both grips in the STAGE space, ends the session and prints one line:
+//
+//   XR-POSES {"head":{"p":[x,y,z],"q":[x,y,z,w]},"left":{"p":[...],"q":[...]},"right":null}
+//
+// A hand without a valid position and orientation is null. Exit code 0 then; on a failure or the timeout (default 30 s,
+// for the whole run) it prints "XR-POSES-FAIL <message>" and exits 1 (2 for a bad command line).
 
 #include <windows.h>
 #include <unknwn.h>
@@ -35,6 +46,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -83,6 +95,52 @@ print(const Result &r)
 	std::printf("XR-CHECK {\"api\":\"%s\",\"ok\":%s,\"frames\":%d,\"submitted\":%d,\"runtime\":\"%s\",\"system\":\"%s\",\"error\":\"%s\"}\n",
 	            json_escape(r.api).c_str(), r.ok ? "true" : "false", r.frames, r.submitted, json_escape(r.runtime).c_str(),
 	            json_escape(r.system).c_str(), json_escape(r.error).c_str());
+	std::fflush(stdout);
+}
+
+//! What --poses measured, in the STAGE space.
+struct Poses
+{
+	XrPosef head{};
+	bool has_left = false;
+	XrPosef left{};
+	bool has_right = false;
+	XrPosef right{};
+};
+
+//! A pose as {"p":[x,y,z],"q":[x,y,z,w]}, metres and a unit quaternion; null when there is none.
+std::string
+pose_json(const XrPosef *pose)
+{
+	if (pose == nullptr) {
+		return "null";
+	}
+	char buffer[256];
+	std::snprintf(buffer, sizeof(buffer), "{\"p\":[%.6f,%.6f,%.6f],\"q\":[%.6f,%.6f,%.6f,%.6f]}", pose->position.x,
+	              pose->position.y, pose->position.z, pose->orientation.x, pose->orientation.y, pose->orientation.z,
+	              pose->orientation.w);
+	return buffer;
+}
+
+void
+print_poses(const Poses &poses)
+{
+	std::printf("XR-POSES {\"head\":%s,\"left\":%s,\"right\":%s}\n", pose_json(&poses.head).c_str(),
+	            pose_json(poses.has_left ? &poses.left : nullptr).c_str(),
+	            pose_json(poses.has_right ? &poses.right : nullptr).c_str());
+	std::fflush(stdout);
+}
+
+void
+print_poses_failure(const std::string &message)
+{
+	std::string line = message;
+	for (char &c : line) {
+		if (c == '\r' || c == '\n') {
+			c = ' ';
+		}
+	}
+	std::printf("XR-POSES-FAIL %s\n", line.c_str());
 	std::fflush(stdout);
 }
 
@@ -329,6 +387,146 @@ wait_for(XrSessionState state, XrSessionState wanted, const char *what)
 	return state;
 }
 
+//! A location with both a valid position and a valid orientation.
+bool
+located(const XrSpaceLocation &location)
+{
+	const XrSpaceLocationFlags both = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT;
+	return (location.locationFlags & both) == both;
+}
+
+XrPath
+path(const char *text)
+{
+	XrPath result = XR_NULL_PATH;
+	check(xrStringToPath(g_instance, text, &result), "xrStringToPath");
+	return result;
+}
+
+//! --poses' input: an action set with a grip pose action per hand, their spaces, and the STAGE and VIEW spaces.
+struct PoseInput
+{
+	XrActionSet set = XR_NULL_HANDLE;
+	XrAction grip[2] = {XR_NULL_HANDLE, XR_NULL_HANDLE};
+	XrSpace grip_space[2] = {XR_NULL_HANDLE, XR_NULL_HANDLE};
+	XrSpace stage = XR_NULL_HANDLE;
+	XrSpace view = XR_NULL_HANDLE;
+
+	explicit PoseInput(XrSession session)
+	{
+		XrActionSetCreateInfo set_info{XR_TYPE_ACTION_SET_CREATE_INFO};
+		strcpy_s(set_info.actionSetName, "poses");
+		strcpy_s(set_info.localizedActionSetName, "Poses");
+		check(xrCreateActionSet(g_instance, &set_info, &set), "xrCreateActionSet");
+
+		const char *names[2] = {"left_grip", "right_grip"};
+		const char *localized[2] = {"Left grip", "Right grip"};
+		for (int hand = 0; hand < 2; hand++) {
+			XrActionCreateInfo action_info{XR_TYPE_ACTION_CREATE_INFO};
+			action_info.actionType = XR_ACTION_TYPE_POSE_INPUT;
+			strcpy_s(action_info.actionName, names[hand]);
+			strcpy_s(action_info.localizedActionName, localized[hand]);
+			check(xrCreateAction(set, &action_info, &grip[hand]), "xrCreateAction");
+		}
+
+		// Each profile on its own: a runtime that doesn't know one still takes the other.
+		const XrActionSuggestedBinding bindings[2] = {
+		    {grip[0], path("/user/hand/left/input/grip/pose")},
+		    {grip[1], path("/user/hand/right/input/grip/pose")},
+		};
+		int suggested = 0;
+		XrResult last = XR_SUCCESS;
+		for (const char *profile : {"/interaction_profiles/khr/simple_controller", "/interaction_profiles/valve/index_controller"}) {
+			XrInteractionProfileSuggestedBinding suggestion{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
+			suggestion.interactionProfile = path(profile);
+			suggestion.countSuggestedBindings = 2;
+			suggestion.suggestedBindings = bindings;
+			last = xrSuggestInteractionProfileBindings(g_instance, &suggestion);
+			suggested += XR_SUCCEEDED(last) ? 1 : 0;
+		}
+		if (suggested == 0) {
+			check(last, "xrSuggestInteractionProfileBindings");
+		}
+
+		XrSessionActionSetsAttachInfo attach{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
+		attach.countActionSets = 1;
+		attach.actionSets = &set;
+		check(xrAttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
+
+		for (int hand = 0; hand < 2; hand++) {
+			XrActionSpaceCreateInfo space_info{XR_TYPE_ACTION_SPACE_CREATE_INFO};
+			space_info.action = grip[hand];
+			space_info.poseInActionSpace.orientation.w = 1.0f;
+			check(xrCreateActionSpace(session, &space_info, &grip_space[hand]), "xrCreateActionSpace");
+		}
+
+		XrReferenceSpaceCreateInfo stage_info{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
+		stage_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
+		stage_info.poseInReferenceSpace.orientation.w = 1.0f;
+		check(xrCreateReferenceSpace(session, &stage_info, &stage), "xrCreateReferenceSpace (STAGE)");
+
+		XrReferenceSpaceCreateInfo view_info{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
+		view_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
+		view_info.poseInReferenceSpace.orientation.w = 1.0f;
+		check(xrCreateReferenceSpace(session, &view_info, &view), "xrCreateReferenceSpace (VIEW)");
+	}
+
+	PoseInput(const PoseInput &) = delete;
+	PoseInput &operator=(const PoseInput &) = delete;
+
+	~PoseInput()
+	{
+		for (XrSpace space : {grip_space[0], grip_space[1], stage, view}) {
+			if (space != XR_NULL_HANDLE) {
+				xrDestroySpace(space);
+			}
+		}
+		// Destroys its actions too.
+		if (set != XR_NULL_HANDLE) {
+			xrDestroyActionSet(set);
+		}
+	}
+
+	void
+	sync(XrSession session) const
+	{
+		XrActiveActionSet active{set, XR_NULL_PATH};
+		XrActionsSyncInfo sync_info{XR_TYPE_ACTIONS_SYNC_INFO};
+		sync_info.countActiveActionSets = 1;
+		sync_info.activeActionSets = &active;
+		check(xrSyncActions(session, &sync_info), "xrSyncActions");
+	}
+
+	//! The head's location in the STAGE space at `time`.
+	XrSpaceLocation
+	head(XrTime time) const
+	{
+		XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
+		check(xrLocateSpace(view, stage, time, &location), "xrLocateSpace (head)");
+		return location;
+	}
+
+	//! The head and both grips in the STAGE space at `time`; a grip without a valid pose is left out.
+	Poses
+	measure(XrTime time) const
+	{
+		Poses poses;
+		poses.head = head(time).pose;
+		XrSpaceLocation hand{XR_TYPE_SPACE_LOCATION};
+		check(xrLocateSpace(grip_space[0], stage, time, &hand), "xrLocateSpace (left grip)");
+		poses.has_left = located(hand);
+		poses.left = hand.pose;
+		hand = {XR_TYPE_SPACE_LOCATION};
+		check(xrLocateSpace(grip_space[1], stage, time, &hand), "xrLocateSpace (right grip)");
+		poses.has_right = located(hand);
+		poses.right = hand.pose;
+		return poses;
+	}
+};
+
+//! Focused frames with a valid head pose before --poses measures.
+constexpr int kHeadFrames = 30;
+
 // --api none: the runtime loads and its service takes the app (xrCreateInstance), with no graphics API and no session.
 // The nightly's check on CI, whose machines have no GPU for Monado's compositor (Mirador_Plan.md).
 void
@@ -349,8 +547,9 @@ run_instance_only(Result &result)
 	result.ok = true;
 }
 
+//! Runs the session: `frames` frames, or with `poses` until they are measured (the watchdog bounds that).
 void
-run(Result &result, bool vulkan, int frames)
+run(Result &result, bool vulkan, int frames, Poses *poses)
 {
 	const char *extension = vulkan ? XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME : XR_KHR_D3D11_ENABLE_EXTENSION_NAME;
 	XrInstanceCreateInfo create{XR_TYPE_INSTANCE_CREATE_INFO};
@@ -379,6 +578,7 @@ run(Result &result, bool vulkan, int frames)
 	Graphics *graphics = vulkan ? static_cast<Graphics *>(new VulkanGraphics(system)) : new D3D11Graphics(system);
 	XrSession session = XR_NULL_HANDLE;
 	XrSpace space = XR_NULL_HANDLE;
+	std::unique_ptr<PoseInput> input;
 	std::vector<XrSwapchain> swapchains;
 	try {
 		XrSessionCreateInfo session_info{XR_TYPE_SESSION_CREATE_INFO};
@@ -390,6 +590,9 @@ run(Result &result, bool vulkan, int frames)
 		space_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
 		space_info.poseInReferenceSpace.orientation.w = 1.0f;
 		check(xrCreateReferenceSpace(session, &space_info, &space), "xrCreateReferenceSpace");
+		if (poses != nullptr) {
+			input = std::make_unique<PoseInput>(session);
+		}
 
 		uint32_t view_count = 0;
 		const XrViewConfigurationType config = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
@@ -437,7 +640,9 @@ run(Result &result, bool vulkan, int frames)
 		begin.primaryViewConfigurationType = config;
 		check(xrBeginSession(session, &begin), "xrBeginSession");
 
-		for (int frame = 0; frame < frames; frame++) {
+		int head_frames = 0;
+		bool measured = false;
+		for (int frame = 0; poses != nullptr ? !measured : frame < frames; frame++) {
 			state = poll(state);
 			if (state == XR_SESSION_STATE_STOPPING || state == XR_SESSION_STATE_EXITING || state == XR_SESSION_STATE_LOSS_PENDING) {
 				throw Failure("the session ended after " + std::to_string(frame) + " frames");
@@ -446,6 +651,19 @@ run(Result &result, bool vulkan, int frames)
 			XrFrameState frame_state{XR_TYPE_FRAME_STATE};
 			check(xrWaitFrame(session, nullptr, &frame_state), "xrWaitFrame");
 			check(xrBeginFrame(session, nullptr), "xrBeginFrame");
+
+			// Actions are synced every frame (only a focused session gets their data); once enough focused frames had
+			// a valid head pose, the head and the grips are measured at this frame's display time.
+			if (input != nullptr) {
+				input->sync(session);
+				if (state == XR_SESSION_STATE_FOCUSED && located(input->head(frame_state.predictedDisplayTime))) {
+					head_frames++;
+				}
+				if (head_frames >= kHeadFrames) {
+					*poses = input->measure(frame_state.predictedDisplayTime);
+					measured = true;
+				}
+			}
 
 			std::vector<XrCompositionLayerProjectionView> projection_views(view_count, {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
 			XrCompositionLayerProjection layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
@@ -502,7 +720,7 @@ run(Result &result, bool vulkan, int frames)
 
 		// A frame that never rendered (the session never visible, no valid pose) proves nothing about the graphics
 		// path: at least half the frames must have submitted their layer.
-		if (result.submitted * 2 < result.frames) {
+		if (poses == nullptr && result.submitted * 2 < result.frames) {
 			throw Failure("only " + std::to_string(result.submitted) + " of " + std::to_string(result.frames) +
 			              " frames rendered a layer (the session wasn't visible, or the views had no valid pose)");
 		}
@@ -531,6 +749,7 @@ run(Result &result, bool vulkan, int frames)
 		for (auto swapchain : swapchains) {
 			xrDestroySwapchain(swapchain);
 		}
+		input.reset();
 		if (space != XR_NULL_HANDLE) {
 			xrDestroySpace(space);
 		}
@@ -544,6 +763,7 @@ run(Result &result, bool vulkan, int frames)
 	for (auto swapchain : swapchains) {
 		xrDestroySwapchain(swapchain);
 	}
+	input.reset();
 	xrDestroySpace(space);
 	xrDestroySession(session);
 	delete graphics;
@@ -552,7 +772,10 @@ run(Result &result, bool vulkan, int frames)
 int
 usage(const char *why)
 {
-	std::fprintf(stderr, "xr-check: %s\nusage: xr-check --api d3d11|vulkan|none [--frames N] [--timeout S]\n", why);
+	std::fprintf(stderr,
+	             "xr-check: %s\nusage: xr-check --api d3d11|vulkan|none [--frames N] [--timeout S]\n"
+	             "       xr-check --api d3d11 --poses [--timeout S]\n",
+	             why);
 	return 2;
 }
 
@@ -564,8 +787,15 @@ main(int argc, char **argv)
 	std::string api;
 	int frames = 300;
 	int timeout = 60;
+	bool frames_given = false;
+	bool timeout_given = false;
+	bool want_poses = false;
 	for (int i = 1; i < argc; i++) {
 		const std::string arg = argv[i];
+		if (arg == "--poses") {
+			want_poses = true;
+			continue;
+		}
 		if (i + 1 >= argc) {
 			return usage(("missing a value after " + arg).c_str());
 		}
@@ -574,14 +804,25 @@ main(int argc, char **argv)
 			api = value;
 		} else if (arg == "--frames") {
 			frames = std::atoi(value.c_str());
+			frames_given = true;
 		} else if (arg == "--timeout") {
 			timeout = std::atoi(value.c_str());
+			timeout_given = true;
 		} else {
 			return usage(("unknown option " + arg).c_str());
 		}
 	}
 	if (api != "d3d11" && api != "vulkan" && api != "none") {
 		return usage("--api must be d3d11, vulkan or none");
+	}
+	if (want_poses && api != "d3d11") {
+		return usage("--poses needs --api d3d11");
+	}
+	if (want_poses && frames_given) {
+		return usage("--poses runs until the poses are measured, without --frames");
+	}
+	if (want_poses && !timeout_given) {
+		timeout = 30;
 	}
 	if (frames < 1 || frames > 100000 || timeout < 1 || timeout > 3600) {
 		return usage("--frames must be 1 to 100000 and --timeout 1 to 3600");
@@ -591,10 +832,15 @@ main(int argc, char **argv)
 	static Result result;
 	result.api = api;
 	static std::atomic<bool> done{false};
-	std::thread([timeout, api] {
+	std::thread([timeout, api, want_poses] {
 		const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(timeout);
 		while (!done.load()) {
 			if (std::chrono::steady_clock::now() > until) {
+				if (want_poses) {
+					print_poses_failure("no poses within " + std::to_string(timeout) + " s (after " +
+					                    std::to_string(g_frames.load()) + " frames)");
+					std::_Exit(1);
+				}
 				Result late;
 				late.api = api;
 				late.frames = g_frames.load();
@@ -607,11 +853,12 @@ main(int argc, char **argv)
 	}).detach();
 
 	int code = 0;
+	static Poses poses;
 	try {
 		if (api == "none") {
 			run_instance_only(result);
 		} else {
-			run(result, api == "vulkan", frames);
+			run(result, api == "vulkan", frames, want_poses ? &poses : nullptr);
 		}
 	} catch (const std::exception &e) {
 		result.ok = false;
@@ -622,6 +869,14 @@ main(int argc, char **argv)
 		xrDestroyInstance(g_instance);
 	}
 	done = true;
+	if (want_poses) {
+		if (code == 0) {
+			print_poses(poses);
+		} else {
+			print_poses_failure(result.error);
+		}
+		return code;
+	}
 	print(result);
 	return code;
 }

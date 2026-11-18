@@ -69,6 +69,7 @@ public sealed partial class HomeViewModel : ObservableObject
         host.Stations.Changed += OnStationsChanged;
         host.Session.Warning += w => ui.TryEnqueue(() => AddWarning(w));
         host.Session.Ended += end => ui.TryEnqueue(() => OnEnded(end));
+        host.RoomSetupApplied += problem => ui.TryEnqueue(() => ShowRoomSetupProblem(problem));
         App.Current.StartFailed += message =>
         {
             // Through null, so that the same message again opens the bar again after it was closed.
@@ -79,6 +80,7 @@ public sealed partial class HomeViewModel : ObservableObject
         OnSessionChanged();
         RefreshStations();
         CheckSteamVrButtonStart();
+        CheckRoomSetup();
     }
 
     public ObservableCollection<ProfileItem> Profiles { get; } = [];
@@ -250,6 +252,7 @@ public sealed partial class HomeViewModel : ObservableObject
         LoadProfiles();
         RefreshRuntime();
         RefreshStations();
+        CheckRoomSetup();
         GpuSchedulingNotice = Core.Gpu.GpuScheduling.Notice(Core.Gpu.GpuScheduling.Now());
         _ = RunChecksAsync();
     }
@@ -542,6 +545,7 @@ public sealed partial class HomeViewModel : ObservableObject
                 }
 
                 selected = picked;
+                CheckRoomSetup();
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -1019,6 +1023,52 @@ public sealed partial class HomeViewModel : ObservableObject
     {
         ShowNotice("miradors-monado", "Bundled Monado", message, ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         RefreshRuntime();
+    }
+
+    /// <summary>After a Monado start: the room setup couldn't be put into Monado, or (null) it could.</summary>
+    private void ShowRoomSetupProblem(string? problem)
+    {
+        if (problem is null)
+        {
+            RemoveNotice("room-setup");
+        }
+        else
+        {
+            ShowNotice("room-setup", "Room setup", problem, InfoBarSeverity.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Whether the Lighthouse space in use has a room setup, from SteamVR's files and Mirador's own (read off the UI
+    /// thread, without starting Monado): at launch, when Home shows, when the profile changes and after a room setup step.
+    /// Also whether SteamVR's room setup changed since Mirador's was measured on it. Each notice stays while it is true;
+    /// neither is the one for a room setup that couldn't be applied.
+    /// </summary>
+    public void CheckRoomSetup() => _ = CheckRoomSetupAsync();
+
+    private async Task CheckRoomSetupAsync()
+    {
+        var (missing, changed) = await Task.Run(host.RoomSetupWarnings);
+        ShowState("room-setup-missing", missing);
+        ShowState("room-setup-changed", changed);
+    }
+
+    /// <summary>A notice that shows a state: there while <paramref name="warning"/> is, updated in place.</summary>
+    private void ShowState(string key, string? warning)
+    {
+        var existing = Notices.FirstOrDefault(n => n.Key == key);
+        if (warning is null)
+        {
+            RemoveNotice(key);
+        }
+        else if (existing is null)
+        {
+            Notices.Add(new NoticeItem(key, "Room setup", warning, InfoBarSeverity.Warning, IsClosable: false));
+        }
+        else if (existing.Message != warning)
+        {
+            Notices[Notices.IndexOf(existing)] = existing with { Message = warning };
+        }
     }
 
     /// <summary>

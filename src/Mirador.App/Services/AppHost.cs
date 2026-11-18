@@ -8,7 +8,9 @@ using Mirador.Core.Elevation;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.OpenVr;
+using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
@@ -132,6 +134,139 @@ public sealed class AppHost : IAsyncDisposable
             ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
             FolderBackups: FolderBackups,
             VariablesApproved: VariablesApproved));
+
+        RoomSetups = new RoomSetupStore(paths.RoomSetupFile);
+        RoomMeasuring = new RoomMeasuring(new CommandRunner(), Path.Combine(appDir, "tools", "xr-check.exe"));
+        Session.MonadoConnected += client => _ = Task.Run(() => ApplyRoomSetup(client));
+    }
+
+    /// <summary>Mirador's room setups, one per tracking origin and Lighthouse universe.</summary>
+    public RoomSetupStore RoomSetups { get; }
+
+    /// <summary>The room setup's measuring, with Mirador's <c>xr-check</c>.</summary>
+    public RoomMeasuring RoomMeasuring { get; }
+
+    /// <summary>
+    /// The room setup's warnings for the selected profile (<see cref="RoomSetupWarning"/>): the Lighthouse space in use
+    /// has none, and SteamVR's room setup changed since Mirador's was measured on it; each null when it doesn't apply, and
+    /// both when the profile doesn't use base stations. Reads SteamVR's files and Mirador's own, never starts Monado: not
+    /// on the UI thread.
+    /// </summary>
+    public (string? Missing, string? Changed) RoomSetupWarnings()
+    {
+        try
+        {
+            var profile = Profiles.Load().Selected;
+            var moduleUsesLighthouse = ModuleUsesLighthouse(profile);
+            var usesSteamVrLh = LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse);
+            if (!profile.UsesBaseStations(moduleUsesLighthouse) && !usesSteamVrLh)
+            {
+                return (null, null);
+            }
+
+            var stations = KnownStations();
+            var setups = RoomSetups.All();
+            SteamVrNow now;
+            try
+            {
+                now = SteamVrNow.Read(SteamDir(), stations);
+            }
+            catch (MiradorException)
+            {
+                // SteamVR may be writing its files: the files as far as they can be read, and no word on a change.
+                return (RoomSetupWarning.FromSteam(SteamDir(), stations, setups, usesSteamVrLh), null);
+            }
+
+            var missing = RoomSetupWarning.For(now.Pick, now.RoomSetups, RoomSetupWarning.HasSetup(setups, now.Pick.Id, usesSteamVrLh), usesSteamVrLh);
+            var changed = RoomSetupWarning.BaseChanged(setups, now.Pick.Id, now.Base, usesSteamVrLh) ? RoomSetupWarning.SteamVrChanged : null;
+            return (missing, changed);
+        }
+        catch (Exception e)
+        {
+            // Profiles, a module or a file that can't be read: no warning rather than a wrong one.
+            AppLog.Write("Couldn't check the room setup", e);
+            return (null, null);
+        }
+    }
+
+    /// <summary>
+    /// Whether the running profile (else the selected one) uses base stations or <c>steamvr_lh</c>: only then is a room
+    /// setup kept per Lighthouse universe, and SteamVR's files read for it.
+    /// </summary>
+    public bool RunUsesBaseStations()
+    {
+        var profile = Session.CurrentProfile?.Profile ?? Profiles.Load().Selected;
+        var moduleUsesLighthouse = ModuleUsesLighthouse(profile);
+        return profile.UsesBaseStations(moduleUsesLighthouse) || LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse);
+    }
+
+    private bool ModuleUsesLighthouse(Profile profile) =>
+        profile.ModuleId is { } id && Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
+
+    /// <summary>The base stations Mirador knows, as kept.</summary>
+    public IReadOnlyList<KnownStation> KnownStations() => [.. Stations.Stations.Select(v => v.Station)];
+
+    /// <summary>
+    /// Raised on a pool thread after each Monado start that Mirador put its room setups into: with Home's warning when
+    /// that failed, or null when it went well.
+    /// </summary>
+    public event Action<string?>? RoomSetupApplied;
+
+    /// <summary>
+    /// Puts the stored room setups of the current Lighthouse universe into the Monado that just started (whoever started
+    /// it). Runs off the UI thread and never throws. A failure becomes Home's warning, unless Monado stopped meanwhile.
+    /// </summary>
+    private void ApplyRoomSetup(IMonadoClient client)
+    {
+        string? problem = null;
+        try
+        {
+            var applied = RunUsesBaseStations()
+                ? RoomSetupApplier.ApplyWithSteamVr(client, RoomSetups, SteamDir(), KnownStations())
+                : RoomSetupApplier.Apply(client, RoomSetups, universe: null);
+            if (applied > 0)
+            {
+                AppLog.Write($"Room setup set for {applied} tracking origin{(applied == 1 ? "" : "s")}.");
+            }
+        }
+        catch (Exception e)
+        {
+            if (!ReferenceEquals(Session.Monado, client))
+            {
+                return;
+            }
+
+            AppLog.Write("Couldn't apply the room setup", e);
+            problem = $"Couldn't apply the room setup: {e.Message}";
+        }
+
+        // Only the current run's result reaches Home: an earlier run's must not clear a newer run's warning.
+        if (!ReferenceEquals(Session.Monado, client))
+        {
+            return;
+        }
+
+        try
+        {
+            RoomSetupApplied?.Invoke(problem);
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Couldn't show how the room setup went", e);
+        }
+    }
+
+    /// <summary>Steam's folder from the registry; null when Steam isn't installed or the registry can't be read.</summary>
+    public static string? SteamDir()
+    {
+        try
+        {
+            return Mirador.Ipc.SteamVr.SteamPathFromRegistry() is { Length: > 0 } steam ? Path.GetFullPath(steam) : null;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed (Mirador.md §4.10 item 46).</summary>
@@ -616,6 +751,7 @@ public sealed class AppHost : IAsyncDisposable
         // Before anything reads the stations: the manager reads its list at first use, and a file it set aside then
         // would go unnoticed here.
         host.CheckStore("base stations", paths.BaseStationsFile, () => host.stationStore.Load());
+        host.CheckStore("room setups", paths.RoomSetupFile, () => host.RoomSetups.All());
         _ = Task.Run(host.StartStationsAsync);
         _ = Task.Run(() => host.IsInstalledCopy(askHelper: true));
         return host;
@@ -906,6 +1042,7 @@ public sealed class AppHost : IAsyncDisposable
         // Mirador's own off goes now, beside Monado's stop (a headset's end can take long). The session's end has its off
         // waiting its few seconds when Mirador's isn't wanted: the flush sends it at once.
         Stations.QuittingNow();
+        Session.EndStarts(); // nothing (a room setup step, a game) starts Monado again behind the last Stop
         try
         {
             await Session.StopAsync(CancellationToken.None).ConfigureAwait(false);
