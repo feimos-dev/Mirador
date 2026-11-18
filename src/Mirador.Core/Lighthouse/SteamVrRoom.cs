@@ -143,11 +143,11 @@ public static class SteamVrRoom
     /// </summary>
     public static (float[] Translation, float Yaw)? Standing(string vrchapJson, string universe)
     {
-        if (Entries(Parse(vrchapJson)).FirstOrDefault(e => Text(e["universeID"]) == universe) is not { } entry)
-        {
-            return null;
-        }
+        return Entries(Parse(vrchapJson)).FirstOrDefault(e => Text(e["universeID"]) == universe) is { } entry ? StandingOf(entry) : null;
+    }
 
+    private static (float[] Translation, float Yaw) StandingOf(JsonObject entry)
+    {
         var standing = entry["standing"] as JsonObject;
         var given = Array(standing?["translation"]).ToList();
         var translation = new float[3];
@@ -188,9 +188,10 @@ public static class SteamVrRoom
     }
 
     /// <summary>
-    /// <paramref name="vrchapJson"/> with the universe's <c>standing.translation</c> and <c>standing.yaw</c> set. A
-    /// universe without an entry gets a copy of the first entry with only its <c>universeID</c> and <c>standing</c>
-    /// changed. Everything else is kept as it was.
+    /// <paramref name="vrchapJson"/> with the universe's <c>standing.translation</c> and <c>standing.yaw</c> set. SteamVR
+    /// keeps the walls (<c>collision_bounds</c>) in standing space, so they are moved with it to stay where they are in
+    /// the room. A universe without an entry gets a copy of the first entry with only its <c>universeID</c> and
+    /// <c>standing</c> changed. Everything else is kept as it was.
     /// </summary>
     /// <exception cref="MiradorException">The text isn't SteamVR's file, or it has no entry to copy.</exception>
     public static string WithStanding(string vrchapJson, string universe, float[] translation, float yaw)
@@ -213,6 +214,21 @@ public static class SteamVrRoom
             entry = first.DeepClone().AsObject();
             entry["universeID"] = universe;
             ((JsonArray)root["universes"]!).Add(entry);
+        }
+        else
+        {
+            var (oldTranslation, oldYaw) = StandingOf(entry);
+            var old = ChaperonePose(oldTranslation, oldYaw);
+            var undo = RoomSetupMath.Transform(
+                new MonadoPose(-old.Qx, -old.Qy, -old.Qz, old.Qw, 0, 0, 0), new MonadoPose(0, 0, 0, 1, -old.X, -old.Y, -old.Z));
+            var move = RoomSetupMath.Transform(ChaperonePose(translation, yaw), undo);
+            foreach (var point in Array(entry["collision_bounds"]).SelectMany(Array).OfType<JsonArray>().Where(p => p.Count == 3))
+            {
+                var at = RoomSetupMath.Transform(move, new MonadoPose(0, 0, 0, 1, Number(point[0]), Number(point[1]), Number(point[2])));
+                point[0] = at.X;
+                point[1] = at.Y;
+                point[2] = at.Z;
+            }
         }
 
         if (entry["standing"] is not JsonObject standing)
@@ -258,19 +274,22 @@ public static class SteamVrRoom
 
         // Mirador's offset was measured on top of the chaperone steamvr_lh applies now: the room setup of the universe it
         // picks, which may be another one than this (this one without an entry yet), or none.
-        var text = Encoding.UTF8.GetString(original);
+        var text = Encoding.UTF8.GetString(original).TrimStart('\uFEFF');
         var inUse = SteamVrLhPick(Read(steamDir).Universes, RoomSetups(text));
         var (translation, yaw) = (inUse is null ? null : Standing(text, inUse)) ?? ([0, 0, 0], 0);
         var (newTranslation, newYaw) = StandingFor(offset, translation, yaw);
         var written = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(WithStanding(text, universe, newTranslation, newYaw));
 
         Directory.CreateDirectory(backupDir);
-        var backup = Path.Combine(
+        var stamped = Path.Combine(
             backupDir, Path.GetFileName(path) + ".mirador-" + time.GetLocalNow().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        if (!File.Exists(backup))
+        var backup = stamped;
+        for (var n = 2; File.Exists(backup); n++)
         {
-            File.WriteAllBytes(backup, original);
+            backup = $"{stamped}-{n}";
         }
+
+        File.WriteAllBytes(backup, original);
 
         if (!ReplaceIfUnchanged(path, original, written))
         {

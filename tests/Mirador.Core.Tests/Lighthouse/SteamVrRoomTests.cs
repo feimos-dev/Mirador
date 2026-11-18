@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Time.Testing;
 using Mirador.Core.Lighthouse;
@@ -209,6 +210,35 @@ public class SteamVrRoomTests
         Assert.Equal("chaperone_info", (string?)root["jsonid"]);
         Assert.Equal(5, (int)root["version"]!);
         Assert.Equal(2, root["universes"]!.AsArray().Count);
+    }
+
+    [Fact]
+    public void With_standing_keeps_the_walls_where_they_are_in_the_room()
+    {
+        float[] oldTranslation = [0.25f, -1.5f, 0.125f];
+        float[] newTranslation = [-0.5f, -1.375f, 0.75f];
+        (float X, float Y, float Z)[] room = [(1.5f, 0.25f, -2), (-0.75f, 2.5f, 1.25f)];
+        var walls = string.Join(", ", room.Select(r =>
+        {
+            var w = RoomSetupMath.Transform(SteamVrRoom.ChaperonePose(oldTranslation, 1), new MonadoPose(0, 0, 0, 1, r.X, r.Y, r.Z));
+            return string.Create(CultureInfo.InvariantCulture, $"[ {w.X}, {w.Y}, {w.Z} ]");
+        }));
+        var vrchap = $$"""
+            { "universes" : [ { "universeID" : "30", "collision_bounds" : [ [ {{walls}} ] ],
+                                "standing" : { "translation" : [ 0.25, -1.5, 0.125 ], "yaw" : 1 } } ] }
+            """;
+
+        var written = SteamVrRoom.WithStanding(vrchap, "30", newTranslation, -0.5f);
+
+        var points = Entry(written, "30")["collision_bounds"]![0]!.AsArray();
+        for (var i = 0; i < room.Length; i++)
+        {
+            var expected = RoomSetupMath.Transform(
+                SteamVrRoom.ChaperonePose(newTranslation, -0.5f), new MonadoPose(0, 0, 0, 1, room[i].X, room[i].Y, room[i].Z));
+            Assert.Equal(expected.X, (float)points[i]![0]!, 1e-4f);
+            Assert.Equal(expected.Y, (float)points[i]![1]!, 1e-4f);
+            Assert.Equal(expected.Z, (float)points[i]![2]!, 1e-4f);
+        }
     }
 
     [Fact]
