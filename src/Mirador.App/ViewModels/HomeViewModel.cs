@@ -985,7 +985,7 @@ public sealed partial class HomeViewModel : ObservableObject
         try
         {
             var problem = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (_, ct) => module.FixDirectModeAsync(host.Context, ct), CancellationToken.None);
+                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
             if (problem is not null)
             {
                 ShowNotice("fix-direct-mode", "Direct mode", problem, InfoBarSeverity.Error);

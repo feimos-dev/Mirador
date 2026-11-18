@@ -151,10 +151,12 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     /// <summary>
     /// "Fix direct mode" (run it through <c>SessionController.RunWhileStoppedAsync</c>): stops Pimax's software, which
     /// has the headset on the desktop, runs <c>mirador-display-check --enable-direct-mode</c>, and starts Pimax's
-    /// service again if it ran.
+    /// service again if it ran. Like <see cref="CheckDisplayAsync"/> it saves that Pimax ran before stopping it, so that
+    /// recovery restarts it if Mirador goes away meanwhile; the record stays when Pimax can't be started again.
     /// </summary>
     /// <returns>Null when direct mode is on again; otherwise the problem, with the check's advice, in its own words.</returns>
-    public async Task<string?> FixDirectModeAsync(ModuleContext ctx, CancellationToken ct)
+    public async Task<string?> FixDirectModeAsync(
+        ModuleContext ctx, Action<IReadOnlyDictionary<string, string>> saveRecovery, CancellationToken ct)
     {
         LayerFiles layer;
         try
@@ -166,29 +168,68 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             return e.Message;
         }
 
+        var (problem, startProblem) = await AroundPimaxStoppedAsync<string?>(
+            ctx,
+            saveRecovery,
+            async () =>
+            {
+                var check = await DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct, "--enable-direct-mode").ConfigureAwait(false);
+                return check.Pass ? null : check.WhatToDo is { } advice ? $"{check.Message} {advice}" : check.Message;
+            },
+            stop => stop.Error ?? "Pimax's software couldn't be stopped.").ConfigureAwait(false);
+
+        return problem is null ? startProblem : startProblem is null ? problem : $"{problem} {startProblem}";
+    }
+
+    /// <summary>
+    /// Stops Pimax's software, runs <paramref name="run"/> (not when the stop failed: <paramref name="stopFailed"/> gives
+    /// the result then), and starts Pimax's service again if it ran, also when <paramref name="run"/> was cancelled or the
+    /// stop failed half way. That Pimax ran is saved before the stop and the record is cleared only once the service is
+    /// running again, so that recovery restarts it if Mirador goes away meanwhile.
+    /// </summary>
+    /// <returns>The result, and what went wrong starting Pimax again (null when nothing did).</returns>
+    private async Task<(T Result, string? PimaxProblem)> AroundPimaxStoppedAsync<T>(
+        ModuleContext ctx,
+        Action<IReadOnlyDictionary<string, string>> saveRecovery,
+        Func<Task<T>> run,
+        Func<HelperReply, T> stopFailed)
+    {
         var running = ctx.Processes.Snapshot();
-        var stop = await StopPimaxAsync(ctx, running).ConfigureAwait(false);
-        if (!stop.Ok)
+        var seenRunning = ServiceRuns(running);
+        if (seenRunning)
         {
-            return stop.Error ?? "Pimax's software couldn't be stopped.";
+            saveRecovery(DreamAirSession.Recovery(true));
         }
 
-        var wasRunning = stop.WasRunning ?? (!stop.NotDelivered && ServiceRuns(running));
-        string? problem;
+        var stop = await StopPimaxAsync(ctx, running).ConfigureAwait(false);
+        var wasRunning = stop.WasRunning ?? (!stop.NotDelivered && seenRunning);
+        if (wasRunning)
+        {
+            saveRecovery(DreamAirSession.Recovery(true));
+        }
+
+        T result;
+        string? startProblem = null;
         try
         {
-            var check = await DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct, "--enable-direct-mode").ConfigureAwait(false);
-            problem = check.Pass ? null : check.WhatToDo is { } advice ? $"{check.Message} {advice}" : check.Message;
+            result = stop.Ok ? await run().ConfigureAwait(false) : stopFailed(stop);
         }
         finally
         {
+            // Also when the work was cancelled: Pimax goes back as it was, and only then is nothing left to undo.
             if (wasRunning)
             {
-                await ctx.Helper.SendAsync(HelperCommand.StartPimax, CancellationToken.None).ConfigureAwait(false);
+                var start = await ctx.Helper.SendAsync(HelperCommand.StartPimax, CancellationToken.None).ConfigureAwait(false);
+                startProblem = start.Ok ? null : $"Mirador couldn't start Pimax's service again: {start.Error} Mirador tries again the next time it starts.";
+            }
+
+            if (startProblem is null)
+            {
+                saveRecovery(new Dictionary<string, string>());
             }
         }
 
-        return problem;
+        return (result, startProblem);
     }
 
     public async Task<ModuleSession> BeforeStartAsync(
@@ -336,44 +377,18 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             return (new DisplayCheckResult(false, e.Message, null, "") { Finished = false }, null);
         }
 
-        var running = ctx.Processes.Snapshot();
-        var seenRunning = ServiceRuns(running);
-        if (seenRunning)
-        {
-            saveRecovery(DreamAirSession.Recovery(true));
-        }
-
-        var stop = await StopPimaxAsync(ctx, running).ConfigureAwait(false);
-        var wasRunning = stop.WasRunning ?? (!stop.NotDelivered && seenRunning);
-        if (wasRunning)
-        {
-            saveRecovery(DreamAirSession.Recovery(true));
-        }
-
-        DisplayCheckResult check;
-        string? startProblem = null;
-        try
-        {
-            check = stop.Ok
-                ? await DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct).ConfigureAwait(false)
-                : new DisplayCheckResult(false, stop.Error ?? "Pimax's software couldn't be stopped.", null, "") { Finished = false };
-        }
-        finally
-        {
-            // Also when the check was cancelled: Pimax goes back as it was, and only then is nothing left to undo.
-            if (wasRunning)
+        var stopFailed = false;
+        var (check, startProblem) = await AroundPimaxStoppedAsync(
+            ctx,
+            saveRecovery,
+            () => DisplayCheck.RunAsync(layer.CheckExe, deps.StartConsole, ct),
+            stop =>
             {
-                var start = await ctx.Helper.SendAsync(HelperCommand.StartPimax, CancellationToken.None).ConfigureAwait(false);
-                startProblem = start.Ok ? null : $"Mirador couldn't start Pimax's service again: {start.Error} Mirador tries again the next time it starts.";
-            }
+                stopFailed = true;
+                return new DisplayCheckResult(false, stop.Error ?? "Pimax's software couldn't be stopped.", null, "") { Finished = false };
+            }).ConfigureAwait(false);
 
-            if (startProblem is null)
-            {
-                saveRecovery(new Dictionary<string, string>());
-            }
-        }
-
-        if (stop.Ok)
+        if (!stopFailed)
         {
             SaveCheckOutput(ctx, check);
         }

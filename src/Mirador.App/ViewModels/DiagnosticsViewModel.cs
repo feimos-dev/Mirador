@@ -212,12 +212,13 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         try
         {
             var problem = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (_, ct) => module.FixDirectModeAsync(host.Context, ct), CancellationToken.None);
+                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
             problem ??= await Task.Run(() => HeadsetMonitor.HeadsetOnDesktop(HeadsetMonitor.List()))
                 ? "Direct mode was turned on, but the headset still shows as a monitor. Unplug and plug in the headset's DisplayPort cable, then try again."
                 : null;
             CheckPassed = problem is null;
             CheckResult = problem is null ? "Direct mode is on for the headset." : Sentence(problem);
+            host.NotifyDevicesChanged(); // Home looks at its checks again
         }
         catch (MiradorException e)
         {

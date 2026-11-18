@@ -586,10 +586,51 @@ public sealed class PimaxModuleTests : IDisposable
         helper.Replies[HelperCommand.StopPimax] = new HelperReply(true, WasRunning: true);
         check = (["PASS: direct mode is on for the headset."], 0);
 
-        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
 
         Assert.Null(problem);
-        Assert.Equal(["StopPimax", "display check --enable-direct-mode", "StartPimax"], steps);
+        Assert.Equal(
+            ["StopPimax", "save pimaxWasRunning=true", "display check --enable-direct-mode", "StartPimax", "save "], steps);
+    }
+
+    [Fact]
+    public async Task Fix_saves_that_pimax_ran_before_stopping_it_and_clears_it_after_the_restart()
+    {
+        processes.Add("PiServiceLauncher");
+        check = (["PASS: direct mode is on for the headset."], 0);
+
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Equal(
+            ["save pimaxWasRunning=true", "StopPimax", "save pimaxWasRunning=true", "display check --enable-direct-mode", "StartPimax", "save "],
+            steps);
+    }
+
+    [Fact]
+    public async Task Fix_that_cant_start_pimax_again_says_so_and_keeps_the_recovery()
+    {
+        helper.Replies[HelperCommand.StopPimax] = new HelperReply(true, WasRunning: true);
+        helper.Replies[HelperCommand.StartPimax] = new HelperReply(false, "Pimax's service is disabled.");
+        check = (["PASS: direct mode is on for the headset."], 0);
+
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
+
+        Assert.Equal("Mirador couldn't start Pimax's service again: Pimax's service is disabled. Mirador tries again the next time it starts.", problem);
+        Assert.Equal("true", saves[^1]["pimaxWasRunning"]);
+    }
+
+    [Fact]
+    public async Task Fix_that_stopped_pimax_only_in_part_starts_it_again_and_runs_no_check()
+    {
+        helper.Replies[HelperCommand.StopPimax] = new HelperReply(false, "Pimax's service wouldn't stop.", WasRunning: true);
+
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
+
+        Assert.Equal("Pimax's service wouldn't stop.", problem);
+        Assert.Equal([HelperCommand.StopPimax, HelperCommand.StartPimax], helper.Sent);
+        Assert.DoesNotContain(steps, t => t.StartsWith("display check", StringComparison.Ordinal));
+        Assert.Empty(saves[^1]);
     }
 
     [Fact]
@@ -597,7 +638,7 @@ public sealed class PimaxModuleTests : IDisposable
     {
         check = (["FAIL: NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5", "what to do: run this as administrator."], 1);
 
-        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
 
         Assert.Equal("NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5 run this as administrator.", problem);
     }
@@ -607,7 +648,7 @@ public sealed class PimaxModuleTests : IDisposable
     {
         helper.Replies[HelperCommand.StopPimax] = new HelperReply(false, "Mirador's helper service isn't running.") { NotDelivered = true };
 
-        var problem = await Module().FixDirectModeAsync(Context, CancellationToken.None);
+        var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
 
         Assert.Equal("Mirador's helper service isn't running.", problem);
         Assert.DoesNotContain(steps, t => t.StartsWith("display check", StringComparison.Ordinal));
