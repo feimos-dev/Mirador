@@ -158,4 +158,17 @@ public class ClientLogParserTests
 
         Assert.Equal(["HelloXR"], before);
     }
+
+    [Fact]
+    public void A_libmonado_client_is_not_an_app()
+    {
+        var p = new ClientLogParser();
+        p.Feed(Connected(1));
+
+        Assert.False(p.Feed(Named("libmonado")));
+        p.Feed(Connected(2));
+        p.Feed(Named("HelloXR"));
+
+        Assert.Equal(["HelloXR"], p.ConnectedApps);
+    }
 }
