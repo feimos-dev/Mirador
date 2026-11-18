@@ -205,15 +205,16 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 
         var stop = await StopPimaxAsync(ctx, running).ConfigureAwait(false);
         var wasRunning = stop.WasRunning ?? (!stop.NotDelivered && seenRunning);
-        if (wasRunning)
-        {
-            saveRecovery(DreamAirSession.Recovery(true));
-        }
 
         T result;
         string? startProblem = null;
         try
         {
+            if (wasRunning)
+            {
+                saveRecovery(DreamAirSession.Recovery(true));
+            }
+
             result = stop.Ok ? await run().ConfigureAwait(false) : stopFailed(stop);
         }
         finally
