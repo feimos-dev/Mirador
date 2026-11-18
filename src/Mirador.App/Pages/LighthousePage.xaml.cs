@@ -100,12 +100,12 @@ public sealed partial class LighthousePage : Page
         }
     }
 
-    /// <summary>"Export to SteamVR": refused while SteamVR runs or another space's setup is in use; asks first.</summary>
+    /// <summary>"Export to SteamVR": refused while SteamVR or Monado runs, or when SteamVR wouldn't use it; asks first.</summary>
     private async void OnExportToSteamVr(object sender, RoutedEventArgs e)
     {
         try
         {
-            if (!await ViewModel.PrepareExportAsync())
+            if (await ViewModel.PrepareExportAsync() is not { } question)
             {
                 return;
             }
@@ -114,7 +114,7 @@ public sealed partial class LighthousePage : Page
             {
                 XamlRoot = XamlRoot,
                 Title = "Export to SteamVR?",
-                Content = LighthouseViewModel.ExportQuestion,
+                Content = new TextBlock { Text = question, TextWrapping = TextWrapping.Wrap },
                 PrimaryButtonText = "Export",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,

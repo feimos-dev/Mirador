@@ -25,7 +25,7 @@ public static class RoomSetupApplier
         for (var i = 0; i < origins.Count; i++)
         {
             var name = origins[i];
-            var setup = setups.FirstOrDefault(s => Is(s, name, universe)) ?? setups.FirstOrDefault(s => Is(s, name, null));
+            var setup = InUse(setups, name, universe);
             if (setup is not null)
             {
                 client.SetOriginOffset((uint)i, setup.Offset);
@@ -35,6 +35,13 @@ public static class RoomSetupApplier
 
         return applied;
     }
+
+    /// <summary>
+    /// The setup that applies to origin <paramref name="originName"/> in <paramref name="universe"/>: the one kept for
+    /// that universe, else the one taken without a Lighthouse universe; null when there is neither.
+    /// </summary>
+    public static RoomSetup? InUse(IReadOnlyList<RoomSetup> setups, string originName, string? universe) =>
+        setups.FirstOrDefault(s => Is(s, originName, universe)) ?? setups.FirstOrDefault(s => Is(s, originName, null));
 
     private static bool Is(RoomSetup setup, string originName, string? universe) =>
         string.Equals(setup.OriginName, originName, StringComparison.Ordinal)

@@ -226,9 +226,11 @@ public static class SteamVrRoom
     /// Writes <paramref name="offset"/>, applied on top of SteamVR's room setup of <paramref name="universe"/>, into
     /// SteamVR's file, then calls <paramref name="clearOwn"/> to drop Mirador's own copy, so that never both apply. The
     /// file is copied to <c>chaperone_info.vrchap.mirador-&lt;yyyyMMdd-HHmmss&gt;</c> in <paramref name="backupDir"/>
-    /// first, and written aside, then moved over the old one. It is refused when <c>steamvr_lh</c> wouldn't use the result
-    /// (<see cref="ExportRefusal"/>), and checked again once written. When that check or the clear fails, SteamVR's
-    /// file is put back. SteamVR rewrites the file when it exits: the caller exports only while SteamVR is closed.
+    /// first, and written aside, then moved over the old one, only if it is still as it was read. It is refused when
+    /// <c>steamvr_lh</c> wouldn't use the result (<see cref="ExportRefusal"/>), and checked again once written. When that
+    /// check or the clear fails, SteamVR's file is put back the same way, unless it changed meanwhile. SteamVR rewrites
+    /// the file when it exits, and <c>steamvr_lh</c> reads it once per Monado start: the caller exports only while both
+    /// are stopped.
     /// </summary>
     /// <returns>The copy of the file as it was.</returns>
     /// <exception cref="MiradorException">Nothing was changed, or (said so) both apply.</exception>
@@ -253,7 +255,7 @@ public static class SteamVrRoom
         var text = Encoding.UTF8.GetString(original);
         var (translation, yaw) = Standing(text, universe) ?? ([0, 0, 0], 0);
         var (newTranslation, newYaw) = StandingFor(offset, translation, yaw);
-        var written = WithStanding(text, universe, newTranslation, newYaw);
+        var written = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(WithStanding(text, universe, newTranslation, newYaw));
 
         Directory.CreateDirectory(backupDir);
         var backup = Path.Combine(
@@ -263,18 +265,9 @@ public static class SteamVrRoom
             File.WriteAllBytes(backup, original);
         }
 
-        var temp = path + ".mirador-new";
-        File.WriteAllText(temp, written, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        try
+        if (!ReplaceIfUnchanged(path, original, written))
         {
-            File.Replace(temp, path, destinationBackupFileName: null);
-        }
-        finally
-        {
-            if (File.Exists(temp))
-            {
-                File.Delete(temp);
-            }
+            throw new MiradorException("SteamVR's room setup changed while Mirador was exporting, so Mirador left it as it is. Nothing changed.");
         }
 
         // Read back: steamvr_lh must now take this universe, or Mirador's own setup stays and SteamVR's goes back.
@@ -282,17 +275,10 @@ public static class SteamVrRoom
         if (SteamVrLhPick(universesNow, roomSetupsNow) != universe)
         {
             const string notUsed = "After the export SteamVR still wouldn't use this room setup";
-            try
-            {
-                File.WriteAllBytes(path, original);
-            }
-            catch (Exception putBack) when (putBack is IOException or UnauthorizedAccessException)
-            {
-                throw new MiradorException(
-                    $"{notUsed}, and Mirador couldn't put SteamVR's room setup back ({putBack.Message.Trim().TrimEnd('.')}). Mirador kept its own. SteamVR's room setup as it was is in {backup}.");
-            }
-
-            throw new MiradorException($"{notUsed}, so Mirador put SteamVR's room setup back and kept its own.");
+            throw PutBack(
+                path, written, original,
+                $"{notUsed}, so Mirador put SteamVR's room setup back and kept its own.",
+                why => $"{notUsed}. {why}. Mirador kept its own. SteamVR's room setup as it was is in {backup}.");
         }
 
         try
@@ -301,22 +287,63 @@ public static class SteamVrRoom
         }
         catch (Exception e)
         {
-            var why = e.Message.Trim().TrimEnd('.');
-            try
-            {
-                File.WriteAllBytes(path, original);
-            }
-            catch (Exception putBack) when (putBack is IOException or UnauthorizedAccessException)
-            {
-                throw new MiradorException(
-                    $"Mirador couldn't clear its own copy of the room setup ({why}) or put SteamVR's room setup back ({putBack.Message.Trim().TrimEnd('.')}): both apply when Monado next starts. SteamVR's room setup as it was is in {backup}.");
-            }
-
-            throw new MiradorException($"Mirador couldn't clear its own copy of the room setup ({why}), so it put SteamVR's room setup back. Nothing changed.");
+            var notCleared = $"Mirador couldn't clear its own copy of the room setup ({e.Message.Trim().TrimEnd('.')})";
+            throw PutBack(
+                path, written, original,
+                $"{notCleared}, so it put SteamVR's room setup back. Nothing changed.",
+                why => $"{notCleared}. {why}: both may apply when Monado next starts. SteamVR's room setup as it was is in {backup}.");
         }
 
         return backup;
     }
+
+    /// <summary>
+    /// Puts <paramref name="original"/> back over the file Mirador wrote (<paramref name="written"/>) and returns the
+    /// exception to throw: <paramref name="putBack"/>, or <paramref name="notPutBack"/> with why it couldn't.
+    /// </summary>
+    private static MiradorException PutBack(string path, byte[] written, byte[] original, string putBack, Func<string, string> notPutBack)
+    {
+        try
+        {
+            return ReplaceIfUnchanged(path, written, original)
+                ? new MiradorException(putBack)
+                : new MiradorException(notPutBack("SteamVR's room setup changed meanwhile, so Mirador left it as it is"));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new MiradorException(notPutBack($"Mirador couldn't put SteamVR's room setup back ({e.Message.Trim().TrimEnd('.')})"));
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="content"/> aside and moves it over <paramref name="path"/>, if the file still holds
+    /// <paramref name="expected"/>; false (and nothing written) when it doesn't. The file written aside never stays.
+    /// </summary>
+    private static bool ReplaceIfUnchanged(string path, byte[] expected, byte[] content)
+    {
+        var temp = path + ".mirador-new";
+        try
+        {
+            File.WriteAllBytes(temp, content);
+            if (!File.ReadAllBytes(path).AsSpan().SequenceEqual(expected))
+            {
+                return false;
+            }
+
+            File.Replace(temp, path, destinationBackupFileName: null);
+            return true;
+        }
+        finally
+        {
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+            }
+        }
+    }
+
+    /// <summary>Whether SteamVR has a room setup of <paramref name="universe"/> (reads its file).</summary>
+    public static bool HasRoomSetup(string steamDir, string universe) => Read(steamDir).RoomSetups.Contains(universe);
 
     /// <summary>
     /// Why exporting into <paramref name="universe"/> wouldn't help: <c>steamvr_lh</c> takes the first known universe

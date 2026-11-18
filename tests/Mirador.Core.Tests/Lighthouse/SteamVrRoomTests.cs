@@ -428,4 +428,27 @@ public class SteamVrRoomTests
         // A space SteamVR doesn't know at all is refused the same way.
         Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "99"));
     }
+
+    [Fact]
+    public void A_file_changed_meanwhile_isnt_put_back()
+    {
+        using var steam = SteamWith(TwoSpaces, "30", "2");
+        var file = SteamVrRoom.ChaperoneInfoPath(steam.Path);
+        const string changed = """{ "universes" : [] }""";
+
+        var e = Assert.Throws<MiradorException>(() => SteamVrRoom.Export(
+            steam.Path, steam.File("backups"), "30", MonadoPose.Identity with { Y = 0.1f },
+            () =>
+            {
+                File.WriteAllText(file, changed);
+                throw new IOException("The disk is full.");
+            },
+            TimeProvider.System));
+
+        Assert.StartsWith(
+            "Mirador couldn't clear its own copy of the room setup (The disk is full). SteamVR's room setup changed meanwhile, so Mirador left it as it is: both may apply when Monado next starts. SteamVR's room setup as it was is in ",
+            e.Message);
+        Assert.Equal(changed, File.ReadAllText(file));
+        Assert.Equal([file], Directory.GetFiles(Path.GetDirectoryName(file)!));
+    }
 }
