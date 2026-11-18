@@ -325,10 +325,21 @@ internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
 {
     public bool Disposed { get; private set; }
 
+    /// <summary>Completes once <see cref="Dispose"/> has run.</summary>
+    public TaskCompletionSource Closed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>When set, <see cref="Devices"/> waits for it (at most <see cref="Harness.Limit"/>), as a call Monado doesn't answer does.</summary>
+    public TaskCompletionSource? DevicesGate { get; set; }
+
+    /// <summary>Completes once a <see cref="Devices"/> call has begun.</summary>
+    public TaskCompletionSource DevicesEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public bool OffersOriginOffsets => true;
 
     public IReadOnlyList<MonadoDevice> Devices()
     {
+        DevicesEntered.TrySetResult();
+        DevicesGate?.Task.Wait(Harness.Limit);
         ObjectDisposedException.ThrowIf(Disposed, this);
         return [new MonadoDevice(0, "head", "Fake headset", "FAKE-1", 0, false, false, 0)];
     }
@@ -351,6 +362,7 @@ internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
     {
         steps.Add("libmonado closed");
         Disposed = true;
+        Closed.TrySetResult();
     }
 }
 

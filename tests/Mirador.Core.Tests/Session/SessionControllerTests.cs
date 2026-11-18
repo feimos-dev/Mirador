@@ -1502,6 +1502,34 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_call_stuck_in_libmonado_does_not_keep_stop_from_ending_monado()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+        var client = h.Libmonado.Client!;
+        client.DevicesGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var monado = h.Controller.Monado!;
+        var stuck = Task.Run(monado.Devices);
+        await client.DevicesEntered.Task.WaitAsync(Limit);
+
+        var stop = h.Controller.StopAsync(CancellationToken.None);
+        await h.Timers.Set(TimeSpan.FromSeconds(5)).WaitAsync(Limit);
+        Assert.DoesNotContain("end cleanly", h.Steps.All);
+        Assert.Empty(monado.Devices()); // a new call doesn't wait behind the stuck one
+        h.Time.Advance(TimeSpan.FromSeconds(5));
+        await stop.WaitAsync(Limit);
+
+        Assert.Contains("end cleanly", h.Steps.All);
+        Assert.False(client.Disposed);
+
+        // Monado has ended, so the stuck call returns, and the close that waited for it completes.
+        client.DevicesGate.SetResult();
+        await stuck.WaitAsync(Limit);
+        await client.Closed.Task.WaitAsync(Limit);
+        Assert.True(client.Disposed);
+    }
+
+    [Fact]
     public async Task No_libmonado_shows_the_problem()
     {
         await using var h = new Harness();

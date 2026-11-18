@@ -67,6 +67,9 @@ public sealed class SessionController(SessionDeps deps)
     /// <summary>How long a Start, and then a Stop, waits for libmonado to connect.</summary>
     private static readonly TimeSpan LibmonadoLimit = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long a Stop waits for libmonado's connection to close before it ends Monado anyway.</summary>
+    private static readonly TimeSpan LibmonadoCloseLimit = TimeSpan.FromSeconds(5);
+
     private static readonly IReadOnlyDictionary<string, string> Nothing = new Dictionary<string, string>();
 
     private readonly SessionDeps deps = deps;
@@ -883,10 +886,12 @@ public sealed class SessionController(SessionDeps deps)
     };
 
     /// <summary>
-    /// Takes the run's libmonado connection from readers, then closes it; nothing opens one for the run afterwards.
-    /// Called before Monado is stopped, and as soon as it is seen to have ended.
+    /// Takes the run's libmonado connection from readers, then closes it on a background thread; nothing opens one for
+    /// the run afterwards. Called before Monado is stopped, and as soon as it is seen to have ended. The task completes
+    /// once the connection is closed, which waits for a call under way: one stuck in Monado returns only once Monado
+    /// has ended.
     /// </summary>
-    private void CloseLibmonado(Run run)
+    private Task CloseLibmonado(Run run)
     {
         SharedMonadoClient? client;
         lock (gate)
@@ -897,11 +902,14 @@ public sealed class SessionController(SessionDeps deps)
             run.LibmonadoProblem = null;
         }
 
-        if (client is not null)
+        if (client is null)
         {
-            client.Close();
-            RaiseChanged();
+            return Task.CompletedTask;
         }
+
+        client.EndCalls();
+        RaiseChanged();
+        return Task.Run(client.Close);
     }
 
     /// <summary>Looks for Monado's pipe every 100 ms until it is there, the service ends, or <see cref="StartTimeout"/> has passed.</summary>
@@ -967,7 +975,7 @@ public sealed class SessionController(SessionDeps deps)
             message = "Monado stopped by itself.";
         }
 
-        CloseLibmonado(run);
+        _ = CloseLibmonado(run); // Monado has ended, so a call under way returns and the close completes
 
         lock (gate)
         {
@@ -1012,7 +1020,16 @@ public sealed class SessionController(SessionDeps deps)
     /// </summary>
     private async Task EndRunAsync(Run run, bool clean)
     {
-        CloseLibmonado(run);
+        var closing = CloseLibmonado(run);
+        try
+        {
+            await closing.WaitAsync(LibmonadoCloseLimit, deps.Context.Time).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // A call stuck in libmonado holds the close: ending Monado below frees it, and the close completes then.
+        }
+
         Task? settled;
         lock (gate)
         {
@@ -1424,19 +1441,29 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>
-    /// A run's libmonado connection as readers get it. Calls wait for each other and for <see cref="Close"/>; once
-    /// closed, or when Monado doesn't answer, the reads are empty instead of throwing. Only the session closes it:
-    /// <see cref="Dispose"/> does nothing, since with "exit on disconnect" a closed connection stops Monado.
+    /// A run's libmonado connection as readers get it. Calls wait for each other; once <see cref="Close"/> has begun,
+    /// or when Monado doesn't answer, the reads are empty instead of throwing, without waiting for a call under way.
+    /// Only the session closes it: <see cref="Dispose"/> does nothing, since with "exit on disconnect" a closed
+    /// connection stops Monado.
     /// </summary>
     private sealed class SharedMonadoClient(IMonadoClient inner) : IMonadoClient
     {
         private readonly object gate = new();
-        private bool closed;
+
+        /// <summary>Set as <see cref="Close"/> begins, outside the lock, so that no new call waits behind a stuck one.</summary>
+        private volatile bool closed;
+
+        private bool disposed;
 
         public bool OffersOriginOffsets => inner.OffersOriginOffsets;
 
         public IReadOnlyList<MonadoDevice> Devices()
         {
+            if (closed)
+            {
+                return [];
+            }
+
             lock (gate)
             {
                 try
@@ -1452,6 +1479,11 @@ public sealed class SessionController(SessionDeps deps)
 
         public IReadOnlyList<string> TrackingOrigins()
         {
+            if (closed)
+            {
+                return [];
+            }
+
             lock (gate)
             {
                 try
@@ -1468,6 +1500,7 @@ public sealed class SessionController(SessionDeps deps)
         /// <exception cref="MiradorException">Monado has stopped, can't move tracking origins, or didn't answer.</exception>
         public MonadoPose GetOriginOffset(uint origin)
         {
+            ThrowUnlessOriginOffsets();
             lock (gate)
             {
                 ThrowUnlessOriginOffsets();
@@ -1478,6 +1511,7 @@ public sealed class SessionController(SessionDeps deps)
         /// <exception cref="MiradorException">Monado has stopped, can't move tracking origins, or didn't answer.</exception>
         public void SetOriginOffset(uint origin, MonadoPose offset)
         {
+            ThrowUnlessOriginOffsets();
             lock (gate)
             {
                 ThrowUnlessOriginOffsets();
@@ -1489,17 +1523,21 @@ public sealed class SessionController(SessionDeps deps)
         {
         }
 
+        /// <summary>From now on, calls return at once (empty, or with <see cref="MiradorException"/>); one under way goes on.</summary>
+        public void EndCalls() => closed = true;
+
         /// <summary>Closes the connection once a call under way has returned. Never throws.</summary>
         public void Close()
         {
+            EndCalls();
             lock (gate)
             {
-                if (closed)
+                if (disposed)
                 {
                     return;
                 }
 
-                closed = true;
+                disposed = true;
                 try
                 {
                     inner.Dispose();
