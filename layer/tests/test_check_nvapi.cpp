@@ -58,6 +58,7 @@ struct NvapiRig {
         e.session = session.get();
         e.adapters = std::move(adapters);
         e.clear_back_buffers = false; // the fake's handles are not D3D11 textures
+        e.warm_up_ns = 0;             // real time: the tests that are not about the warm-up do not wait for one
         e.session_lines = [this] { return session_log; };
         return e;
     }
@@ -113,6 +114,31 @@ TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
     CHECK(rig.printed("every private NVAPI id resolves"));
     CHECK_FALSE(rig.printed("FAILED"));
     CHECK(rig.printed("presenting for 2 s (180 presents at 90 Hz expected)"));
+}
+
+TEST_CASE("nvapi_mode_does_not_count_a_stuttering_start_against_the_display")
+{
+    using namespace std::chrono_literals;
+    // A display that works but stutters for its first moments: the counter stands still for 300 ms, then runs. The
+    // warm-up (500 ms here) is presented but not counted, so the counted window is a clean 90 Hz.
+    NvapiRig rig(2);
+    rig.api.stop_counter();
+    std::thread thaw([&rig] {
+        std::this_thread::sleep_for(300ms);
+        rig.api.start_counter();
+    });
+    dvl::NvapiEnv env = rig.env();
+    env.warm_up_ns = 500'000'000;
+    const dvl::ModeResult result = dvl::run_nvapi_check(env, rig.options, rig.out);
+    thaw.join();
+    INFO(rig.out.text());
+    REQUIRE(result.steps_ok);
+
+    CHECK(result.counts.seconds >= 1.99);
+    CHECK(result.counts.seconds <= 2.1);
+    const dvl::Verdict verdict = dvl::judge(result.steps_ok, result.failed_step, result.counts);
+    INFO(verdict.line);
+    CHECK(verdict.pass);
 }
 
 TEST_CASE("nvapi_mode_reports_the_registry_edid_route_when_that_is_the_one_used")

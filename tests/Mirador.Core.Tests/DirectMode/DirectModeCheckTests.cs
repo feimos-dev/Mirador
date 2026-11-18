@@ -63,7 +63,7 @@ public sealed class DirectModeCheckTests : IDisposable
 
         var e = await Assert.ThrowsAsync<MiradorException>(() => Ensure("621.01", "620.00"));
 
-        Assert.Equal("Direct mode doesn't work with NVIDIA driver 621.01: NVAPI call 0x1F2E3D4C is missing in this driver. Go back to driver 620.00.", e.Message);
+        Assert.Equal("Direct mode didn't pass its check with NVIDIA driver 621.01: NVAPI call 0x1F2E3D4C is missing in this driver. Go back to driver 620.00.", e.Message);
         Assert.Equal("unset", remembered);
         Assert.False(saved!.Pass);
     }

@@ -22,7 +22,7 @@ public sealed record DisplayCheckResult(bool Pass, string Message, string? WhatT
 
 /// <summary>
 /// Runs the layer's display check (<c>mirador-display-check.exe</c>), which drives the headset's panels through
-/// NVIDIA's private direct-mode interface for about 20 s without Monado. NVIDIA may move that interface with any driver,
+/// NVIDIA's private direct-mode interface for about 23 s (3 s of warm-up, then 20 s of counting) without Monado. NVIDIA may move that interface with any driver,
 /// so Mirador runs it when the driver changed. The headset's own software and Monado must not run: the check refuses
 /// while they hold the display (the headset's module frees it first).
 /// </summary>

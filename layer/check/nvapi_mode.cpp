@@ -367,12 +367,19 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
     }
     const double refresh_hz = product.refresh_mhz != 0 ? product.refresh_mhz / 1000.0 : kRefreshHz;
     result.counts.refresh_hz = refresh_hz;
-    say(out, "presenting for %d s (%llu presents at %.0f Hz expected)", options.seconds,
-        static_cast<unsigned long long>(expected_flips(options.seconds, refresh_hz)), refresh_hz);
+    say(out, "presenting for %d s (%llu presents at %.0f Hz expected), after a warm-up of %.1f s that is not counted",
+        options.seconds, static_cast<unsigned long long>(expected_flips(options.seconds, refresh_hz)), refresh_hz,
+        static_cast<double>(env.warm_up_ns) / 1e9);
 
-    const nvdm::FrameModel::Counters before = counters_of(*r);
-    const int64_t t0 = r->clock.now_ns();
-    const int64_t deadline = t0 + static_cast<int64_t>(options.seconds) * 1'000'000'000;
+    // The run presents through a warm-up first, and counts presents, flips and time only from its end: a display that
+    // works can still stutter for its first second or two. A present that failed anywhere in the run still fails it.
+    const nvdm::FrameModel::Counters run_before = counters_of(*r);
+    nvdm::FrameModel::Counters before = run_before;
+    const int64_t t_start = r->clock.now_ns();
+    const int64_t warm_up_end = t_start + env.warm_up_ns;
+    bool counting = env.warm_up_ns <= 0;
+    int64_t t0 = t_start; // where the counted window starts
+    int64_t deadline = (counting ? t0 : warm_up_end) + static_cast<int64_t>(options.seconds) * 1'000'000'000;
     int64_t next_progress = t0 + 5'000'000'000;
     uint64_t id = 0;
     uint64_t wait_timeouts = 0;
@@ -386,8 +393,16 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
             }
             break;
         }
+        if (!counting && r->clock.now_ns() >= warm_up_end) {
+            counting = true;
+            before = counters_of(*r);
+            t0 = r->clock.now_ns();
+            deadline = t0 + static_cast<int64_t>(options.seconds) * 1'000'000'000;
+            next_progress = t0 + 5'000'000'000;
+            say(out, "warm-up over after %.1f s: counting from here", static_cast<double>(t0 - t_start) / 1e9);
+        }
         if (can_clear) {
-            const int64_t second = (r->clock.now_ns() - t0) / 1'000'000'000;
+            const int64_t second = (r->clock.now_ns() - t_start) / 1'000'000'000;
             if (!clearer.clear(frame->buffer, kColours[second % 4])) {
                 clear_timeouts++;
             }
@@ -405,14 +420,14 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         r->lines.drain(out);
         // A dead display completes every present at once (design 6.7 step 5): the loop would run at the speed of the
         // clears for the rest of the run. The mode's rate cannot do 3 times its count.
-        if (id > 3 * expected_flips(options.seconds, refresh_hz) + 100) {
+        if (id > 3 * expected_flips(options.seconds + static_cast<double>(env.warm_up_ns) / 1e9, refresh_hz) + 100) {
             result.steps_ok = false;
             result.failed_step = "presenting " + std::to_string(id) +
                                  " frames far above the mode's rate: the display is not flipping (presents complete at once "
                                  "while flips are stopped)";
             break;
         }
-        if (r->clock.now_ns() >= next_progress) {
+        if (counting && r->clock.now_ns() >= next_progress) {
             next_progress += 5'000'000'000;
             const nvdm::FrameModel::Counters now = counters_of(*r);
             say(out, "  %.0f s: %llu presents, %llu flips", static_cast<double>(r->clock.now_ns() - t0) / 1e9,
@@ -437,7 +452,7 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
 
     result.counts.presents = after.presents - before.presents;
     result.counts.flips = after.refreshes - before.refreshes;
-    result.counts.failures = (after.failed - before.failed) + (after.unconfirmed - before.unconfirmed) + wait_timeouts;
+    result.counts.failures = (after.failed - run_before.failed) + (after.unconfirmed - run_before.unconfirmed) + wait_timeouts;
     result.counts.link_drops = after.link_drops - before.link_drops;
     result.counts.seconds = static_cast<double>(t1 - t0) / 1e9;
 
