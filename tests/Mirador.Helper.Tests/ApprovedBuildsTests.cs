@@ -364,6 +364,25 @@ public sealed class ApprovedBuildsTests : IDisposable
         Assert.Contains("VK_LAYER_PATH", e.Message);
         Assert.Null(store.Get(Finn, "p1"));
     }
+
+    [Fact]
+    public void A_bundled_commit_with_a_build_folder_is_refused()
+    {
+        var source = MakeInstall();
+
+        Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.Approve(Finn, "p1", ApprovedBuilds.BundledCommit, source, App, store));
+        Assert.Null(store.Get(Finn, "p1"));
+    }
+
+    [Theory]
+    [InlineData("0123abc", true)]
+    [InlineData("0123456789abcdef0123456789abcdef01234567", true)]
+    [InlineData("bundled", false)]
+    [InlineData("folder", false)]
+    [InlineData("0123ab", false)]
+    [InlineData("0123ABC", false)]
+    [InlineData("../x", false)]
+    public void Only_hex_is_a_git_commit(string commit, bool isCommit) => Assert.Equal(isCommit, ApprovedBuilds.IsGitCommit(commit));
 }
 
 /// <summary>The calls the OpenXR loader makes to load a runtime DLL.</summary>

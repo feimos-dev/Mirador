@@ -65,4 +65,28 @@ public class ApprovedBuildChoiceTests
             "STEAMVR_PATH can't be set for Monado as administrator. Remove it, or run this profile as you.",
             Mirador.Core.Elevation.ElevatedChoice.ApprovalProblem(profile));
     }
+
+    private static Profile Saved(bool runAsAdmin, params EnvVar[] extra) =>
+        new("p1", "Fork", null, BuildSource.UpstreamMain, extra, new Dictionary<string, string>(), RunAsAdministrator: runAsAdmin);
+
+    [Fact]
+    public void Save_approves_only_when_the_switch_turns_on_or_the_variables_change()
+    {
+        var log = new EnvVar("PIMAX_P3C_LOG", "info");
+
+        // Turned on: approve, and a cancelled prompt saves it off.
+        Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(false), Saved(true)));
+        Assert.False(Mirador.Core.Elevation.ElevatedChoice.KeepsSwitchWhenDeclined(Saved(false)));
+        Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(null, Saved(true)));
+
+        // Already on: a rename or any other edit asks nothing; a change of the variables asks, and declining keeps it on.
+        Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true, log) with { Name = "Renamed" }));
+        Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true, log with { Value = "debug" })));
+        Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true)));
+        Assert.True(Mirador.Core.Elevation.ElevatedChoice.KeepsSwitchWhenDeclined(Saved(true, log)));
+
+        // Off stays off: nothing to approve.
+        Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true), Saved(false)));
+        Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(false), Saved(false, log)));
+    }
 }

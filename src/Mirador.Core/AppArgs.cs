@@ -69,6 +69,27 @@ public sealed record AppArgs(
         return new AppArgs(start, background, signIn, removeSignIn, allowElevatedMonado, approveBuild);
     }
 
+    /// <summary>
+    /// What the approval step approves: for the bundled Monado (commit <see cref="Bundled"/>) the commit
+    /// <see cref="Mirador.Ipc.ApprovedBuilds.BundledCommit"/> and no folder, only when the folder is
+    /// <see cref="Bundled"/> too; else the build's commit and folder. Decided from the commit, which a build folder's own
+    /// files could name.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The commit and the folder don't go together.</exception>
+    public static (string Commit, string Source) ApprovalTarget(string commit, string source)
+    {
+        if (commit == Bundled)
+        {
+            return source == Bundled
+                ? (Mirador.Ipc.ApprovedBuilds.BundledCommit, "")
+                : throw new InvalidOperationException("An approval of the bundled Monado names no build folder.");
+        }
+
+        return source == Bundled
+            ? throw new InvalidOperationException("A build's approval needs its build folder.")
+            : (commit, source);
+    }
+
     /// <summary>The flag of the approval step.</summary>
     public const string ApproveBuildFlag = "--approve-build";
 }

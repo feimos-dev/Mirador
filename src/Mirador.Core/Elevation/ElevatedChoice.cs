@@ -83,6 +83,18 @@ public static class ElevatedChoice
             string.Equals(pair.First.Name, pair.Second.Key, StringComparison.OrdinalIgnoreCase)
             && string.Equals(pair.First.Value, pair.Second.Value, StringComparison.Ordinal));
 
+    /// <summary>
+    /// Whether saving <paramref name="edited"/> over <paramref name="saved"/> approves it (one prompt): "Run as
+    /// administrator" turns on, or the variables change while it stays on. Any other edit of a profile with the switch on
+    /// asks nothing; it runs as you until approved, and Home says why.
+    /// </summary>
+    public static bool ApprovesOnSave(Profile? saved, Profile edited) =>
+        edited.RunAsAdministrator
+        && (saved is not { RunAsAdministrator: true } || !saved.ExtraEnvironment.SequenceEqual(edited.ExtraEnvironment));
+
+    /// <summary>Whether declining the save's prompt keeps "Run as administrator" on: when it was on before the edit.</summary>
+    public static bool KeepsSwitchWhenDeclined(Profile? saved) => saved is { RunAsAdministrator: true };
+
     /// <summary>The profile's variables as the helper takes them.</summary>
     public static IReadOnlyList<KeyValuePair<string, string>> Variables(Profile profile) =>
         [.. profile.ExtraEnvironment.Select(v => new KeyValuePair<string, string>(v.Name, v.Value))];

@@ -59,19 +59,20 @@ public static partial class Program
             try
             {
                 var owner = AllowElevatedCommand.CurrentUser()?.Value ?? throw new InvalidOperationException("Windows didn't say who you are.");
-                var bundled = approve.Commit == AppArgs.Bundled && approve.Source == AppArgs.Bundled;
+                var (commit, source) = AppArgs.ApprovalTarget(approve.Commit, approve.Source);
+                var bundled = commit == Mirador.Ipc.ApprovedBuilds.BundledCommit;
                 var profileRoot = Mirador.Ipc.ApprovedBuilds.ProfileRoot(AppContext.BaseDirectory, owner, approve.ProfileId) + Path.DirectorySeparatorChar;
                 var active = new RegistryRuntimeReader().ActiveRuntime();
                 var runtimeWasThisProfiles = active is not null && Path.GetFullPath(active).StartsWith(profileRoot, StringComparison.OrdinalIgnoreCase);
                 var build = Mirador.Ipc.ApprovedBuilds.Approve(
-                    owner, approve.ProfileId, bundled ? Mirador.Ipc.ApprovedBuilds.BundledCommit : approve.Commit, bundled ? "" : approve.Source,
+                    owner, approve.ProfileId, commit, source,
                     AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approve.Variables);
 
                 // When the machine's runtime was this profile's earlier approved copy, it is the new copy now. An approval
                 // of the bundled Monado has no copy, and the earlier one goes: Mirador's Monado takes over, when it is there.
                 if (runtimeWasThisProfiles)
                 {
-                    if (!bundled)
+                    if (!bundled && Path.IsPathRooted(build.Folder))
                     {
                         ActiveRuntimeWriter.Write(build.Manifest);
                     }

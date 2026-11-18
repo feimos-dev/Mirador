@@ -779,7 +779,8 @@ public sealed class AppHost : IAsyncDisposable
             return "Only an installed build can be approved (Monado's install layout, as Mirador's branch builds are). Build it with \"cmake --install\", or let Mirador build the branch.";
         }
 
-        commit = Core.Build.BuildInfo.Load(folder)?.Commit is { Length: >= 7 } c ? c : "folder";
+        // The build folder's own record of its commit, which the user can write: only a git commit's id counts.
+        commit = Core.Build.BuildInfo.Load(folder)?.Commit is { } c && ApprovedBuilds.IsGitCommit(c) ? c : "folder";
         return null;
     }
 

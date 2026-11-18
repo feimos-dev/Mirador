@@ -78,6 +78,9 @@ public static partial class ApprovedBuilds
     /// <summary>Whether <paramref name="id"/> is a profile id (a GUID's digits or a default profile's name): never a path.</summary>
     public static bool IsProfileId(string? id) => id is not null && ProfileIdPattern().IsMatch(id);
 
+    /// <summary>Whether <paramref name="commit"/> is a git commit's id: 7 to 40 lower-case hex digits, never <see cref="BundledCommit"/> or a path.</summary>
+    public static bool IsGitCommit(string? commit) => commit is not null && GitCommitPattern().IsMatch(commit);
+
     /// <summary>Whether <paramref name="sid"/> looks like a SID: never a path.</summary>
     public static bool IsOwner(string? sid) => sid is not null && OwnerPattern().IsMatch(sid);
 
@@ -103,6 +106,12 @@ public static partial class ApprovedBuilds
         if (commit != BundledCommit && !CommitPattern().IsMatch(commit))
         {
             throw new InvalidOperationException("That isn't a commit.");
+        }
+
+        // The bundled Monado's approval copies nothing: a build folder named with it would be recorded without its files.
+        if (commit == BundledCommit && !string.IsNullOrEmpty(source))
+        {
+            throw new InvalidOperationException("An approval of the bundled Monado has no build folder.");
         }
 
         IReadOnlyList<KeyValuePair<string, string>> approved = [.. variables ?? []];
@@ -461,6 +470,9 @@ public static partial class ApprovedBuilds
 
     [GeneratedRegex(@"^([0-9a-f]{7,40}|folder)\z")]
     private static partial Regex CommitPattern();
+
+    [GeneratedRegex(@"^[0-9a-f]{7,40}\z")]
+    private static partial Regex GitCommitPattern();
 }
 
 /// <summary>

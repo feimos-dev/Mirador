@@ -419,15 +419,24 @@ public sealed partial class ProfilesViewModel : ObservableObject
         // from another copy would buy nothing (Home says why this copy runs as you).
         var needsConsent = profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false);
 
-        // A profile that needs an approval (its build, its variables) gets it here too, behind the same one prompt.
-        // Declining the prompt saves the profile to run as you; turning the switch off later keeps the approval.
-        if (profile.RunAsAdministrator && Approvable(profile) && !host.FullyApproved(profile) && host.ApprovalTarget(profile, out _, out _) is null)
+        // Turning the switch on, or changing the variables while it is on, approves the profile (its build, its variables)
+        // here too, behind the same one prompt. Declining the prompt saves a switch just turned on as off; one that was
+        // on stays on, and the profile runs as you until approved. Turning the switch off later keeps the approval.
+        if (ElevatedChoice.ApprovesOnSave(editing, profile) && Approvable(profile) && !host.FullyApproved(profile)
+            && host.ApprovalTarget(profile, out _, out _) is null)
         {
             var refusal = await host.ApproveBuildAsync(profile, alsoAllow: needsConsent);
             if (refusal == AppHost.ApprovalCancelled)
             {
-                profile = profile with { RunAsAdministrator = false };
-                problem = "Saved to run as you: Windows' administrator prompt was cancelled.";
+                if (ElevatedChoice.KeepsSwitchWhenDeclined(editing))
+                {
+                    problem = "Saved, but not approved: Windows' administrator prompt was cancelled. The profile runs as you until you approve it.";
+                }
+                else
+                {
+                    profile = profile with { RunAsAdministrator = false };
+                    problem = "Saved to run as you: Windows' administrator prompt was cancelled.";
+                }
             }
             else if (refusal is not null)
             {
