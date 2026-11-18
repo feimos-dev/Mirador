@@ -28,6 +28,7 @@ public sealed partial class DreamAirLogParser
     private string? failed;
     private readonly string headset;
     private readonly bool headsetThere;
+    private readonly bool layerUsed;
     private readonly StatusLine? eye;
 
     private string? mode;
@@ -41,13 +42,16 @@ public sealed partial class DreamAirLogParser
     /// <param name="headsetThere">Whether the headset's board (and Lighthouse receiver) were plugged in at the Start: only
     /// then is a missing head Monado's driver's fault.</param>
     /// <param name="timeProvider">The clock for <see cref="DisplayWait"/>.</param>
+    /// <param name="layerUsed">Whether the layer drives the display: only then is there a display session to wait for.</param>
     public DreamAirLogParser(
-        GeometryResult? upload = null, string headset = "Pimax Dream Air", bool headsetThere = true, TimeProvider? timeProvider = null)
+        GeometryResult? upload = null, string headset = "Pimax Dream Air", bool headsetThere = true, TimeProvider? timeProvider = null,
+        bool layerUsed = true)
     {
         time = timeProvider ?? TimeProvider.System;
         startedAt = time.GetTimestamp();
         this.headset = headset;
         this.headsetThere = headsetThere;
+        this.layerUsed = layerUsed;
         eye = upload switch
         {
             null => null,
@@ -114,7 +118,7 @@ public sealed partial class DreamAirLogParser
     {
         lock (gate)
         {
-            if (mode is null && failed is null && time.GetElapsedTime(startedAt) > DisplayWait)
+            if (layerUsed && mode is null && failed is null && time.GetElapsedTime(startedAt) > DisplayWait)
             {
                 var last = lastLayerMessage is null ? "" : (lastLayerMessage.EndsWith('.') ? lastLayerMessage : lastLayerMessage + ".") + " ";
                 failed = $"The headset's display didn't come up within a minute. {last}Check Diagnostics, then start again.";

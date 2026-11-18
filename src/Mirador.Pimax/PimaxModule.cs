@@ -324,7 +324,7 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             }
 
             return new DreamAirSession(
-                ctx, EnvironmentFor(model), wasRunning, upload, warnings, model.Name, headsetThere);
+                ctx, EnvironmentFor(model), wasRunning, upload, warnings, model.Name, headsetThere, layerUsed: notUsed is null);
         }
         catch
         {

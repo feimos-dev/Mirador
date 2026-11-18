@@ -42,14 +42,15 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     /// <param name="warnings">Warnings from getting ready, raised at the first look (Mirador listens only once it has the session).</param>
     public DreamAirSession(
         ModuleContext ctx, IReadOnlyList<EnvVar> environment, bool pimaxWasRunning, GeometryResult? upload,
-        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true)
+        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true,
+        bool layerUsed = true)
     {
         this.ctx = ctx;
         pending = warnings is { Count: > 0 } ? [.. warnings] : null;
         this.pimaxWasRunning = pimaxWasRunning;
         Environment = environment;
         RecoveryData = Recovery(pimaxWasRunning);
-        parser = new DreamAirLogParser(upload, headset, headsetThere, ctx.Time);
+        parser = new DreamAirLogParser(upload, headset, headsetThere, ctx.Time, layerUsed);
         timer = ctx.Time.CreateTimer(_ => Poll(), null, PollInterval, Timeout.InfiniteTimeSpan);
     }
 

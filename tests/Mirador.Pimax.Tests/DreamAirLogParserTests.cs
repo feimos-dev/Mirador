@@ -10,6 +10,18 @@ public class DreamAirLogParserTests
     private static readonly GeometryResult Uploaded = new(true, "XR5DA-P501G0D202652600422", GeometryUploader.Uploaded, "log");
 
     [Fact]
+    public void Without_the_layer_no_display_session_is_waited_for()
+    {
+        var time = new FakeTimeProvider();
+        var parser = new DreamAirLogParser(timeProvider: time, layerUsed: false);
+
+        time.Advance(TimeSpan.FromMinutes(5));
+        parser.Tick();
+
+        Assert.Null(parser.Failed);
+    }
+
+    [Fact]
     public void No_display_session_within_a_minute_fails()
     {
         var time = new FakeTimeProvider();
