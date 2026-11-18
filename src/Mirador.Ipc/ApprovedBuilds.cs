@@ -14,10 +14,19 @@ namespace Mirador.Ipc;
 /// <param name="Owner">The SID of the user who approved it.</param>
 /// <param name="ProfileId">The profile the build is for.</param>
 /// <param name="Commit">The commit it was built from (or <c>folder</c> for a build folder with no git).</param>
-/// <param name="Folder">The approved copy.</param>
-/// <param name="Files">Each file of the copy, by its path relative to <see cref="Folder"/>, with its SHA-256 (lower case).</param>
-public sealed record ApprovedBuild(string Owner, string ProfileId, string Commit, string Folder, IReadOnlyDictionary<string, string> Files)
+/// <param name="Folder">The approved copy; empty for the bundled Monado (<see cref="ApprovedBuilds.BundledCommit"/>).</param>
+/// <param name="Files">Each file of the copy, by its path relative to <see cref="Folder"/>, with its SHA-256 (lower case); none for the bundled Monado.</param>
+/// <param name="Variables">
+/// The profile's own environment variables approved with it, in the profile's order: an elevated Start with variables
+/// runs only when they are exactly these. None for an approval from before variables could be approved.
+/// </param>
+public sealed record ApprovedBuild(
+    string Owner, string ProfileId, string Commit, string Folder, IReadOnlyDictionary<string, string> Files,
+    IReadOnlyList<KeyValuePair<string, string>>? Variables = null)
 {
+    /// <summary>The approved variables; empty when there are none.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> Variables { get; init; } = Variables ?? [];
+
     /// <summary>The copy's runtime manifest, which Mirador writes itself at the approval (it names the copy's own DLL).</summary>
     public string Manifest => Path.Combine(Folder, "openxr_monado.json");
 
@@ -51,6 +60,12 @@ public interface IApprovedBuildStore
 /// </summary>
 public static partial class ApprovedBuilds
 {
+    /// <summary>
+    /// The commit of an approval for the bundled Monado: it runs as administrator without a copy, being Mirador's own,
+    /// so such an approval holds only a profile's variables (no folder, no files).
+    /// </summary>
+    public const string BundledCommit = "bundled";
+
     /// <summary>The DLL the approved copy's manifest names, relative to the copy.</summary>
     public static readonly string RuntimeDll = Path.Combine("bin", "openxr_monado.dll");
 
@@ -71,19 +86,43 @@ public static partial class ApprovedBuilds
     /// writes the copy's runtime manifest itself (naming the copy's own DLL, whatever the build's manifest said), hashes
     /// the copy and records it. Only then do the profile's earlier copies go, as far as they can (one still in use stays
     /// until the next approval). A link or junction anywhere in the source is refused: it could point the copy at files
-    /// outside the build.
+    /// outside the build. The profile's <paramref name="variables"/> are recorded with it. For the bundled Monado
+    /// (<see cref="BundledCommit"/>) nothing is copied: the record holds the variables only, and the profile's earlier
+    /// copies go.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The source can't be approved; the message says why.</exception>
-    public static ApprovedBuild Approve(string owner, string profileId, string commit, string source, string appDir, IApprovedBuildStore store)
+    /// <exception cref="InvalidOperationException">The source or a variable can't be approved; the message says why.</exception>
+    public static ApprovedBuild Approve(
+        string owner, string profileId, string commit, string source, string appDir, IApprovedBuildStore store,
+        IReadOnlyList<KeyValuePair<string, string>>? variables = null)
     {
         if (!IsOwner(owner) || !IsProfileId(profileId))
         {
             throw new InvalidOperationException("That isn't a user's profile.");
         }
 
-        if (!CommitPattern().IsMatch(commit))
+        if (commit != BundledCommit && !CommitPattern().IsMatch(commit))
         {
             throw new InvalidOperationException("That isn't a commit.");
+        }
+
+        IReadOnlyList<KeyValuePair<string, string>> approved = [.. variables ?? []];
+        if (ElevatedVariables.FirstRefused(approved) is { } refused)
+        {
+            throw new InvalidOperationException($"{refused} can't be set for Monado run as administrator.");
+        }
+
+        if (approved.Any(v => v.Value is null || v.Value.Contains('\0')))
+        {
+            throw new InvalidOperationException("A variable's value can't hold a null character.");
+        }
+
+        if (commit == BundledCommit)
+        {
+            var bundled = new ApprovedBuild(owner, profileId, BundledCommit, "", new Dictionary<string, string>(), approved);
+            store.Set(bundled);
+            RemoveWhole(ProfileRoot(appDir, owner, profileId), appDir);
+            SweepLeftovers(appDir, store);
+            return bundled;
         }
 
         var from = Path.GetFullPath(source);
@@ -111,7 +150,7 @@ public static partial class ApprovedBuilds
         }
 
         Directory.Move(staging, target);
-        var build = new ApprovedBuild(owner, profileId, commit, target, files);
+        var build = new ApprovedBuild(owner, profileId, commit, target, files, approved);
         store.Set(build);
 
         foreach (var old in Directory.GetDirectories(profileRoot).Where(d => !string.Equals(d, target, StringComparison.OrdinalIgnoreCase)))
@@ -426,7 +465,8 @@ public static partial class ApprovedBuilds
 
 /// <summary>
 /// The approved builds in <c>HKLM\SOFTWARE\Mirador\ApprovedBuilds</c> (64-bit view): a key per user SID and profile with
-/// <c>Commit</c> and <c>Folder</c>, and its <c>Files</c> subkey with a value per file (relative path → SHA-256).
+/// <c>Commit</c>, <c>Folder</c> and <c>Variables</c> (a multi-string of <c>NAME=VALUE</c>, in order; missing on a record
+/// from before variables could be approved), and its <c>Files</c> subkey with a value per file (relative path → SHA-256).
 /// </summary>
 public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
 {
@@ -472,7 +512,21 @@ public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
             }
         }
 
-        return new ApprovedBuild(owner, profileId, commit, folder, hashes);
+        var variables = new List<KeyValuePair<string, string>>();
+        if (key.GetValue("Variables") is string[] lines)
+        {
+            foreach (var line in lines)
+            {
+                // The name ends at the first '=': a value may hold more.
+                var at = line.IndexOf('=', StringComparison.Ordinal);
+                if (at > 0)
+                {
+                    variables.Add(new(line[..at], line[(at + 1)..]));
+                }
+            }
+        }
+
+        return new ApprovedBuild(owner, profileId, commit, folder, hashes, variables);
     }
 
     public void Set(ApprovedBuild build)
@@ -482,6 +536,7 @@ public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
         using var key = root.CreateSubKey($@"{keyPath}\{build.Owner}\{build.ProfileId}", writable: true);
         key.SetValue("Commit", build.Commit, RegistryValueKind.String);
         key.SetValue("Folder", build.Folder, RegistryValueKind.String);
+        key.SetValue("Variables", build.Variables.Select(v => $"{v.Key}={v.Value}").ToArray(), RegistryValueKind.MultiString);
         using var files = key.CreateSubKey("Files", writable: true);
         foreach (var (name, hash) in build.Files)
         {

@@ -22,6 +22,35 @@ public class ElevatedEnvironmentTests
         ElevatedEnvironment.Build(start ?? Start(module: module), Folders, ServerDir, SteamVrPath);
 
     [Fact]
+    public void Approved_variables_come_last_and_win()
+    {
+        var plain = Build(module: PimaxEnvironment.ModuleId);
+        var env = ElevatedEnvironment.Build(
+            Start(module: PimaxEnvironment.ModuleId), Folders, ServerDir, SteamVrPath,
+            approvedVariables: [new("steamvr_lh_enable", "0"), new("PIMAX_P3C_LOG", "debug")]);
+
+        Assert.Equal("0", env["STEAMVR_LH_ENABLE"]);
+        Assert.Equal("steamvr_lh_enable", env.Keys.Single(k => string.Equals(k, "STEAMVR_LH_ENABLE", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("debug", env["PIMAX_P3C_LOG"]);
+        Assert.Equal(plain.Count + 1, env.Count);
+    }
+
+    [Fact]
+    public void A_duplicate_name_keeps_the_last_value()
+    {
+        var env = ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("PIMAX_P3C_LOG", "info"), new("pimax_p3c_log", "debug")]);
+
+        Assert.Equal("debug", env["PIMAX_P3C_LOG"]);
+    }
+
+    [Fact]
+    public void A_refused_name_never_reaches_the_environment()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("Path", @"C:\Users\finn\bin")]));
+    }
+
+    [Fact]
     public void Headless_adds_the_null_compositor_and_the_simulated_headset_and_nothing_else()
     {
         var plain = Build();

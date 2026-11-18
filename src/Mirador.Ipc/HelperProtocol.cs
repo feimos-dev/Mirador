@@ -127,6 +127,11 @@ public enum HelperCommand
 /// protection is on (elevation then runs as another account, which the fix can't tell from the user).
 /// </param>
 /// <param name="StandbyOnExit">Whether Monado puts its Lighthouse devices in standby as it ends (<see cref="MonadoSettingsEnvironment.StandbyOnExit"/>).</param>
+/// <param name="ProfileId">The profile the Start is for: with <see cref="Variables"/>, the helper looks its approval up in its own record.</param>
+/// <param name="Variables">
+/// The profile's own environment variables, in its order; null or empty for none. The helper runs them only when they
+/// are exactly what the caller approved for <see cref="ProfileId"/> and none is refused (<see cref="ElevatedVariables"/>).
+/// </param>
 public sealed record ElevatedStart(
     [property: JsonRequired] int LighthouseWaitMs,
     [property: JsonRequired] int RenderScalePercent,
@@ -136,7 +141,9 @@ public sealed record ElevatedStart(
     string Build = "",
     bool Headless = false,
     bool ElevationFix = false,
-    bool StandbyOnExit = false);
+    bool StandbyOnExit = false,
+    string ProfileId = "",
+    IReadOnlyList<KeyValuePair<string, string>>? Variables = null);
 
 /// <summary>
 /// A request: a command, the typed <see cref="Start"/> only with <see cref="HelperCommand.StartMonadoElevated"/>, and
