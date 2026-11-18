@@ -184,6 +184,10 @@ public sealed partial class MainWindow : Window
         {
             deactivatedAt = Stopwatch.GetTimestamp();
         }
+        else
+        {
+            App.Current.Home.OnWindowActivated();
+        }
     }
 
     /// <summary>A left click on the tray icon: hides the window when it is in front, else brings it to the front.</summary>

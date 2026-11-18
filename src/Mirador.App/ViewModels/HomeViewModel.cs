@@ -61,6 +61,9 @@ public sealed partial class HomeViewModel : ObservableObject
         host.DevicesChanged += () => ui.TryEnqueue(() => _ = RunChecksAsync());
 
         host.Session.Changed += () => ui.TryEnqueue(OnSessionChanged);
+
+        // The OpenVR runtime paths or OpenLamina changed (its installer, SteamVR, a hand edit): the card says so at once.
+        host.OpenVrWatch.Changed += () => ui.TryEnqueue(RefreshRuntime);
         host.Session.StatusChanged += () => ui.TryEnqueue(RefreshStatus);
         host.Stations.Changed += OnStationsChanged;
         host.Session.Warning += w => ui.TryEnqueue(() => AddWarning(w));
@@ -254,6 +257,15 @@ public sealed partial class HomeViewModel : ObservableObject
     /// screen; <paramref name="shown"/> is the first and the last of those. Monado's devices are read while it shows and
     /// Monado runs.
     /// </summary>
+    /// <summary>The window came to the front: while Home shows, its runtime cards are read again.</summary>
+    public void OnWindowActivated()
+    {
+        if (pageShown)
+        {
+            RefreshRuntime();
+        }
+    }
+
     public void SetShown(bool shown)
     {
         pageShown = shown;

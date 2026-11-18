@@ -91,6 +91,7 @@ public sealed class AppHost : IAsyncDisposable
         Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
         OpenVr = new OpenVrGames(new OpenVrPaths(OpenVrPaths.DefaultFile, OpenComposite.Folder), OpenComposite);
+        OpenVrWatch = new FolderWatch([Path.GetDirectoryName(OpenVrPaths.DefaultFile)!, OpenComposite.Folder], TimeSpan.FromMilliseconds(500));
 
         radio = new WinRtStationRadio(text => AppLog.Write(text));
         stationStore = new StationStore(paths.BaseStationsFile);
@@ -574,6 +575,12 @@ public sealed class AppHost : IAsyncDisposable
     /// <summary>Home's "OpenVR runtime" row and its "Set OpenLamina" (Mirador.md §4.6).</summary>
     public OpenVrGames OpenVr { get; }
 
+    /// <summary>
+    /// <c>%LOCALAPPDATA%\openvr</c> (the OpenVR runtime paths, replaced through a temporary file) and OpenLamina's install
+    /// folder: Home's OpenVR card follows their changes.
+    /// </summary>
+    public FolderWatch OpenVrWatch { get; }
+
     /// <summary>Mirador's OpenLamina: OpenLamina as its installer put it.</summary>
     public OpenCompositeInstall OpenComposite { get; }
 
@@ -893,6 +900,7 @@ public sealed class AppHost : IAsyncDisposable
         Stations.QuittingNow();
         await Session.StopAsync(CancellationToken.None).ConfigureAwait(false);
         await Stations.FlushAsync(StationsLimit).ConfigureAwait(false);
+        OpenVrWatch.Dispose();
         launcher.Dispose();
     }
 
