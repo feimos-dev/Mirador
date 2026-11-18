@@ -1605,6 +1605,17 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_device_read_that_fails_says_why()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+        h.Libmonado.Client!.DevicesFail = new MiradorException("Monado gave libmonado a device count it can't have (-1).");
+
+        var e = Assert.Throws<MiradorException>(() => h.Controller.Monado!.Devices());
+        Assert.Equal("Monado gave libmonado a device count it can't have (-1).", e.Message);
+    }
+
+    [Fact]
     public async Task A_connection_read_after_the_session_closed_it_has_no_devices()
     {
         await using var h = new Harness();

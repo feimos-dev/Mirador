@@ -29,6 +29,7 @@ public readonly record struct MonadoPose(float Qx, float Qy, float Qz, float Qw,
 public interface IMonadoClient : IDisposable
 {
     /// <summary>The devices Monado created, in its device list's order.</summary>
+    /// <exception cref="MiradorException">Monado's answer can't be read, or it didn't answer.</exception>
     IReadOnlyList<MonadoDevice> Devices();
 
     /// <summary>

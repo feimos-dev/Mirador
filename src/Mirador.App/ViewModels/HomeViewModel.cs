@@ -341,8 +341,19 @@ public sealed partial class HomeViewModel : ObservableObject
             IReadOnlyList<StatusLine> lines;
             if (host.Session.Monado is { } monado)
             {
-                // Devices() never throws: a closed connection or one Monado doesn't answer gives no devices.
-                lines = DeviceStatus.Lines(await Task.Run(() => monado.Devices(), CancellationToken.None));
+                // A closed connection gives no devices; a read that fails says why.
+                try
+                {
+                    lines = DeviceStatus.Lines(await Task.Run(() => monado.Devices(), CancellationToken.None));
+                }
+                catch (MiradorException e)
+                {
+                    lines = [new StatusLine("devices", "Devices", StatusLevel.Warning, e.Message)];
+                    if (!lines.SequenceEqual(deviceLines))
+                    {
+                        AppLog.Write("Mirador couldn't read Monado's devices", e);
+                    }
+                }
             }
             else if (host.Session.MonadoClientProblem is { } problem)
             {

@@ -340,11 +340,19 @@ internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
 
     public bool OffersOriginOffsets => true;
 
+    /// <summary>When set, <see cref="Devices"/> throws it, as a read Monado's answer breaks does.</summary>
+    public Exception? DevicesFail { get; set; }
+
     public IReadOnlyList<MonadoDevice> Devices()
     {
         DevicesEntered.TrySetResult();
         DevicesGate?.Task.Wait(Harness.Limit);
         ObjectDisposedException.ThrowIf(Disposed, this);
+        if (DevicesFail is { } fail)
+        {
+            throw fail;
+        }
+
         return [new MonadoDevice(0, "head", "Fake headset", "FAKE-1", 0, false, false, 0)];
     }
 

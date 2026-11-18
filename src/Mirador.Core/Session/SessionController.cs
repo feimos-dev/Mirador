@@ -1512,7 +1512,7 @@ public sealed class SessionController(SessionDeps deps)
                 {
                     return closed ? [] : inner.Devices();
                 }
-                catch (Exception e) when (e is MiradorException or ObjectDisposedException)
+                catch (Exception e) when (e is ObjectDisposedException || (e is MiradorException && closed))
                 {
                     return [];
                 }
