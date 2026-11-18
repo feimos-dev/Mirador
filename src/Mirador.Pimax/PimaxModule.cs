@@ -136,11 +136,13 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 
     /// <summary>
     /// Whether the headset is listed among the desktop's monitors while Monado doesn't run: direct mode is off for it
-    /// (Pimax Play or SteamVR handed it back to Windows). A list that can't be read counts as no.
+    /// (Pimax Play or SteamVR handed it back to Windows). A list that can't be read counts as no, and so does a PC where
+    /// Fix direct mode can't help: without an NVIDIA GPU or Mirador's layer (their own checks say so).
     /// </summary>
     private bool HeadsetShowsAsMonitor()
     {
-        if (deps.Monitors is null || Safe(() => deps.MonadoRuns?.Invoke() ?? false))
+        if (deps.Monitors is null || Safe(() => deps.MonadoRuns?.Invoke() ?? false) || Safe(NvidiaDriverNow) is null
+            || LayerCheck().Level != StatusLevel.Ok)
         {
             return false;
         }

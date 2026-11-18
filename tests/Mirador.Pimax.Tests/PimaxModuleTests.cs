@@ -570,6 +570,17 @@ public sealed class PimaxModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task No_warning_without_an_nvidia_gpu()
+    {
+        monitors = [new MonitorEntry(HeadsetMonitorId, true)];
+        nvidia = null;
+
+        var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
+
+        Assert.DoesNotContain(results, r => r.Label == PimaxModule.DirectModeOffLabel);
+    }
+
+    [Fact]
     public async Task No_warning_while_monado_runs()
     {
         monitors = [new MonitorEntry(HeadsetMonitorId, true)];
