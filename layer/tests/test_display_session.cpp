@@ -95,6 +95,19 @@ struct Rig {
         return out;
     }
 
+    // How many enable_direct_mode calls came after the first enumerate: the step-level enable, which must not be reached
+    // while an earlier step fails. The call before the first enumerate does not count.
+    size_t enables_after_first_enumerate() const
+    {
+        size_t n = 0;
+        bool enumerated = false;
+        for (const FakeApi::Call& call : api.calls()) {
+            enumerated = enumerated || call.name == "enumerate";
+            n += enumerated && call.name == "enable_direct_mode" ? 1 : 0;
+        }
+        return n;
+    }
+
     size_t warnings() const
     {
         size_t n = 0;
@@ -413,7 +426,8 @@ TEST_CASE("luid_mismatch_stops_before_enable")
     const nvdm::OpenResult result = session.open(other);
     CHECK_FALSE(result.ok);
     CHECK(result.step == OpenStep::Luid);
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.api.count("read_edid") == 0);
     CHECK(rig.d3d11_made == 0);
     CHECK_FALSE(session.is_open());
@@ -609,7 +623,8 @@ TEST_CASE("an EDID that cannot be read fails at Product, and is read again")
     const nvdm::OpenResult first = session.open(rig.api.luid);
     CHECK_FALSE(first.ok);
     CHECK(first.step == OpenStep::Product);
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
 
     CHECK(session.open(rig.api.luid).ok);
     CHECK(rig.api.count("read_edid") == 2);
@@ -627,7 +642,8 @@ TEST_CASE("an unknown product is rejected before direct mode, naming it")
     CHECK(result.step == OpenStep::Product);
     CHECK(contains(result.message, "PVR"));
     CHECK(contains(result.message, "0x1020"));
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.d3d11_made == 0);
 }
 
@@ -661,7 +677,8 @@ TEST_CASE("an untested headset that carries Microsoft's HMD block is left to Win
     CHECK(contains(result.message, "Microsoft"));
     CHECK(contains(result.message, nvdm::kWindowsDrivesIt)); // the check tool's NOT USED verdict keys on these words
     CHECK(contains(result.message, "Windows"));
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
 }
 
 TEST_CASE("the tested Dream Air is the layer's even when its EDID carries Microsoft's HMD block")
@@ -719,7 +736,8 @@ TEST_CASE("an untested headset's EDID from the registry alone is not trusted")
     CHECK(result.step == OpenStep::Product);
     CHECK(contains(result.message, "registry"));
     CHECK(contains(result.message, "can't be trusted to be the connected headset's"));
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.api.modes_set.empty());
 }
 
@@ -791,7 +809,8 @@ TEST_CASE("no EDID and no board: Product fails, naming the board, and nothing is
     CHECK(contains(result.message, "34A4:0044"));
     CHECK(rig.board_checks == 1);
     CHECK(rig.warnings() == 0);
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(session.edid_route() == nvdm::EdidRoute::None);
 }
 
@@ -809,7 +828,8 @@ TEST_CASE("no EDID and two PVR displays: Product fails, and the board is not eve
     CHECK(contains(result.message, "2 direct-mode displays"));
     CHECK(rig.board_checks == 0);
     CHECK(rig.warnings() == 0);
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.enables_after_first_enumerate() == 0);
 }
 
 TEST_CASE("an EDID that can be read is the answer: the board is never asked")
@@ -1065,13 +1085,16 @@ TEST_CASE("find_display goes on waiting when EnableDirectMode fails")
 {
     Rig rig;
     rig.api.set_default_status(Fn::EnableDirectMode, -1);
-    rig.api.enables_needed = 0;
-    rig.wait_ms = 2000;
-    rig.api.appears_at_ns = 500 * kMs;
+    rig.wait_ms = 3000;
+    rig.api.appears_at_ns = 1500 * kMs;
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult result = session.open(rig.api.luid);
-    // The failing call is logged but the wait finds the display; the later enable step then reports the refusal.
-    CHECK(rig.lines_containing("EnableDirectMode") + rig.lines_containing("direct mode") >= 1);
+    // Each failing call before the display shows up (at 0 s and at 1 s) is logged, and the wait goes on: it sleeps and
+    // enumerates again until the display is there. The step-level enable then reports the refusal.
+    CHECK(rig.lines_containing("still waiting for the display") == 2);
+    CHECK(rig.api.count("enumerate") >= 2);
+    CHECK_FALSE(rig.sleeps.empty());
+    CHECK(rig.clock.now_ns() >= 1500 * kMs);
     CHECK(result.step == OpenStep::EnableDirectMode);
 }
