@@ -88,6 +88,14 @@ public sealed class SteamVrSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Setting_creates_the_file_and_its_folder_when_missing()
+    {
+        Settings().SetAutoLaunchOnButton(false);
+
+        Assert.False(Settings().AutoLaunchOnButton());
+    }
+
+    [Fact]
     public void Setting_creates_the_power_section_when_missing()
     {
         Write("""{ "steamvr" : { "supersampleScale" : 1.5 } }""");

@@ -82,6 +82,7 @@ public sealed class SteamVrSettings(string vrsettingsPath, string backupDir, Tim
         var text = root.ToJsonString(
             new JsonSerializerOptions { WriteIndented = true, IndentSize = 3, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         var temp = vrsettingsPath + ".mirador-new";
+        Directory.CreateDirectory(Path.GetDirectoryName(vrsettingsPath)!);
         File.WriteAllText(temp, text);
         try
         {
@@ -92,7 +93,6 @@ public sealed class SteamVrSettings(string vrsettingsPath, string backupDir, Tim
             }
             else
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(vrsettingsPath)!);
                 File.Move(temp, vrsettingsPath);
             }
         }
