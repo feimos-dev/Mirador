@@ -19,19 +19,19 @@
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
 
             <TextBlock Style="{StaticResource FirstSectionHeader}" Text="General" />
-            <toolkit:SettingsCard Description="Windows starts Mirador when you sign in, so it is ready when a game wants Monado." Header="Start Mirador when you sign in">
+            <toolkit:SettingsCard Header="Start Mirador when you sign in">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartAtSignIn, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Description="Games then only find Monado while Mirador is open." Header="Start Mirador when a game needs Monado">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartMiradorForGames, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Start minimized when Windows starts Mirador: in the notification area, or on the taskbar when Mirador doesn't close to the tray." Header="Start minimized" IsEnabled="{x:Bind ViewModel.StartAtSignIn, Mode=OneWay}">
+            <toolkit:SettingsCard Header="Start minimized" IsEnabled="{x:Bind ViewModel.StartAtSignIn, Mode=OneWay}">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Closing the window keeps Mirador in the notification area, so games can still start Monado. Quit it from the tray icon." Header="Close to the tray">
+            <toolkit:SettingsCard Description="Closing the window keeps Mirador in the notification area, so games can still start Monado." Header="Close to the tray">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.CloseToTray, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Once a day at most, Mirador asks GitHub whether Mirador or OpenLamina has a newer release, and says so on Home. It never installs anything by itself." Header="Check for updates">
+            <toolkit:SettingsCard Description="Once a day at most, Mirador asks GitHub whether Mirador or OpenLamina has a newer release, and says so on Home." Header="Automatically Check for Updates">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.CheckForUpdates, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Description="{x:Bind ViewModel.UpdatesText, Mode=OneWay}" Header="Updates">

@@ -41,8 +41,8 @@ public class AppSettingsTests
         var settings = new AppSettingsStore(dir.File("settings.json")).Load();
 
         Assert.False(settings.CloseToTray);
-        Assert.True(settings.BaseStationsOnAtStart);
-        Assert.True(settings.BaseStationsOffAtStop);
+        Assert.False(settings.BaseStationsOnAtStart);
+        Assert.False(settings.BaseStationsOffAtStop);
     }
 
     [Fact]
@@ -120,5 +120,17 @@ public class AppSettingsTests
 
         // The stand-in reads this very text: the key, then false.
         Assert.Contains("\"startMiradorForGames\": false", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    [Fact]
+    public void Lighthouse_settings_are_off_on_a_fresh_install()
+    {
+        var settings = new AppSettings();
+
+        Assert.False(settings.BaseStationsOnAtStart);
+        Assert.False(settings.BaseStationsOffAtStop);
+        Assert.False(settings.BaseStationsOnAtMiradorStart);
+        Assert.False(settings.BaseStationsOffAtMiradorQuit);
+        Assert.False(settings.ControllersOffAtStop);
     }
 }

@@ -250,7 +250,7 @@ public class StationManagerTests
         // Even from a settings file of before 2026-11-07 that chose standby.
         using var h = new StationHarness();
         Assert.Equal(StationCommand.Sleep, h.Manager.OffCommand());
-        File.WriteAllText(h.Dir.File("settings.json"), """{"baseStationsOff": "Standby", "baseStationsOffAtMiradorQuit": true}""");
+        File.WriteAllText(h.Dir.File("settings.json"), """{"baseStationsOff": "Standby", "baseStationsOnAtStart": true, "baseStationsOffAtStop": true, "baseStationsOffAtMiradorQuit": true}""");
         h.Settings = new AppSettingsStore(h.Dir.File("settings.json")).Load() with { BaseStationsState = StationStateMode.Live };
         Assert.Equal(StationCommand.Sleep, h.Manager.OffCommand());
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
@@ -2120,7 +2120,7 @@ public class StationManagerTests
     public async Task Startup_scans_once_and_finds_stations()
     {
         using var h = new StationHarness();
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         var changed = 0;
         h.Manager.Changed += () => Interlocked.Increment(ref changed);
 
@@ -2154,7 +2154,7 @@ public class StationManagerTests
         // Without it, the scan sends nothing.
         using (var h = new StationHarness())
         {
-            h.Settings = new AppSettings();
+            h.Settings = StationHarness.Base;
             h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName));
             var startup = h.Manager.StartupAsync(CancellationToken.None);
             h.Hear(Left, LeftName, 0x00);
@@ -2168,7 +2168,7 @@ public class StationManagerTests
         // With it, On to the selected stations after the scan, queued like a command: Mirador's start doesn't wait for it.
         using (var h = new StationHarness())
         {
-            h.Settings = new AppSettings(BaseStationsOnAtMiradorStart: true);
+            h.Settings = StationHarness.Base with { BaseStationsOnAtMiradorStart = true };
             h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName));
             var hold = h.Radio.Hold(Left);
             var startup = h.Manager.StartupAsync(CancellationToken.None);
@@ -2190,7 +2190,7 @@ public class StationManagerTests
         // Cancelled during the scan: no On, and no exception.
         using (var h = new StationHarness())
         {
-            h.Settings = new AppSettings(BaseStationsOnAtMiradorStart: true);
+            h.Settings = StationHarness.Base with { BaseStationsOnAtMiradorStart = true };
             h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
             using var cancel = new CancellationTokenSource();
             var startup = h.Manager.StartupAsync(cancel.Token);
@@ -2206,7 +2206,7 @@ public class StationManagerTests
         // Mirador quits during the scan: its On doesn't follow the quit.
         using (var h = new StationHarness())
         {
-            h.Settings = new AppSettings(BaseStationsOnAtMiradorStart: true);
+            h.Settings = StationHarness.Base with { BaseStationsOnAtMiradorStart = true };
             h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
             var startup = h.Manager.StartupAsync(CancellationToken.None);
             h.Hear(Left, LeftName, 0x00);
@@ -2222,7 +2222,7 @@ public class StationManagerTests
     public async Task Last_scan_mode_listens_only_while_scanning_or_commanding()
     {
         using var h = new StationHarness();
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         Assert.Equal(StationStateMode.LastScan, h.Settings.BaseStationsState);
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName, Selected: true));
 
@@ -2300,7 +2300,7 @@ public class StationManagerTests
     public async Task Changing_the_mode_while_held_starts_or_stops_listening()
     {
         using var h = new StationHarness();
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         var listen = h.Manager.Listen();
         Assert.False(h.Radio.Watching);
 
@@ -2312,7 +2312,7 @@ public class StationManagerTests
         h.Hear(Left, LeftName);
         Assert.True(h.View(Left).Seen);
 
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         h.Manager.SettingsChanged();
         Assert.False(h.Radio.Watching);
 
@@ -2336,7 +2336,7 @@ public class StationManagerTests
     public async Task Not_heard_in_the_last_scan_is_not_seen()
     {
         using var h = new StationHarness();
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
 
         // Known but not heard since Mirador started.
@@ -2652,7 +2652,7 @@ public class StationManagerTests
     public async Task A_scan_without_Bluetooth_leaves_seen_as_it_was()
     {
         using var h = new StationHarness();
-        h.Settings = new AppSettings();
+        h.Settings = StationHarness.Base;
         var first = h.Manager.ScanAsync(CancellationToken.None);
         h.Hear(Left, LeftName);
         await h.EndScan(first);
@@ -2704,16 +2704,21 @@ internal sealed class StationHarness : IDisposable
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Mirador's defaults but with "Station state: Live while shown", the harness's own default: a <c>Listen()</c> then
-    /// hears adverts, as the pages did before 2026-11-07. The tests of "From the last scan" (Mirador's default) set
-    /// <c>new AppSettings()</c> themselves.
+    /// The switches these tests start from: power on when Monado starts and off when it stops, the rest off, "Station
+    /// state: When Relevant" (Mirador's own defaults have every base-station switch off, so they are set here).
     /// </summary>
-    public static readonly AppSettings Live = new(BaseStationsState: StationStateMode.Live);
+    public static readonly AppSettings Base = new(BaseStationsOnAtStart: true, BaseStationsOffAtStop: true);
+
+    /// <summary>
+    /// <see cref="Base"/> with "Station state: Live while shown", the harness's own default: a <c>Listen()</c> then hears
+    /// adverts, as the pages did before 2026-11-07. The tests of "From the last scan" set <see cref="Base"/> themselves.
+    /// </summary>
+    public static readonly AppSettings Live = Base with { BaseStationsState = StationStateMode.Live };
 
     /// <summary>Switches "Station state tracking rate" to "When Relevant" and tells the manager, as the page does.</summary>
     public void WhenRelevant()
     {
-        Settings = new AppSettings();
+        Settings = Base;
         Manager.SettingsChanged();
     }
 
