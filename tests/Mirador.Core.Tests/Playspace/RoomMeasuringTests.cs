@@ -133,6 +133,15 @@ public class RoomMeasuringTests
     }
 
     [Fact]
+    public void The_floor_step_refuses_a_controller_still_in_hand()
+    {
+        var poses = XrPoses.Parse(["""XR-POSES {"head":{"p":[0,1.6,0],"q":[0,0,0,1]},"left":{"p":[0.2,1.1,-0.3],"q":[0,0,0,1]},"right":null}"""])!;
+
+        var e = Assert.Throws<MiradorException>(() => RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Floor, poses, null, Now));
+        Assert.Equal("The controller was as high as your head. Lay it on the floor, then Set the floor.", e.Message);
+    }
+
+    [Fact]
     public void The_floor_step_needs_a_controller()
     {
         var poses = XrPoses.Parse(["""XR-POSES {"head":{"p":[0,1.6,0],"q":[0,0,0,1]},"left":null,"right":null}"""])!;

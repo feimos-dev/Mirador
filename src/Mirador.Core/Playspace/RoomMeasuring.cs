@@ -120,13 +120,17 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
         return [.. indices.Select(i => new TrackedOrigin(i, names[(int)i], client.GetOriginOffset(i)))];
     }
 
+    /// <summary>How far below the head the lower controller must be for a floor step: less means it was still in hand.</summary>
+    public const float FloorBelowHeadM = 0.6f;
+
     /// <summary>
     /// Each origin's room setup after <paramref name="step"/>: its offset corrected by what was measured
     /// (<see cref="RoomSetupMath.Correct"/>), for <paramref name="universe"/>, noting the SteamVR room setup it was
     /// measured on (<paramref name="steamVrBase"/>).
     /// </summary>
     /// <exception cref="MiradorException">
-    /// The floor step, and neither controller was tracked; the forward step, and the head looked up or down too far.
+    /// The floor step, and neither controller was tracked or the lower one wasn't well below the head; the forward step,
+    /// and the head looked up or down too far.
     /// </exception>
     public static IReadOnlyList<RoomSetup> Corrected(
         IReadOnlyList<TrackedOrigin> origins, RoomStep step, XrPoses poses, string? universe, DateTimeOffset now, SteamVrBase? steamVrBase = null)
@@ -137,6 +141,10 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
         {
             floorY = RoomSetupMath.FloorY(poses.Left, poses.Right)
                 ?? throw new MiradorException("Neither controller was tracked. Turn one on, lay it on the floor and measure again.");
+            if (poses.Head.Y - (floorY + RoomSetupMath.ControllerRestHeightM) < FloorBelowHeadM)
+            {
+                throw new MiradorException("The controller was as high as your head. Lay it on the floor, then Set the floor.");
+            }
         }
         else if (!RoomSetupMath.LooksAhead(poses.Head))
         {
