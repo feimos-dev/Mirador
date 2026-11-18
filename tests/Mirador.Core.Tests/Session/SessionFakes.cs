@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Time.Testing;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
@@ -280,6 +281,76 @@ internal sealed class FakePipe(Steps steps) : IMonadoPipe
         asked.Enqueue(name);
         FirstPoll.TrySetResult();
         return Up;
+    }
+}
+
+/// <summary>Libmonado as the session opens it: counts the opens and hands out <see cref="FakeMonadoClient"/>s.</summary>
+internal sealed class FakeLibmonado(Steps steps)
+{
+    private readonly ConcurrentQueue<string> binDirs = new();
+
+    /// <summary>What the next open gives when not null; else a new connected client.</summary>
+    public LibmonadoOpen? Result { get; set; }
+
+    public FakeMonadoClient? Client { get; private set; }
+
+    public IReadOnlyCollection<string> BinDirs => binDirs;
+
+    public int Opens => binDirs.Count;
+
+    /// <summary>When set, an open waits for it (at most <see cref="Harness.Limit"/>) before it connects.</summary>
+    public TaskCompletionSource? Gate { get; set; }
+
+    /// <summary>Completes once an open has begun.</summary>
+    public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public LibmonadoOpen Open(string binDir)
+    {
+        steps.Add("libmonado");
+        binDirs.Enqueue(binDir);
+        Entered.TrySetResult();
+        Gate?.Task.Wait(Harness.Limit);
+        if (Result is { } result)
+        {
+            return result;
+        }
+
+        Client = new FakeMonadoClient(steps);
+        return new LibmonadoOpen(Client, null);
+    }
+}
+
+/// <summary>A libmonado connection to a Monado with a head; it throws after <see cref="Dispose"/>, as the real one does.</summary>
+internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
+{
+    public bool Disposed { get; private set; }
+
+    public bool OffersOriginOffsets => true;
+
+    public IReadOnlyList<MonadoDevice> Devices()
+    {
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        return [new MonadoDevice(0, "head", "Fake headset", "FAKE-1", 0, false, false, 0)];
+    }
+
+    public IReadOnlyList<string> TrackingOrigins()
+    {
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        return ["Fake origin"];
+    }
+
+    public MonadoPose GetOriginOffset(uint origin)
+    {
+        ObjectDisposedException.ThrowIf(Disposed, this);
+        return MonadoPose.Identity;
+    }
+
+    public void SetOriginOffset(uint origin, MonadoPose offset) => ObjectDisposedException.ThrowIf(Disposed, this);
+
+    public void Dispose()
+    {
+        steps.Add("libmonado closed");
+        Disposed = true;
     }
 }
 
@@ -571,6 +642,7 @@ internal sealed class Harness : IAsyncDisposable
         Module = new FakeModule(Steps);
         Launcher = new FakeLauncher(Steps, Paths.SessionFile);
         Pipe = new FakePipe(Steps);
+        Libmonado = new FakeLibmonado(Steps);
         Runtime = new FakeRuntimeReader { Active = BundledManifest };
         Profiles = new ProfileStore(Paths.ProfilesFile);
         Settings = new MonadoSettingsStore(Paths.MonadoSettingsFile);
@@ -599,7 +671,8 @@ internal sealed class Harness : IAsyncDisposable
                 ElevatedInstalledCopy: installedCopy is { } installed ? () => installed : null,
                 BundledLayerDir: BundledLayer,
                 ElevationFixVerified: elevationFix,
-                ControllersOffAtStop: () => controllersOffAtStop),
+                ControllersOffAtStop: () => controllersOffAtStop,
+                OpenLibmonado: Libmonado.Open),
             isStandIn: path => path.StartsWith(StandInImages, StringComparison.OrdinalIgnoreCase));
 
         Controller.Changed += () => Changes.Enqueue(Controller.State);
@@ -663,6 +736,8 @@ internal sealed class Harness : IAsyncDisposable
     public FakeUsb Usb { get; }
 
     public FakePipe Pipe { get; }
+
+    public FakeLibmonado Libmonado { get; }
 
     public FakeRuntimeReader Runtime { get; }
 

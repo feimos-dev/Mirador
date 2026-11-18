@@ -1,6 +1,7 @@
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
 
@@ -194,7 +195,7 @@ public class SessionControllerTests
 
         Assert.Equal(new StartOutcome(true, "Monado is running."), outcome);
         Assert.Equal(SessionState.Running, h.Controller.State);
-        Assert.Equal(new[] { "processes", "before-start", "launch", "pipe" }, h.Steps.All);
+        Assert.Equal(new[] { "processes", "before-start", "launch", "pipe", "libmonado" }, h.Steps.All);
 
         var spec = h.Launcher.Spec;
         Assert.Equal(h.BundledServer, spec.FileName);
@@ -259,7 +260,7 @@ public class SessionControllerTests
 
         await h.StartRunningAsync();
 
-        Assert.Equal(new[] { "processes", "launch", "pipe" }, h.Steps.All);
+        Assert.Equal(new[] { "processes", "launch", "pipe", "libmonado" }, h.Steps.All);
         Assert.False(h.Launcher.Spec.Environment.ContainsKey("FAKE_HEADSET"));
         Assert.Null(new SessionFile(h.Paths.SessionFile).Read()?.ModuleId);
         Assert.Equal(
@@ -1302,7 +1303,7 @@ public class SessionControllerTests
         await h.StartRunningAsync(); // a game's START, served before the app called RecoverAsync
 
         Assert.Equal(WasRunning, h.Module.Recovered);
-        Assert.Equal(new[] { "processes", "recover", "before-start", "launch", "pipe" }, h.Steps.All);
+        Assert.Equal(new[] { "processes", "recover", "before-start", "launch", "pipe", "libmonado" }, h.Steps.All);
         Assert.Equal(WasNotRunning, new SessionFile(h.Paths.SessionFile).Read()?.Data);
     }
 
@@ -1367,5 +1368,176 @@ public class SessionControllerTests
         h.Module.RecoverGate.SetResult();
         await recovery.WaitAsync(Limit);
         Assert.Equal(WasRunning, h.Module.Recovered);
+    }
+
+    [Fact]
+    public async Task Libmonado_opens_once_after_monado_is_up()
+    {
+        await using var h = new Harness();
+
+        await h.StartRunningAsync();
+
+        Assert.Equal(1, h.Libmonado.Opens);
+        Assert.Equal(new[] { h.RuntimeDir }, h.Libmonado.BinDirs);
+        var steps = h.Steps.All;
+        Assert.True(Array.LastIndexOf(steps, "pipe") < Array.IndexOf(steps, "libmonado"), string.Join(", ", steps));
+        Assert.NotNull(h.Controller.Monado);
+        Assert.Null(h.Controller.MonadoClientProblem);
+        Assert.Single(h.Controller.Monado.Devices(), device => device.Role == "head");
+    }
+
+    [Fact]
+    public async Task Libmonado_is_never_opened_when_the_start_fails()
+    {
+        await using var h = new Harness();
+
+        var start = Start(h);
+        await h.Pipe.FirstPoll.Task.WaitAsync(Limit);
+        await h.Timers.Set(Poll).WaitAsync(Limit);
+        h.Time.Advance(SessionController.StartTimeout + TimeSpan.FromSeconds(1));
+        var outcome = await start.WaitAsync(Limit);
+
+        Assert.False(outcome.Ok);
+        Assert.Equal(0, h.Libmonado.Opens);
+        Assert.Null(h.Controller.Monado);
+    }
+
+    [Fact]
+    public async Task Libmonado_is_closed_before_monado_is_stopped()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+        var client = h.Libmonado.Client!;
+
+        await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
+
+        Assert.True(client.Disposed);
+        Assert.Null(h.Controller.Monado);
+        var steps = h.Steps.All;
+        Assert.True(Array.IndexOf(steps, "libmonado closed") < Array.IndexOf(steps, "end cleanly"), string.Join(", ", steps));
+    }
+
+    [Fact]
+    public async Task Libmonado_is_closed_when_monado_exits_by_itself()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+        var client = h.Libmonado.Client!;
+
+        h.Launcher.Last!.Exit(5);
+        await h.HasEnded.Task.WaitAsync(Limit);
+
+        Assert.True(client.Disposed);
+        Assert.Null(h.Controller.Monado);
+        Assert.Equal(1, h.Libmonado.Opens);
+    }
+
+    [Fact]
+    public async Task A_game_start_through_the_stand_in_opens_libmonado_too()
+    {
+        await using var h = new Harness();
+        h.Pipe.Up = true;
+
+        var outcome = await h.Controller.StartAsync(StartReason.Game, StandInBelow(h.RuntimeDir), CancellationToken.None).WaitAsync(Limit);
+
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Equal(1, h.Libmonado.Opens);
+        Assert.NotNull(h.Controller.Monado);
+    }
+
+    [Fact]
+    public async Task A_slow_libmonado_does_not_hold_the_start_and_is_kept_once_it_connects()
+    {
+        await using var h = new Harness();
+        h.Libmonado.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Pipe.Up = true;
+        IMonadoClient? connected = null;
+        var connecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Controller.MonadoConnected += client =>
+        {
+            connected = client;
+            connecting.TrySetResult();
+        };
+
+        var start = Start(h);
+        await h.Libmonado.Entered.Task.WaitAsync(Limit);
+        await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
+        var outcome = await start.WaitAsync(Limit);
+
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Null(h.Controller.Monado);
+        Assert.Equal("Monado didn't answer libmonado within 10 s.", h.Controller.MonadoClientProblem);
+
+        h.Libmonado.Gate.SetResult();
+        await connecting.Task.WaitAsync(Limit);
+
+        Assert.Same(h.Controller.Monado, connected);
+        Assert.Null(h.Controller.MonadoClientProblem);
+        Assert.Equal(1, h.Libmonado.Opens);
+    }
+
+    [Fact]
+    public async Task A_stop_waits_for_libmonado_to_connect_before_ending_monado_then_closes_it()
+    {
+        await using var h = new Harness();
+        h.Libmonado.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Pipe.Up = true;
+        var start = Start(h);
+        await h.Libmonado.Entered.Task.WaitAsync(Limit);
+        await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
+        await start.WaitAsync(Limit);
+
+        var stop = h.Controller.StopAsync(CancellationToken.None);
+        await h.Timers.Set(TimeSpan.FromSeconds(10), count: 2).WaitAsync(Limit);
+        Assert.DoesNotContain("end cleanly", h.Steps.All);
+        h.Libmonado.Gate.SetResult();
+        await stop.WaitAsync(Limit);
+
+        Assert.True(h.Libmonado.Client!.Disposed);
+        Assert.Null(h.Controller.Monado);
+        var steps = h.Steps.All;
+        Assert.True(Array.IndexOf(steps, "libmonado closed") < Array.IndexOf(steps, "end cleanly"), string.Join(", ", steps));
+    }
+
+    [Fact]
+    public async Task No_libmonado_shows_the_problem()
+    {
+        await using var h = new Harness();
+        h.Libmonado.Result = new LibmonadoOpen(null, Libmonado.NotOffered);
+
+        await h.StartRunningAsync();
+
+        Assert.Null(h.Controller.Monado);
+        Assert.Equal(Libmonado.NotOffered, h.Controller.MonadoClientProblem);
+    }
+
+    [Fact]
+    public async Task A_connection_read_after_the_session_closed_it_has_no_devices()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+        var monado = h.Controller.Monado!;
+
+        await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
+
+        Assert.Empty(monado.Devices());
+        Assert.Empty(monado.TrackingOrigins());
+    }
+
+    [Fact]
+    public async Task Connecting_raises_monado_connected_and_changed()
+    {
+        await using var h = new Harness();
+        IMonadoClient? connected = null;
+        var monadoSeen = false;
+        h.Controller.MonadoConnected += client => connected = client;
+        h.Controller.Changed += () => monadoSeen |= h.Controller.Monado is not null;
+
+        await h.StartRunningAsync();
+
+        Assert.Same(h.Controller.Monado, connected);
+        Assert.True(monadoSeen);
     }
 }
