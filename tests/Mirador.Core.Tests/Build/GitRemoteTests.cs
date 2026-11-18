@@ -47,7 +47,7 @@ public class GitRemoteTests
     [Theory]
     [InlineData("--upload-pack=calc.exe")]
     [InlineData("-c")]
-    [InlineData("C:\\Users\\finn\\monado")]
+    [InlineData("C:\\Users\\someone\\monado")]
     [InlineData("ext::sh -c touch% /tmp/x")]
     public async Task A_link_git_could_read_as_an_option_or_a_path_is_refused_before_git_runs(string url)
     {

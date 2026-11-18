@@ -26,8 +26,8 @@ public class ApprovedBuildChoiceTests
     [Fact]
     public void The_approval_step_reads_its_three_values()
     {
-        var args = AppArgs.Parse(["--approve-build", "p1", "abc1234", @"C:\Users\finn\AppData\Local\Mirador\Builds\p1\install"]);
-        Assert.Equal(("p1", "abc1234", @"C:\Users\finn\AppData\Local\Mirador\Builds\p1\install"), (args.ApproveBuild!.Value.ProfileId, args.ApproveBuild.Value.Commit, args.ApproveBuild.Value.Source));
+        var args = AppArgs.Parse(["--approve-build", "p1", "abc1234", @"C:\Users\someone\AppData\Local\Mirador\Builds\p1\install"]);
+        Assert.Equal(("p1", "abc1234", @"C:\Users\someone\AppData\Local\Mirador\Builds\p1\install"), (args.ApproveBuild!.Value.ProfileId, args.ApproveBuild.Value.Commit, args.ApproveBuild.Value.Source));
         Assert.Null(AppArgs.Parse(["--approve-build", "p1"]).ApproveBuild);
     }
 

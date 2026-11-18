@@ -262,7 +262,7 @@ static size_t skip_space(const char *text, size_t length, size_t at)
 /*
  * Whether a game may start Mirador: "Start Mirador when a game needs Monado" in %LOCALAPPDATA%\Mirador\settings.json.
  * Off (0) only when the file holds "startMiradorForGames", optional white space, ':', optional white space, then
- * false. A file that is missing, can't be read or is over 64 KB counts as on, as before the setting.
+ * false. A file that is missing, can't be read or is over 64 KB counts as on.
  */
 static int games_may_start_app(void)
 {
