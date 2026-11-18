@@ -1291,7 +1291,7 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>Monado's own line when it can't set up its compositor: it then idles with nothing to show.</summary>
-    private const string CompositorFailure = "Failed to init compositor";
+    private const string CompositorFailure = "[comp_main_create_system_compositor] Failed to init compositor";
 
     private const string CompositorMessage =
         "Monado couldn't start its compositor. Check Diagnostics for the reason in Monado's log, then start again.";

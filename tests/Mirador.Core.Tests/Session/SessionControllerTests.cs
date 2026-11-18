@@ -952,6 +952,19 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_compositor_failure_for_one_session_does_not_stop_monado()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Launcher.Last!.Emit("ERROR [compositor_begin_session] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100);
+
+        Assert.Equal(SessionState.Running, h.Controller.State);
+        Assert.Empty(h.EndedMessages);
+    }
+
+    [Fact]
     public async Task An_idle_monado_without_a_game_is_not_stopped()
     {
         await using var h = new Harness();
