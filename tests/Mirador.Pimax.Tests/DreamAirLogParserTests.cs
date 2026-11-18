@@ -35,6 +35,20 @@ public class DreamAirLogParserTests
     }
 
     [Fact]
+    public void A_monado_with_no_driver_for_the_headset_fails_at_once_with_that_reason()
+    {
+        var parser = new DreamAirLogParser(timeProvider: new FakeTimeProvider());
+
+        parser.Feed(" WARN [p_dev_get_usb_device] No builder can be used to create a head device");
+
+        Assert.Equal(
+            "This Monado has no driver for the Pimax Dream Air: none of its drivers took the headset. Use a profile whose Monado has a driver for it.",
+            parser.Failed);
+        Assert.Equal(parser.Failed, Line(parser, "headset").Text);
+        Assert.Equal(StatusLevel.Info, Line(parser, "display").Level); // the display line keeps saying it waits
+    }
+
+    [Fact]
     public void A_display_session_in_time_never_fails()
     {
         var time = new FakeTimeProvider();

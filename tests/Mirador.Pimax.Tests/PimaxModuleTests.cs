@@ -811,6 +811,21 @@ public sealed class PimaxModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task A_monado_with_no_driver_for_the_headset_asks_to_stop_at_once_with_that_reason()
+    {
+        var session = (DreamAirSession)await BeforeStart();
+        var reasons = new List<string>();
+        session.StopRequested += reasons.Add;
+
+        session.OnServiceLine(" WARN [p_dev_get_usb_device] No builder can be used to create a head device");
+        session.OnServiceLine(" INFO [something] more output");
+
+        var reason = Assert.Single(reasons);
+        Assert.StartsWith("This Monado has no driver for the", reason);
+        session.Dispose();
+    }
+
+    [Fact]
     public async Task Ending_stops_the_watch()
     {
         var session = (DreamAirSession)await BeforeStart();

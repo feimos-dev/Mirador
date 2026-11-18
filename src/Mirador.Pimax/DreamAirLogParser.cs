@@ -80,8 +80,9 @@ public sealed partial class DreamAirLogParser
     }
 
     /// <summary>
-    /// Why the display didn't come up (no <c>display session open</c> within <see cref="DisplayWait"/> of the start, with
-    /// the layer's last message); null while it may still come, and once it did.
+    /// Why Monado can't bring the display up: its prober found no driver for the headset (the headset line's text, from
+    /// that line on), or no <c>display session open</c> came within <see cref="DisplayWait"/> of the start (with the
+    /// layer's last message). Null while it may still come, and once it did.
     /// </summary>
     public string? Failed
     {
@@ -89,7 +90,7 @@ public sealed partial class DreamAirLogParser
         {
             lock (gate)
             {
-                return failed;
+                return noDriver?.Text ?? failed;
             }
         }
     }

@@ -69,6 +69,9 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         {
             RaiseStatusChanged();
         }
+
+        // Monado found no driver for the headset: it idles, so it stops now, not after the display's wait.
+        StopIfFailed();
     }
 
     /// <summary>
@@ -155,8 +158,14 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
             RaiseWarning(warning);
         }
 
-        // The layer's display never came up: Monado idles for ever otherwise. Asked once.
+        // The layer's display never came up: Monado idles for ever otherwise.
         parser.Tick();
+        StopIfFailed();
+    }
+
+    /// <summary>Asks Mirador once to stop Monado when the parser says it can't work.</summary>
+    private void StopIfFailed()
+    {
         if (parser.Failed is { } failed)
         {
             lock (gate)
