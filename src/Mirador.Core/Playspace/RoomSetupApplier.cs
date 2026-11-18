@@ -6,9 +6,9 @@ namespace Mirador.Core.Playspace;
 public static class RoomSetupApplier
 {
     /// <summary>
-    /// Sets the offset of each of Monado's tracking origins that has a setup in <paramref name="store"/> for
-    /// <paramref name="universe"/>, found by the origin's name. Origins without one are left as they are. Nothing is set
-    /// when this libmonado doesn't move tracking origins.
+    /// Sets the offset of each of Monado's tracking origins that has a setup in <paramref name="store"/>, found by the
+    /// origin's name: the one for <paramref name="universe"/>, else the one taken without a Lighthouse universe. Origins
+    /// without either are left as they are. Nothing is set when this libmonado doesn't move tracking origins.
     /// </summary>
     /// <returns>How many origins were set.</returns>
     /// <exception cref="MiradorException">Monado didn't take an offset (the origins before it were set).</exception>
@@ -20,11 +20,13 @@ public static class RoomSetupApplier
         }
 
         var origins = client.TrackingOrigins();
-        var setups = store.All().Where(s => string.Equals(s.Universe, universe, StringComparison.Ordinal)).ToList();
+        var setups = store.All();
         var applied = 0;
         for (var i = 0; i < origins.Count; i++)
         {
-            if (setups.Find(s => string.Equals(s.OriginName, origins[i], StringComparison.Ordinal)) is { } setup)
+            var name = origins[i];
+            var setup = setups.FirstOrDefault(s => Is(s, name, universe)) ?? setups.FirstOrDefault(s => Is(s, name, null));
+            if (setup is not null)
             {
                 client.SetOriginOffset((uint)i, setup.Offset);
                 applied++;
@@ -33,4 +35,8 @@ public static class RoomSetupApplier
 
         return applied;
     }
+
+    private static bool Is(RoomSetup setup, string originName, string? universe) =>
+        string.Equals(setup.OriginName, originName, StringComparison.Ordinal)
+        && string.Equals(setup.Universe, universe, StringComparison.Ordinal);
 }

@@ -80,6 +80,31 @@ public sealed class RoomSetupApplierTests : IDisposable
     }
 
     [Fact]
+    public void A_setup_taken_without_a_lighthouse_space_is_the_fallback()
+    {
+        var noSpace = MonadoPose.Identity with { Y = -0.75f };
+        store.Set(new RoomSetup("steamvr_lh", null, noSpace, Taken));
+        store.Set(new RoomSetup("simulated", null, noSpace, Taken));
+        store.Set(new RoomSetup("simulated", "1793836993", Simulated, Taken));
+        var client = new OriginsClient("steamvr_lh", "simulated");
+
+        // The universe's own setup wins; without one, the setup taken without a space is used.
+        Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1793836993"));
+        Assert.Equal([(0u, noSpace), (1u, Simulated)], client.Set);
+    }
+
+    [Fact]
+    public void Without_a_lighthouse_space_only_setups_taken_without_one_apply()
+    {
+        store.Set(new RoomSetup("steamvr_lh", "1793836993", Lighthouse, Taken));
+        store.Set(new RoomSetup("simulated", null, Simulated, Taken));
+        var client = new OriginsClient("steamvr_lh", "simulated");
+
+        Assert.Equal(1, RoomSetupApplier.Apply(client, store, null));
+        Assert.Equal([(1u, Simulated)], client.Set);
+    }
+
+    [Fact]
     public void Apply_does_nothing_without_origin_offsets()
     {
         store.Set(new RoomSetup("steamvr_lh", null, Lighthouse, Taken));
