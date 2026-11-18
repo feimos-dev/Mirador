@@ -170,6 +170,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public bool HasBranchListProblem => BranchListProblem is not null;
 
     private CancellationTokenSource? listing;
+    private string? listingUrl;
+    private BranchOffer? branchOffer;
+
+    /// <summary>The branches offered for the link, listed once per link.</summary>
+    private BranchOffer Offer => branchOffer ??= new BranchOffer(host.Tools.Git, new CommandRunner());
 
     /// <summary>
     /// The profile's "Run as administrator" (Mirador.md §4.10 item 44, §4.11 item 51): for Mirador's Monado the user's
@@ -307,6 +312,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public void Detach()
     {
+        CancelListing();
+        branchOffer?.Forget();
         host.Session.Changed -= OnSessionChanged;
         host.Builds.Changed -= OnBuildsChanged;
         Build.Detach();
@@ -582,15 +589,13 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// <summary>
     /// Lists the branches of the repository the link names (<c>git ls-remote --heads</c>, at most 20 s) into the "Branch"
     /// drop-down: only for a repository's own link, not one naming a merge request, pull request, commit or branch.
-    /// The branch picked is the profile's, else <c>main</c>, else the first. A newer listing cancels this one; a failure
-    /// is shown under the link and the branch stays as it was.
+    /// The branch picked is the profile's, else <c>main</c>, else the first (<see cref="BranchOffer.Offer"/>). The same
+    /// link isn't listed again (leaving the box, Enter): the list and the branch stay as they are, with no git run. A
+    /// listing of another link cancels this one; a failure is shown under the link and the branch stays as it was.
     /// </summary>
     /// <param name="keepCurrent">A saved profile's branch stays picked even when the repository no longer lists it.</param>
     public async Task ListBranchesAsync(bool keepCurrent = false)
     {
-        listing?.Cancel();
-        listing?.Dispose();
-        listing = null;
         if (MonadoSource != LinkSource || BranchLink.NamesItsBranch(MonadoLink) || MonadoBranch.StartsWith("refs/", StringComparison.Ordinal))
         {
             ClearBranches();
@@ -608,32 +613,31 @@ public sealed partial class ProfilesViewModel : ObservableObject
             return;
         }
 
+        if (listing is not null && url == listingUrl)
+        {
+            return; // this very link is being listed now
+        }
+
+        listing?.Cancel();
+        listing?.Dispose();
         var cts = listing = new CancellationTokenSource();
+        listingUrl = url;
         IsListingBranches = true;
         BranchListProblem = null;
         try
         {
-            var branches = await GitRemote.ListBranchesAsync(url, host.Tools.Git, new CommandRunner(), GitRemote.Limit, cts.Token);
-            if (cts.IsCancellationRequested)
+            if (await Offer.ListAsync(url, cts.Token) is not { } branches || cts.IsCancellationRequested)
             {
-                return;
+                return; // listed already for this link: nothing changes
             }
 
-            var keep = MonadoBranch;
+            var (items, pick) = BranchOffer.Offer(branches, MonadoBranch, keepCurrent);
             Branches.Clear();
-            if (keepCurrent && keep.Length > 0 && !branches.Contains(keep))
-            {
-                Branches.Add(keep);
-            }
-
-            foreach (var branch in branches)
+            foreach (var branch in items)
             {
                 Branches.Add(branch);
             }
 
-            var pick = Branches.Contains(keep) ? keep
-                : branches.Contains(BuildSource.UpstreamRef) ? BuildSource.UpstreamRef
-                : branches.FirstOrDefault() ?? keep;
             SelectedBranch = pick;
             MonadoBranch = pick;
             ShowBranches = Branches.Count >= 2;
@@ -651,13 +655,25 @@ public sealed partial class ProfilesViewModel : ObservableObject
             if (ReferenceEquals(listing, cts))
             {
                 IsListingBranches = false;
+                listing = null;
+                listingUrl = null;
+                cts.Dispose();
             }
         }
     }
 
-    private void ClearBranches()
+    /// <summary>Stops a listing under way (the page is left): git doesn't outlive the page.</summary>
+    private void CancelListing()
     {
         listing?.Cancel();
+        listing = null;
+        listingUrl = null;
+    }
+
+    private void ClearBranches()
+    {
+        CancelListing();
+        branchOffer?.Forget();
         SelectedBranch = null;
         Branches.Clear();
         ShowBranches = false;

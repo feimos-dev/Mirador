@@ -25,10 +25,6 @@ public sealed partial class ProfilesPage : Page
 
     public ProfilesViewModel ViewModel { get; }
 
-    /// <summary>
-    /// The build log shows its newest lines as they come (the box keeps the last few hundred, oldest first), so that a
-    /// running build looks like one, and a finished one shows how it ended.
-    /// </summary>
     /// <summary>The link was left: offer the repository's branches.</summary>
     private void OnMonadoLinkLostFocus(object sender, RoutedEventArgs e) => _ = ViewModel.ListBranchesAsync();
 
@@ -41,6 +37,10 @@ public sealed partial class ProfilesPage : Page
         }
     }
 
+    /// <summary>
+    /// The build log shows its newest lines as they come (the box keeps the last few hundred, oldest first), so that a
+    /// running build looks like one, and a finished one shows how it ended.
+    /// </summary>
     private void OnBuildLogChanged(object sender, TextChangedEventArgs e) => ShowBuildLogEnd();
 
     /// <summary>Opened, the log shows its end.</summary>
