@@ -5,38 +5,39 @@ namespace Mirador.Core.Tests.Lighthouse;
 public class SteamVrRoomTests
 {
     /// <summary>
-    /// A lighthousedb.json as SteamVR writes one: universe ids as numbers, a station list per universe, other keys that
-    /// have to be ignored. The first universe has no room setup.
+    /// A lighthousedb.json as SteamVR writes one: universe ids as strings, base station serial numbers as integers (some
+    /// above int32), a station list per universe, other keys that have to be ignored. The first universe has no room
+    /// setup.
     /// </summary>
     private const string Lighthousedb = """
         {
            "base_stations" : [
-              { "base_serial_number" : "LHB-1A2B3C4D", "dynamic_states" : [] }
+              { "base_serial_number" : 439041101, "dynamic_states" : [] }
            ],
            "known_universes" : [
               {
                  "base_stations" : [
-                    { "base_serial_number" : "LHB-1A2B3C4D", "pose" : [ 0.0, 0.0, 0.0, 1.0, 0.5, 2.1, -1.3 ] },
-                    { "base_serial_number" : "LHB-5E6F7A8B", "pose" : [ 0.0, 0.0, 0.0, 1.0, -0.5, 2.2, 1.4 ] }
+                    { "base_serial_number" : 439041101, "pose" : [ 0.0, 0.0, 0.0, 1.0, 0.5, 2.1, -1.3 ] },
+                    { "base_serial_number" : 1584364171, "pose" : [ 0.0, 0.0, 0.0, 1.0, -0.5, 2.2, 1.4 ] }
                  ],
-                 "id" : 1793836993,
+                 "id" : "1793836993",
                  "last_modified_timestamp" : 1762900000
               },
               {
                  "base_stations" : [
-                    { "base_serial_number" : "LHB-00000030" }
+                    { "base_serial_number" : 48 }
                  ],
-                 "id" : 30
+                 "id" : "30"
               },
               {
                  "base_stations" : [],
-                 "id" : 2
+                 "id" : "2"
               },
               {
                  "base_stations" : [
-                    { "base_serial_number" : "LHB-9C0D1E2F" }
+                    { "base_serial_number" : 2618105391 }
                  ],
-                 "id" : 1779499028
+                 "id" : "1779499028"
               }
            ],
            "revision" : 4
@@ -69,10 +70,10 @@ public class SteamVrRoomTests
         var universes = SteamVrRoom.Universes(Lighthousedb);
 
         Assert.Equal(["1793836993", "30", "2", "1779499028"], universes.Select(u => u.Id));
-        Assert.Equal(["LHB-1A2B3C4D", "LHB-5E6F7A8B"], universes[0].StationSerials);
-        Assert.Equal(["LHB-00000030"], universes[1].StationSerials);
+        Assert.Equal(["439041101", "1584364171"], universes[0].StationSerials);
+        Assert.Equal(["48"], universes[1].StationSerials);
         Assert.Empty(universes[2].StationSerials);
-        Assert.Equal(["LHB-9C0D1E2F"], universes[3].StationSerials);
+        Assert.Equal(["2618105391"], universes[3].StationSerials);
     }
 
     [Fact]
@@ -93,6 +94,16 @@ public class SteamVrRoomTests
 
         Assert.Equal(["18446744073709551615", "0042", "1.50", "7"], universes.Select(u => u.Id));
         Assert.Equal(["123", "LHB-7"], universes[3].StationSerials);
+    }
+
+    [Fact]
+    public void Serials_above_int32_keep_their_written_form()
+    {
+        var universes = SteamVrRoom.Universes("""
+            { "known_universes" : [ { "id" : "1", "base_stations" : [ { "base_serial_number" : 4294967295 }, { "base_serial_number" : 2147483648 } ] } ] }
+            """);
+
+        Assert.Equal(["4294967295", "2147483648"], Assert.Single(universes).StationSerials);
     }
 
     [Fact]
