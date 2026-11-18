@@ -1041,14 +1041,21 @@ public sealed partial class HomeViewModel : ObservableObject
     /// <summary>
     /// Whether the Lighthouse space in use has a room setup, from SteamVR's files and Mirador's own (read off the UI
     /// thread, without starting Monado): at launch, when Home shows, when the profile changes and after a room setup step.
-    /// The notice stays while it is true; it isn't the one for a room setup that couldn't be applied.
+    /// Also whether SteamVR's room setup changed since Mirador's was measured on it. Each notice stays while it is true;
+    /// neither is the one for a room setup that couldn't be applied.
     /// </summary>
     public void CheckRoomSetup() => _ = CheckRoomSetupAsync();
 
     private async Task CheckRoomSetupAsync()
     {
-        const string key = "room-setup-missing";
-        var warning = await Task.Run(host.MissingRoomSetup);
+        var (missing, changed) = await Task.Run(host.RoomSetupWarnings);
+        ShowState("room-setup-missing", missing);
+        ShowState("room-setup-changed", changed);
+    }
+
+    /// <summary>A notice that shows a state: there while <paramref name="warning"/> is, updated in place.</summary>
+    private void ShowState(string key, string? warning)
+    {
         var existing = Notices.FirstOrDefault(n => n.Key == key);
         if (warning is null)
         {

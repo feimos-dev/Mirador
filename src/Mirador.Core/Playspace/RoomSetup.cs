@@ -1,3 +1,4 @@
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Monado.Libmonado;
 
 namespace Mirador.Core.Playspace;
@@ -9,4 +10,8 @@ namespace Mirador.Core.Playspace;
 /// The origin's offset to set after each Monado start, as it is (Monado forgets its offsets when it stops).
 /// </param>
 /// <param name="Taken">When it was measured.</param>
-public sealed record RoomSetup(string OriginName, string? Universe, MonadoPose Offset, DateTimeOffset Taken);
+/// <param name="Base">
+/// The SteamVR room setup <c>steamvr_lh</c> applied while it was measured, which <paramref name="Offset"/> is relative
+/// to; null when Steam's files weren't there (or for a setup kept before Mirador noted it).
+/// </param>
+public sealed record RoomSetup(string OriginName, string? Universe, MonadoPose Offset, DateTimeOffset Taken, SteamVrBase? Base = null);

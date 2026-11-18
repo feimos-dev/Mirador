@@ -1,3 +1,4 @@
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Playspace;
 using Mirador.Tests;
@@ -64,6 +65,18 @@ public sealed class RoomSetupStoreTests : IDisposable
         Assert.Null(Store().Get("steamvr_lh", "30"));
         Assert.Equal(current, Store().Get("steamvr_lh", "1500000001"));
         Assert.Equal(none, Store().Get("steamvr_lh", null));
+    }
+
+    [Fact]
+    public void The_steamvr_room_setup_it_was_taken_on_is_kept()
+    {
+        var setup = new RoomSetup("steamvr_lh", "1500000001", Lowered, Taken, new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1));
+        Store().Set(setup);
+        Store().Set(new RoomSetup("simulated", null, Lowered, Taken, SteamVrBase.None));
+
+        Assert.Equal(setup, Store().Get("steamvr_lh", "1500000001"));
+        Assert.Equal(SteamVrBase.None, Store().Get("simulated", null)!.Base);
+        Assert.Contains("\"base\"", System.IO.File.ReadAllText(File));
     }
 
     [Fact]

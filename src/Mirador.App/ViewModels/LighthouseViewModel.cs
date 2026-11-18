@@ -388,17 +388,24 @@ public sealed partial class LighthouseViewModel : ObservableObject
 
     public bool HasRoomSetupUnavailable => RoomSetupUnavailable is not null;
 
-    /// <summary>The space in use has no room setup (<see cref="AppHost.MissingRoomSetup"/>); null when it has one.</summary>
+    /// <summary>The space in use has no room setup (<see cref="AppHost.RoomSetupWarnings"/>); null when it has one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMissingRoomSetup))]
     public partial string? MissingRoomSetup { get; set; }
 
     public bool HasMissingRoomSetup => MissingRoomSetup is not null;
 
-    /// <summary>Reads whether the space in use has a room setup, for this page, off the UI thread.</summary>
+    /// <summary>SteamVR's room setup changed since Mirador's was measured on it; null when it didn't.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChangedRoomSetup))]
+    public partial string? ChangedRoomSetup { get; set; }
+
+    public bool HasChangedRoomSetup => ChangedRoomSetup is not null;
+
+    /// <summary>Reads the room setup's warnings, for this page, off the UI thread.</summary>
     private async Task CheckRoomSetupAsync()
     {
-        MissingRoomSetup = await Task.Run(host.MissingRoomSetup);
+        (MissingRoomSetup, ChangedRoomSetup) = await Task.Run(host.RoomSetupWarnings);
     }
 
     /// <summary>A step is measuring, or an export writing, now.</summary>
@@ -605,7 +612,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
 
         public IReadOnlyDictionary<string, string>? MonadoEnvironment => host.Session.LastMiradorEnvironment;
 
-        public string? CurrentUniverse() => host.CurrentUniverse().Id;
+        public SteamVrNow SteamVr() => SteamVrNow.Read(AppHost.SteamDir(), host.KnownStations());
 
         public Task<StartOutcome> StartMonadoAsync() => App.Current.StartAsync(StartReason.Button);
 

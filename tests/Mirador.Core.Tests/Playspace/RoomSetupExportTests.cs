@@ -156,4 +156,34 @@ public sealed class RoomSetupExportTests : IDisposable
             RoomSetupExport.QuestionFor(steam.Path, Universe));
         Assert.Equal(question, RoomSetupExport.QuestionFor(steam.Path, "30"));
     }
+
+    [Fact]
+    public void A_setup_taken_on_another_steamvr_room_setup_isnt_exported()
+    {
+        // Measured while 30's room setup was still at the origin; SteamVR's Room Setup has moved it since.
+        store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0, 0, 0, 0)));
+
+        Assert.Equal(
+            "SteamVR's room setup changed since Mirador's: the floor and forward direction may be wrong in games. Measure again on the Lighthouse page.",
+            Refusal());
+
+        store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1)));
+        Assert.Null(Refusal());
+
+        // A setup kept before Mirador noted the base is exported as it is.
+        store.Set(new RoomSetup(Origin, Universe, Lifted, Taken));
+        Assert.Null(Refusal());
+    }
+
+    [Fact]
+    public void After_an_export_the_kept_none_notes_the_new_room_setup()
+    {
+        store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1)));
+
+        RoomSetupExport.Run(steam.Path, steam.File("backups"), Universe, store, TimeProvider.System);
+
+        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), Universe)!.Value;
+        Assert.Equal(new SteamVrBase(Universe, translation[0], translation[1], translation[2], yaw), store.Get(Origin, Universe)!.Base);
+        Assert.False(RoomSetupWarning.BaseChanged(store.All(), Universe, SteamVrRoom.BaseNow(steam.Path), profileUsesSteamVrLh: true));
+    }
 }

@@ -46,8 +46,25 @@ public static class RoomSetupExport
             return "Mirador can't tell which Lighthouse space is in use, so it can't export.";
         }
 
-        return SteamVrRoom.ExportRefusal(steamDir, universe)
-            ?? (RoomSetupApplier.InUse(store.All(), SteamVrRoom.LighthouseOrigin, universe) is null ? NoSetup : null);
+        if (SteamVrRoom.ExportRefusal(steamDir, universe) is { } refusal)
+        {
+            return refusal;
+        }
+
+        if (RoomSetupApplier.InUse(store.All(), SteamVrRoom.LighthouseOrigin, universe) is not { } setup)
+        {
+            return NoSetup;
+        }
+
+        // The export writes the setup on top of SteamVR's room setup now: only right when it was measured on that one.
+        try
+        {
+            return setup.Base is { } taken && !taken.SameAs(SteamVrRoom.BaseNow(steamDir)) ? RoomSetupWarning.SteamVrChanged : null;
+        }
+        catch (MiradorException e)
+        {
+            return e.Message;
+        }
     }
 
     /// <summary>The question to ask; it says so when the space's entry in SteamVR's file will be a copy of another's.</summary>
@@ -56,8 +73,9 @@ public static class RoomSetupExport
 
     /// <summary>
     /// Exports the setup that applies in <paramref name="universe"/> (<see cref="RoomSetupApplier.InUse"/>: the space's
-    /// own, else the one taken without a space), then keeps an offset of none for the space, so that a setup taken
-    /// without a space no longer applies on top of SteamVR's in it; it stays for the other spaces.
+    /// own, else the one taken without a space), then keeps an offset of none for the space, noting SteamVR's new room
+    /// setup as its base, so that a setup taken without a space no longer applies on top of SteamVR's in it; it stays for
+    /// the other spaces.
     /// </summary>
     /// <returns>The copy of SteamVR's file as it was.</returns>
     /// <exception cref="MiradorException">Nothing was changed, or (said so) both may apply.</exception>
@@ -69,7 +87,8 @@ public static class RoomSetupExport
             backupDir,
             universe,
             setup.Offset,
-            () => store.Set(new RoomSetup(SteamVrRoom.LighthouseOrigin, universe, MonadoPose.Identity, time.GetLocalNow())),
+            () => store.Set(new RoomSetup(
+                SteamVrRoom.LighthouseOrigin, universe, MonadoPose.Identity, time.GetLocalNow(), SteamVrRoom.BaseNow(steamDir))),
             time);
     }
 }

@@ -349,6 +349,10 @@ public static class SteamVrRoom
         }
     }
 
+    /// <summary>The room setup <c>steamvr_lh</c> applies now (reads Steam's files).</summary>
+    /// <exception cref="MiradorException">A file is there but can't be read (<see cref="SteamVrNow.Unreadable"/>).</exception>
+    public static SteamVrBase BaseNow(string steamDir) => SteamVrNow.Read(steamDir, []).Base!;
+
     /// <summary>Whether SteamVR has a room setup of <paramref name="universe"/> (reads its file).</summary>
     public static bool HasRoomSetup(string steamDir, string universe) => Read(steamDir).RoomSetups.Contains(universe);
 

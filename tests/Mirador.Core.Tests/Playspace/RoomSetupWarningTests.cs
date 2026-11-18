@@ -85,6 +85,33 @@ public class RoomSetupWarningTests
         Assert.False(RoomSetupWarning.HasSetup([], "1500000001"));
     }
 
+    private const string Changed =
+        "SteamVR's room setup changed since Mirador's: the floor and forward direction may be wrong in games. Measure again on the Lighthouse page.";
+
+    [Fact]
+    public void A_setup_taken_on_another_steamvr_room_setup_is_noticed()
+    {
+        const string origin = SteamVrRoom.LighthouseOrigin;
+        var base30 = new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1);
+        RoomSetup[] setups = [new(origin, "1500000001", MonadoPose.Identity, Taken, base30)];
+
+        Assert.False(RoomSetupWarning.BaseChanged(setups, "1500000001", base30, profileUsesSteamVrLh: true));
+        Assert.True(RoomSetupWarning.BaseChanged(setups, "1500000001", base30 with { Y = -1.2f }, true));
+        Assert.True(RoomSetupWarning.BaseChanged(setups, "1500000001", SteamVrBase.None, true));
+        Assert.Equal(Changed, RoomSetupWarning.SteamVrChanged);
+
+        // Not with another driver than steamvr_lh, nor without Steam's files.
+        Assert.False(RoomSetupWarning.BaseChanged(setups, "1500000001", base30 with { Y = -1.2f }, false));
+        Assert.False(RoomSetupWarning.BaseChanged(setups, "1500000001", null, true));
+
+        // A setup kept before Mirador noted the base, or another origin's, says nothing.
+        Assert.False(RoomSetupWarning.BaseChanged([new(origin, "1500000001", MonadoPose.Identity, Taken)], "1500000001", base30, true));
+        Assert.False(RoomSetupWarning.BaseChanged([new("Pimax", "1500000001", MonadoPose.Identity, Taken, base30)], "1500000001", SteamVrBase.None, true));
+
+        // The setup that applies: one taken without a space counts too.
+        Assert.True(RoomSetupWarning.BaseChanged([new(origin, null, MonadoPose.Identity, Taken, base30)], "1500000001", SteamVrBase.None, true));
+    }
+
     [Fact]
     public void The_warning_is_read_from_steams_files()
     {

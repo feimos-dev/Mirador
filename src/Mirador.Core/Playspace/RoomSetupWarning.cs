@@ -15,6 +15,21 @@ public static class RoomSetupWarning
     public const string OtherSpace =
         "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Set it up on the Lighthouse page.";
 
+    public const string SteamVrChanged =
+        "SteamVR's room setup changed since Mirador's: the floor and forward direction may be wrong in games. Measure again on the Lighthouse page.";
+
+    /// <summary>
+    /// Whether the setup that applies to <c>steamvr_lh</c>'s origin in <paramref name="universe"/> was measured on
+    /// another SteamVR room setup than the one <c>steamvr_lh</c> applies now (<paramref name="now"/>; null: no Steam): it
+    /// would then apply on top of the new one. A setup that didn't note it, and profiles without <c>steamvr_lh</c>, say
+    /// nothing.
+    /// </summary>
+    public static bool BaseChanged(IReadOnlyList<RoomSetup> setups, string? universe, SteamVrBase? now, bool profileUsesSteamVrLh) =>
+        profileUsesSteamVrLh
+        && now is not null
+        && RoomSetupApplier.InUse(setups, SteamVrRoom.LighthouseOrigin, universe)?.Base is { } taken
+        && !taken.SameAs(now);
+
     /// <summary>
     /// The warning for the current universe <paramref name="pick"/>; null when Mirador has a setup, or when
     /// <c>steamvr_lh</c> is used and applies SteamVR's room setup of this universe. When <c>steamvr_lh</c> applies

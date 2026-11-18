@@ -1,3 +1,4 @@
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Playspace;
@@ -81,7 +82,10 @@ public sealed class RoomSetupRunTests : IDisposable
 
         public Exception? UniverseFails { get; set; }
 
-        public string? CurrentUniverse() => UniverseFails is { } fails ? throw fails : "1500000001";
+        public SteamVrBase? Base { get; set; } = new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1);
+
+        public SteamVrNow SteamVr() =>
+            UniverseFails is { } fails ? throw fails : new SteamVrNow(new UniversePick("1500000001", true), new HashSet<string> { "30" }, Base);
 
         public Task<StartOutcome> StartMonadoAsync()
         {
@@ -137,6 +141,9 @@ public sealed class RoomSetupRunTests : IDisposable
         Assert.Equal(0.07f, monado.Client.Offsets[0].Y, 1e-4f);
         Assert.Equal(0.07f, store.Get("steamvr_lh", "1500000001")!.Offset.Y, 1e-4f);
         Assert.Equal(0, monado.Starts);
+
+        // Kept with the SteamVR room setup it was measured on.
+        Assert.Equal(new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1), store.Get("steamvr_lh", "1500000001")!.Base);
     }
 
     [Fact]

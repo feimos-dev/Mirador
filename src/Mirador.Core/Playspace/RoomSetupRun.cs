@@ -1,3 +1,4 @@
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Session;
@@ -16,8 +17,9 @@ public interface IRoomSetupSession
     /// <summary>The variables Mirador started Monado with.</summary>
     IReadOnlyDictionary<string, string>? MonadoEnvironment { get; }
 
-    /// <summary>The Lighthouse universe in use (reads files).</summary>
-    string? CurrentUniverse();
+    /// <summary>What SteamVR's Lighthouse files say now: the universe in use, and the room setup steamvr_lh applies.</summary>
+    /// <exception cref="MiradorException">A file is there but can't be read (<see cref="SteamVrNow.Unreadable"/>).</exception>
+    SteamVrNow SteamVr();
 
     /// <summary>How Monado's run ended since the step began; null while it hasn't.</summary>
     SessionEnd? LastEnd { get; }
@@ -75,8 +77,9 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
             status(step == RoomStep.Floor ? "Measuring the floor. Keep the controller still." : "Measuring forward. Keep looking ahead.");
             programRan = true;
             var poses = await measuring.MeasureAsync(session.RuntimeManifest, ct).ConfigureAwait(false);
-            var universe = session.CurrentUniverse();
-            foreach (var setup in RoomMeasuring.Corrected(origins, step, poses, universe, time.GetLocalNow()))
+            var steamVr = session.SteamVr();
+            var universe = steamVr.Pick.Id;
+            foreach (var setup in RoomMeasuring.Corrected(origins, step, poses, universe, time.GetLocalNow(), steamVr.Base))
             {
                 store.Set(setup);
             }

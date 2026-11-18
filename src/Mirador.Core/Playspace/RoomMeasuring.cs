@@ -1,5 +1,6 @@
 using System.Globalization;
 using Mirador.Core.Build;
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Ipc;
 
@@ -121,13 +122,14 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
 
     /// <summary>
     /// Each origin's room setup after <paramref name="step"/>: its offset corrected by what was measured
-    /// (<see cref="RoomSetupMath.Correct"/>), for <paramref name="universe"/>.
+    /// (<see cref="RoomSetupMath.Correct"/>), for <paramref name="universe"/>, noting the SteamVR room setup it was
+    /// measured on (<paramref name="steamVrBase"/>).
     /// </summary>
     /// <exception cref="MiradorException">
     /// The floor step, and neither controller was tracked; the forward step, and the head looked up or down too far.
     /// </exception>
     public static IReadOnlyList<RoomSetup> Corrected(
-        IReadOnlyList<TrackedOrigin> origins, RoomStep step, XrPoses poses, string? universe, DateTimeOffset now)
+        IReadOnlyList<TrackedOrigin> origins, RoomStep step, XrPoses poses, string? universe, DateTimeOffset now, SteamVrBase? steamVrBase = null)
     {
         var floorY = 0f;
         var yaw = 0f;
@@ -145,6 +147,6 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
             yaw = RoomSetupMath.YawOf(poses.Head.Qx, poses.Head.Qy, poses.Head.Qz, poses.Head.Qw);
         }
 
-        return [.. origins.Select(o => new RoomSetup(o.Name, universe, RoomSetupMath.Correct(o.Offset, floorY, yaw), now))];
+        return [.. origins.Select(o => new RoomSetup(o.Name, universe, RoomSetupMath.Correct(o.Offset, floorY, yaw), now, steamVrBase))];
     }
 }
