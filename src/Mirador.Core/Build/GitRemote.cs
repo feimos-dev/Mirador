@@ -18,6 +18,9 @@ public static class GitRemote
 
     private const string Failed = "Couldn't list the branches of that link: ";
 
+    /// <summary>What to do when git can't be started: Mirador's own copy comes with the build tools of its first build.</summary>
+    public const string NoGit = "Mirador gets git with its first build. Build once, or paste a link to the branch.";
+
     /// <summary>The branches of the repository at <paramref name="url"/>, in git's order, with git from <c>PATH</c>.</summary>
     /// <exception cref="GitRemoteException">The link isn't one to list, git failed, or it took longer than <see cref="Limit"/>.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; git has been ended.</exception>
@@ -57,9 +60,10 @@ public static class GitRemote
         {
             throw new GitRemoteException($"{Failed}git didn't answer within {limit.TotalSeconds:0} s.");
         }
-        catch (MiradorException e)
+        catch (MiradorException)
         {
-            throw new GitRemoteException(Failed + e.Message);
+            // Git couldn't be started: most PCs have none until Mirador's first build brings its own.
+            throw new GitRemoteException(NoGit);
         }
 
         string output;

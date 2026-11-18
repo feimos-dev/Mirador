@@ -174,7 +174,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     private BranchOffer? branchOffer;
 
     /// <summary>The branches offered for the link, listed once per link.</summary>
-    private BranchOffer Offer => branchOffer ??= new BranchOffer(host.Tools.Git, new CommandRunner());
+    private BranchOffer Offer => branchOffer ??= new BranchOffer(() => host.Tools.Git, new CommandRunner());
 
     /// <summary>
     /// The profile's "Run as administrator" (Mirador.md §4.10 item 44, §4.11 item 51): for Mirador's Monado the user's

@@ -106,4 +106,14 @@ public class GitRemoteTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => listing.WaitAsync(TimeSpan.FromSeconds(10)));
     }
+
+    [Fact]
+    public async Task Without_git_the_message_says_what_to_do()
+    {
+        var runner = new FakeCommandRunner { Effect = (_, _) => throw new MiradorException("git couldn't be started: The system cannot find the file specified.") };
+
+        var e = await Assert.ThrowsAsync<GitRemoteException>(() => GitRemote.ListBranchesAsync(Url, "git", runner, GitRemote.Limit, CancellationToken.None));
+
+        Assert.Equal("Mirador gets git with its first build. Build once, or paste a link to the branch.", e.Message);
+    }
 }

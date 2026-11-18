@@ -7,9 +7,9 @@ namespace Mirador.Core.Build;
 /// which one to pick. Leaving the link box again on the same link lists nothing and changes nothing; only another link
 /// (or <see cref="Forget"/>) lists again.
 /// </summary>
-/// <param name="git">The git to run (<see cref="BuildTools.Git"/>).</param>
+/// <param name="git">The git to run, looked up at each listing (<see cref="BuildTools.Git"/>: Mirador's copy once a build installed it).</param>
 /// <param name="runner">Runs git; cancelling ends it.</param>
-public sealed class BranchOffer(string git, ICommandRunner runner)
+public sealed class BranchOffer(Func<string> git, ICommandRunner runner)
 {
     private string? listedUrl;
 
@@ -26,7 +26,7 @@ public sealed class BranchOffer(string git, ICommandRunner runner)
             return null;
         }
 
-        var branches = await GitRemote.ListBranchesAsync(url, git, runner, GitRemote.Limit, ct).ConfigureAwait(false);
+        var branches = await GitRemote.ListBranchesAsync(url, git(), runner, GitRemote.Limit, ct).ConfigureAwait(false);
         listedUrl = url;
         return branches;
     }
