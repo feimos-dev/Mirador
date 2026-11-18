@@ -109,7 +109,7 @@ public class BranchSourceStoreTests
         using var dir = new TempDir();
         var store = new ProfileStore(dir.File("profiles.json"));
         var source = BuildSource.FromBranch("https://gitlab.freedesktop.org/ultradev/monado.git", "pimax-p3c", ["-DXRT_HAVE_SDL2=OFF"]);
-        var set = ProfileSet.Defaults().Replace(ProfileSet.Defaults().Profiles[1] with { Monado = source });
+        var set = TestProfiles.Two().Replace(TestProfiles.Two().Profiles[1] with { Monado = source });
 
         store.Save(set);
         var text = File.ReadAllText(dir.File("profiles.json"));

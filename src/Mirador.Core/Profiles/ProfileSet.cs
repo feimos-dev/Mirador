@@ -9,14 +9,12 @@ namespace Mirador.Core.Profiles;
 public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string SelectedId)
 {
     /// <summary>
-    /// The first-run set: Dream Air (selected, with the Pimax module) and Custom, both on the bundled Monado.
+    /// The first-run set: one profile, "Default", on the bundled Monado with no headset type. A headset's profile starts as
+    /// a copy of it with the headset picked.
     /// </summary>
     public static ProfileSet Defaults() => new(
-        [
-            new Profile("dreamair", "Dream Air", global::Mirador.Ipc.PimaxEnvironment.ModuleId, BuildSource.Mirador, [], new Dictionary<string, string>()),
-            new Profile("custom", "Custom", null, BuildSource.Mirador, [], new Dictionary<string, string>()),
-        ],
-        "dreamair");
+        [new Profile("default", "Default", null, BuildSource.Mirador, [], new Dictionary<string, string>())],
+        "default");
 
     [JsonIgnore]
     public Profile Selected => Find(SelectedId);
