@@ -232,7 +232,7 @@ TEST_CASE("display_session_opened_by_the_first_query_once")
     REQUIRE(rig.ready());
     CHECK(display_count(rig, 0) == 1);
     const size_t calls = rig.api.calls().size();
-    CHECK(rig.api.count("enable_direct_mode") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 2);
     CHECK(display_count(rig, 0) == 1);
     find_ours(rig);
     const auto planes =

@@ -26,6 +26,8 @@ namespace {
 
 // The enumerate wait looks again this often.
 constexpr int64_t kPollNs = 100'000'000;
+// How often EnableDirectMode is asked again while the display is missing.
+constexpr int64_t kEnableRetryNs = 1'000'000'000;
 
 bool same_luid(const LUID& a, const LUID& b)
 {
@@ -266,6 +268,17 @@ OpenResult DisplaySession::check_ids()
     return proceed(OpenStep::CheckIds);
 }
 
+void DisplaySession::enable_all_vendors()
+{
+    for (const DirectModeVendor& vendor : kDirectModeVendors) {
+        const int ret = deps_.api.enable_direct_mode(vendor.nvapi_id);
+        if (ret != 0) {
+            log(std::string("warning: NVAPI EnableDirectMode for vendor ") + vendor.letters + " returned " +
+                std::to_string(ret) + "; still waiting for the display");
+        }
+    }
+}
+
 OpenResult DisplaySession::find_display()
 {
     if (display_id_ != 0) {
@@ -275,6 +288,10 @@ OpenResult DisplaySession::find_display()
     // its heartbeat. Look every kPollNs until wait_ms has passed.
     const int64_t deadline = deps_.clock.now_ns() + static_cast<int64_t>(deps_.wait_ms) * 1'000'000;
     std::vector<uint32_t> ids;
+    // After a Pimax Play or SteamVR session the headset is back on the desktop and Enumerate finds nothing, so direct
+    // mode is asked for first, and again once a second while nothing shows up. A refusal is logged and the wait goes on.
+    int64_t last_enable = deps_.clock.now_ns();
+    enable_all_vendors();
     for (;;) {
         // Each direct-mode vendor in turn (Pimax first); the first with a display is the one.
         for (const DirectModeVendor& vendor : kDirectModeVendors) {
@@ -289,7 +306,11 @@ OpenResult DisplaySession::find_display()
                 return proceed(OpenStep::Enumerate);
             }
         }
-        const int64_t now = deps_.clock.now_ns();
+        int64_t now = deps_.clock.now_ns();
+        if (now - last_enable >= kEnableRetryNs) {
+            last_enable = now;
+            enable_all_vendors();
+        }
         if (now >= deadline) {
             std::string vendors;
             for (const DirectModeVendor& vendor : kDirectModeVendors) {
