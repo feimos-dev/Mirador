@@ -115,6 +115,42 @@ public sealed class RoomSetupApplierTests : IDisposable
     }
 
     [Fact]
+    public void At_a_start_the_universe_comes_from_steams_files()
+    {
+        using var steam = new TempDir();
+        Directory.CreateDirectory(Path.GetDirectoryName(Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path))!);
+        File.WriteAllText(
+            Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path),
+            """{ "known_universes" : [ { "base_stations" : [ { "base_serial_number" : 3735928559 } ], "id" : "1500000001" } ] }""");
+        store.Set(new RoomSetup("steamvr_lh", "1500000001", Lighthouse, Taken));
+        store.Set(new RoomSetup("steamvr_lh", null, Simulated, Taken));
+        var client = new OriginsClient("steamvr_lh");
+
+        Assert.Equal(1, RoomSetupApplier.ApplyWithSteamVr(client, store, steam.Path, [new("AA:BB:CC:DD:EE:01", "LHB-DEADBEEF")]));
+        Assert.Equal([(0u, Lighthouse)], client.Set);
+
+        // Without Steam: no universe, so the setup taken without one.
+        client.Set.Clear();
+        Assert.Equal(1, RoomSetupApplier.ApplyWithSteamVr(client, store, null, []));
+        Assert.Equal([(0u, Simulated)], client.Set);
+    }
+
+    [Fact]
+    public void Steams_files_that_cant_be_read_apply_nothing()
+    {
+        // Not only the setup taken without a universe: which universe is in use isn't known.
+        using var steam = new TempDir();
+        Directory.CreateDirectory(Path.GetDirectoryName(Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path))!);
+        File.WriteAllText(Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path), "{ \"known_universes\" : [");
+        store.Set(new RoomSetup("steamvr_lh", null, Simulated, Taken));
+        var client = new OriginsClient("steamvr_lh");
+
+        var e = Assert.Throws<MiradorException>(() => RoomSetupApplier.ApplyWithSteamVr(client, store, steam.Path, []));
+        Assert.Equal("Couldn't read SteamVR's Lighthouse files; try again.", e.Message);
+        Assert.Empty(client.Set);
+    }
+
+    [Fact]
     public void A_failed_call_is_passed_on()
     {
         store.Set(new RoomSetup("steamvr_lh", null, Lighthouse, Taken));

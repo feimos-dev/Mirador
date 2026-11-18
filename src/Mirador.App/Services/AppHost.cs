@@ -147,13 +147,6 @@ public sealed class AppHost : IAsyncDisposable
     public RoomMeasuring RoomMeasuring { get; }
 
     /// <summary>
-    /// The Lighthouse universe in use, from SteamVR's files and the base stations Mirador knows (no universe without
-    /// Steam). Reads files: not on the UI thread.
-    /// </summary>
-    public UniversePick CurrentUniverse() =>
-        Mirador.Core.Lighthouse.CurrentUniverse.FromSteam(SteamDir(), [.. Stations.Stations.Select(v => v.Station)]);
-
-    /// <summary>
     /// The room setup's warnings for the selected profile (<see cref="RoomSetupWarning"/>): the Lighthouse space in use
     /// has none, and SteamVR's room setup changed since Mirador's was measured on it; each null when it doesn't apply, and
     /// both when the profile doesn't use base stations. Reads SteamVR's files and Mirador's own, never starts Monado: not
@@ -214,8 +207,7 @@ public sealed class AppHost : IAsyncDisposable
         string? problem = null;
         try
         {
-            var universe = CurrentUniverse().Id;
-            var applied = RoomSetupApplier.Apply(client, RoomSetups, universe);
+            var applied = RoomSetupApplier.ApplyWithSteamVr(client, RoomSetups, SteamDir(), KnownStations());
             if (applied > 0)
             {
                 AppLog.Write($"Room setup set for {applied} tracking origin{(applied == 1 ? "" : "s")}.");

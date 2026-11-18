@@ -423,7 +423,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
     /// </summary>
     public async Task<string?> PrepareExportAsync()
     {
-        var (refusal, question) = await Task.Run(CheckExport);
+        var (refusal, question, _, _) = await Task.Run(CheckExport);
         if (refusal is not null)
         {
             ShowRoomSetup(refusal, InfoBarSeverity.Warning);
@@ -442,21 +442,21 @@ public sealed partial class LighthouseViewModel : ObservableObject
         RoomSetupBusy = true;
         try
         {
-            var refusal = await Task.Run(() =>
-            {
-                var (why, _) = CheckExport();
-                if (why is null)
+            // While Monado is stopped and stays so: the session holds every Start (a game's too) until the export is done.
+            var refusal = await host.Session.RunWhileStoppedAsync(
+                "",
+                (_, _) => Task.Run(() =>
                 {
-                    RoomSetupExport.Run(
-                        AppHost.SteamDir()!,
-                        Path.Combine(host.Paths.BackupsDir, "steamvr"),
-                        host.CurrentUniverse().Id!,
-                        host.RoomSetups,
-                        TimeProvider.System);
-                }
+                    var check = CheckExport();
+                    if (check.Refusal is null)
+                    {
+                        RoomSetupExport.Run(
+                            check.Steam!, Path.Combine(host.Paths.BackupsDir, "steamvr"), check.Universe!, host.RoomSetups, TimeProvider.System);
+                    }
 
-                return why;
-            });
+                    return check.Refusal;
+                }),
+                CancellationToken.None);
             ShowRoomSetup(
                 refusal ?? "The room setup is in SteamVR's settings now, and Mirador applies none of its own in this space. Monado uses it from its next start.",
                 refusal is null ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
@@ -486,15 +486,24 @@ public sealed partial class LighthouseViewModel : ObservableObject
     /// Why the export can't go ahead (<see cref="RoomSetupExport.Refusal"/>: SteamVR running, then Monado running, …),
     /// or the question to ask. Reads files and processes: not on the UI thread.
     /// </summary>
-    private (string? Refusal, string? Question) CheckExport()
+    private (string? Refusal, string? Question, string? Steam, string? Universe) CheckExport()
     {
         var steam = AppHost.SteamDir();
-        var universe = steam is null ? null : host.CurrentUniverse().Id;
+        string? universe;
+        try
+        {
+            universe = SteamVrNow.Read(steam, host.KnownStations()).Pick.Id;
+        }
+        catch (MiradorException e)
+        {
+            return (e.Message, null, steam, null);
+        }
+
         // Monado started by Mirador, or any monado-service (one started outside Mirador too).
         var monadoRunning = host.Session.State != SessionState.Stopped
             || host.Processes.Snapshot().Any(p => string.Equals(p.Name, "monado-service", StringComparison.OrdinalIgnoreCase));
         var refusal = RoomSetupExport.Refusal(SteamVrStillRunning() is not null, monadoRunning, steam, universe, host.RoomSetups);
-        return refusal is null ? (null, RoomSetupExport.QuestionFor(steam!, universe!)) : (refusal, null);
+        return refusal is null ? (null, RoomSetupExport.QuestionFor(steam!, universe!), steam, universe) : (refusal, null, steam, universe);
     }
 
     /// <summary>Monado runs with "exit on disconnect": the card says what happens first.</summary>

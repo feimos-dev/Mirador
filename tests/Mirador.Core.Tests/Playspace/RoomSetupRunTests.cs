@@ -304,6 +304,20 @@ public sealed class RoomSetupRunTests : IDisposable
     }
 
     [Fact]
+    public async Task A_measurement_isnt_kept_while_steams_files_cant_be_read()
+    {
+        monado.Current = monado.Client;
+        monado.UniverseFails = new MiradorException("Couldn't read SteamVR's Lighthouse files; try again.");
+        Answer(Measured, 0);
+
+        Assert.Equal(
+            new RoomStepOutcome("Couldn't read SteamVR's Lighthouse files; try again.", RoomStepLevel.Error),
+            await Step(RoomStep.Floor));
+        Assert.Empty(store.All());
+        Assert.Empty(monado.Client.Offsets);
+    }
+
+    [Fact]
     public async Task Without_monado_nothing_is_measured()
     {
         Assert.Equal(new RoomStepOutcome("Start Monado first.", RoomStepLevel.Error), await Step(RoomStep.Forward));

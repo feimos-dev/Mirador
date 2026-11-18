@@ -1,3 +1,5 @@
+using Mirador.Core.BaseStations;
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Monado.Libmonado;
 
 namespace Mirador.Core.Playspace;
@@ -35,6 +37,17 @@ public static class RoomSetupApplier
 
         return applied;
     }
+
+    /// <summary>
+    /// <see cref="Apply"/> at a Monado start, for the Lighthouse universe in use as Steam's files say now (none without
+    /// Steam).
+    /// </summary>
+    /// <exception cref="MiradorException">
+    /// Steam's files are there but can't be read (<see cref="SteamVrNow.Unreadable"/>): nothing is set, since which
+    /// universe is in use isn't known; setting only setups taken without a universe could be wrong for this one.
+    /// </exception>
+    public static int ApplyWithSteamVr(IMonadoClient client, RoomSetupStore store, string? steamDir, IReadOnlyList<KnownStation> stations) =>
+        Apply(client, store, SteamVrNow.Read(steamDir, stations).Pick.Id);
 
     /// <summary>
     /// The setup that applies to origin <paramref name="originName"/> in <paramref name="universe"/>: the one kept for
