@@ -185,7 +185,7 @@ public sealed class HelperHandlerApprovalTests : IDisposable
     [Fact]
     public void The_helper_refuses_a_refused_name_even_when_approved()
     {
-        IReadOnlyList<KeyValuePair<string, string>> withPath = [new("PIMAX_P3C_LOG", "debug"), new("Path", @"C:\Users\finn\bin")];
+        IReadOnlyList<KeyValuePair<string, string>> withPath = [new("PIMAX_P3C_LOG", "debug"), new("Path", @"C:\Users\you\bin")];
         store.Set(new ApprovedBuild(Finn.Value, "p1", ApprovedBuilds.BundledCommit, "", new Dictionary<string, string>(), withPath));
 
         var refusal = Check(StartWith("p1", withPath), store, out var variables);

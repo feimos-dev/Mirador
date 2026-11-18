@@ -50,7 +50,7 @@ public static partial class Program
             }
         }
 
-        // The elevated step of approving a profile (Mirador.md §4.11 item 51): for a branch or build folder it copies the
+        // The elevated step of approving a profile: for a branch or build folder it copies the
         // build into the install folder, which only administrators can change, and records each file's hash; for the
         // bundled Monado nothing is copied. Either way the profile's variables are recorded with it. No window.
         if (parsed.ApproveBuild is { } approve)

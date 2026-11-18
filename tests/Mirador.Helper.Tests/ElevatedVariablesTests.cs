@@ -83,7 +83,7 @@ public class ElevatedVariablesTests
     [Fact]
     public void Every_name_the_helper_sets_itself_is_refused()
     {
-        var folders = new Mirador.Helper.ElevatedMonado.UserFolders(@"C:\Users\finn", @"C:\Users\finn\AppData\Roaming", @"C:\Users\finn\AppData\Local", @"C:\Users\finn\AppData\Local\Temp");
+        var folders = new Mirador.Helper.ElevatedMonado.UserFolders(@"C:\Users\you", @"C:\Users\you\AppData\Roaming", @"C:\Users\you\AppData\Local", @"C:\Users\you\AppData\Local\Temp");
         var starts = new[]
         {
             new ElevatedStart(3000, 100, 6, true, PimaxEnvironment.ModuleId, StandbyOnExit: true),

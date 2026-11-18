@@ -76,7 +76,7 @@ public class BranchOfferTests
         var offer = new BranchOffer(() => git, runner);
 
         await offer.ListAsync(Url, CancellationToken.None);
-        git = @"C:\Users\finn\AppData\Local\Mirador\tools\git\cmd\git.exe"; // a build installed Mirador's git meanwhile
+        git = @"C:\Users\you\AppData\Local\Mirador\tools\git\cmd\git.exe"; // a build installed Mirador's git meanwhile
         await offer.ListAsync(Other, CancellationToken.None);
 
         Assert.Equal(["git", git], runner.Commands.Select(c => c.FileName));

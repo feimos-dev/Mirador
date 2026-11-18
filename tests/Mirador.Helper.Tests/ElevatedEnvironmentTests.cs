@@ -48,7 +48,7 @@ public class ElevatedEnvironmentTests
     public void A_refused_name_never_reaches_the_environment()
     {
         Assert.Throws<ArgumentException>(() =>
-            ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("Path", @"C:\Users\finn\bin")]));
+            ElevatedEnvironment.Build(Start(), Folders, ServerDir, SteamVrPath, approvedVariables: [new("Path", @"C:\Users\you\bin")]));
     }
 
     [Fact]

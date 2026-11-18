@@ -2711,7 +2711,7 @@ internal sealed class StationHarness : IDisposable
 
     /// <summary>
     /// <see cref="Base"/> with "Station state: Live while shown", the harness's own default: a <c>Listen()</c> then hears
-    /// adverts, as the pages did before 2026-11-07. The tests of "From the last scan" set <see cref="Base"/> themselves.
+    /// adverts. The tests of "From the last scan" set <see cref="Base"/> themselves.
     /// </summary>
     public static readonly AppSettings Live = Base with { BaseStationsState = StationStateMode.Live };
 
