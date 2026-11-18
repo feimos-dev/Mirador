@@ -712,6 +712,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
         profile.Monado.Kind is SourceKind.Branch or SourceKind.Folder
         || (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count > 0);
 
+    /// <summary>What an approved variable that names a file means, in the approval card's text.</summary>
+    private const string FileRightsNote =
+        "A variable that names a file runs that file with full rights; keep such files where only administrators can change them.";
+
     private void RefreshApproval(string? problem = null)
     {
         CanApprove = editing is not null && Approvable(editing);
@@ -729,10 +733,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
         else if (editing.Monado.Kind == SourceKind.Mirador)
         {
             state = IsApproved
-                ? "Approved: these variables run with Monado as administrator, with full rights."
+                ? "Approved: these variables run with Monado as administrator, with full rights. " + FileRightsNote
                 : host.HasApproval(editing)
                     ? "Not approved: the variables changed."
-                    : "Approve these variables to run them with Monado as administrator. Approved variables run with full rights.";
+                    : "Approve these variables to run them with Monado as administrator. Approved variables run with full rights. " + FileRightsNote;
         }
         else
         {
@@ -745,7 +749,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
                     ? "Not approved: the variables changed."
                     : host.HasApproval(editing)
                         ? $"This build changed since it was approved: approve it again to let it {uses}."
-                        : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it. Its variables are approved with it and run with full rights.";
+                        : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it. Its variables are approved with it and run with full rights. {FileRightsNote}";
         }
 
         ApprovalStatus = problem is null ? state : $"{problem} {state}";
