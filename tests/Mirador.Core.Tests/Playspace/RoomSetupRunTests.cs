@@ -1,3 +1,4 @@
+using Mirador.Core.Modules;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Playspace;
 using Mirador.Core.Session;
@@ -67,6 +68,10 @@ public sealed class RoomSetupRunTests : IDisposable
 
         public int Starts { get; private set; }
 
+        public SessionEnd? LastEnd { get; set; }
+
+        public bool Quitting { get; set; }
+
         public IMonadoClient? MonadoClient => Current;
 
         public string? RuntimeManifest => @"C:\Monado\openxr_monado.json";
@@ -89,9 +94,16 @@ public sealed class RoomSetupRunTests : IDisposable
         {
             if (ExitOnDisconnect)
             {
-                Client.Stopped = true;
-                Current = null;
+                Stop(new SessionEnd("Monado stopped after the last app closed.", Problem: false));
             }
+        }
+
+        /// <summary>Monado ends, as the session reports it.</summary>
+        public void Stop(SessionEnd end)
+        {
+            Client.Stopped = true;
+            Current = null;
+            LastEnd = end;
         }
     }
 
@@ -141,6 +153,7 @@ public sealed class RoomSetupRunTests : IDisposable
 
         monado.Current = monado.Client;
         monado.Client.Stopped = false;
+        monado.LastEnd = null;
         monado.StartAnswer = new StartOutcome(false, "Close SteamVR first.");
         Assert.Equal(
             new RoomStepOutcome("The floor is measured and kept, but Monado didn't start again: Close SteamVR first.", RoomStepLevel.Warning),
@@ -227,6 +240,60 @@ public sealed class RoomSetupRunTests : IDisposable
             await Step(RoomStep.Floor));
         Assert.Equal(1, monado.Starts);
         Assert.Equal(["The room setup step failed: Something unexpected."], logged);
+    }
+
+    [Theory]
+    [InlineData("Stopped.", false)]
+    [InlineData("Monado stopped by itself (exit code 3).", true)]
+    [InlineData("The headset's display didn't come up.", true)]
+    public async Task A_stop_the_measuring_program_didnt_cause_starts_nothing(string message, bool problem)
+    {
+        // The user's Stop on Home or the tray, Monado ending by itself, or Mirador stopping it for a problem.
+        monado.Current = monado.Client;
+        monado.ExitOnDisconnect = true;
+        runner.Answer = _ => ([Measured], 0);
+        runner.Effect = (_, _) =>
+        {
+            monado.Stop(new SessionEnd(message, problem));
+            return Task.CompletedTask;
+        };
+
+        Assert.Equal(
+            new RoomStepOutcome("The floor is measured and kept; Monado stopped, so it is set when Monado next starts.", RoomStepLevel.Warning),
+            await Step(RoomStep.Floor));
+
+        // A failed measurement as well.
+        monado.Current = monado.Client;
+        monado.Client.Stopped = false;
+        runner.Answer = _ => (["XR-POSES-FAIL no poses within 30 s (after 3 frames)"], 1);
+        Assert.Equal(
+            new RoomStepOutcome("Mirador couldn't measure: no poses within 30 s (after 3 frames).", RoomStepLevel.Error),
+            await Step(RoomStep.Floor));
+        Assert.Equal(0, monado.Starts);
+    }
+
+    [Fact]
+    public async Task Nothing_is_started_while_mirador_quits()
+    {
+        monado.Current = monado.Client;
+        monado.ExitOnDisconnect = true;
+        Answer(Measured, 0);
+        runner.Effect = (_, _) =>
+        {
+            monado.Quitting = true;
+            monado.StopWithTheClient();
+            return Task.CompletedTask;
+        };
+
+        Assert.Equal(RoomStepLevel.Warning, (await Step(RoomStep.Floor)).Level);
+
+        monado.Current = monado.Client;
+        monado.Client.Stopped = false;
+        runner.Answer = _ => ([NoHands], 0);
+        Assert.Equal(
+            new RoomStepOutcome("Neither controller was tracked. Turn one on, lay it on the floor and measure again.", RoomStepLevel.Error),
+            await Step(RoomStep.Floor));
+        Assert.Equal(0, monado.Starts);
     }
 
     [Fact]

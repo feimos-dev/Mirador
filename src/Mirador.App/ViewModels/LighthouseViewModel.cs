@@ -7,6 +7,7 @@ using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.BaseStations;
 using Mirador.Core.Lighthouse;
+using Mirador.Core.Modules;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Playspace;
 using Mirador.Core.Session;
@@ -553,7 +554,8 @@ public sealed partial class LighthouseViewModel : ObservableObject
         RoomSetupBusy = true;
         try
         {
-            var run = new RoomSetupRun(host.RoomMeasuring, host.RoomSetups, new SessionForRoomSetup(host), TimeProvider.System)
+            using var session = new SessionForRoomSetup(host);
+            var run = new RoomSetupRun(host.RoomMeasuring, host.RoomSetups, session, TimeProvider.System)
             {
                 Log = AppLog.Write,
             };
@@ -581,8 +583,22 @@ public sealed partial class LighthouseViewModel : ObservableObject
     }
 
     /// <summary>The session as a room setup step uses it; Monado is started again as the Start button does.</summary>
-    private sealed class SessionForRoomSetup(AppHost host) : IRoomSetupSession
+    private sealed class SessionForRoomSetup : IRoomSetupSession, IDisposable
     {
+        private readonly AppHost host;
+        private volatile SessionEnd? lastEnd;
+
+        /// <summary>Follows how Monado's run ends from now on, until disposed.</summary>
+        public SessionForRoomSetup(AppHost host)
+        {
+            this.host = host;
+            host.Session.Ended += OnEnded;
+        }
+
+        public SessionEnd? LastEnd => lastEnd;
+
+        public bool Quitting => App.Current.Quitting;
+
         public IMonadoClient? MonadoClient => host.Session.Monado;
 
         public string? RuntimeManifest => host.Session.CurrentInstall?.Manifest;
@@ -592,6 +608,10 @@ public sealed partial class LighthouseViewModel : ObservableObject
         public string? CurrentUniverse() => host.CurrentUniverse().Id;
 
         public Task<StartOutcome> StartMonadoAsync() => App.Current.StartAsync(StartReason.Button);
+
+        public void Dispose() => host.Session.Ended -= OnEnded;
+
+        private void OnEnded(SessionEnd end) => lastEnd = end;
     }
 
     private void ShowRoomSetup(string message, InfoBarSeverity severity)

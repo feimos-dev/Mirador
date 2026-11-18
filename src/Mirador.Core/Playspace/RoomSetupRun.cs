@@ -1,3 +1,4 @@
+using Mirador.Core.Modules;
 using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.Session;
 
@@ -18,6 +19,12 @@ public interface IRoomSetupSession
     /// <summary>The Lighthouse universe in use (reads files).</summary>
     string? CurrentUniverse();
 
+    /// <summary>How Monado's run ended since the step began; null while it hasn't.</summary>
+    SessionEnd? LastEnd { get; }
+
+    /// <summary>Mirador is quitting: nothing is started any more.</summary>
+    bool Quitting { get; }
+
     /// <summary>Starts Monado again, as the Start button does; the start applies the kept room setups.</summary>
     Task<StartOutcome> StartMonadoAsync();
 }
@@ -37,7 +44,8 @@ public sealed record RoomStepOutcome(string Message, RoomStepLevel Level);
 /// One room setup step from start to end: measures with <see cref="RoomMeasuring"/>, keeps each tracked origin's new
 /// offset in <paramref name="store"/> for the current Lighthouse universe, and sets it through the running Monado. With
 /// "exit on disconnect", the measuring program's exit stops Monado whatever it measured: Monado is then started again,
-/// after a failure too, and that start sets the kept offsets.
+/// after a failure too, and that start sets the kept offsets. Any other stop meanwhile (the user's, a problem, Mirador
+/// quitting) starts nothing.
 /// </summary>
 public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, IRoomSetupSession session, TimeProvider time)
 {
@@ -83,7 +91,7 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
                 return new RoomStepOutcome(set, RoomStepLevel.Success);
             }
 
-            if (stops && !ReferenceEquals(session.MonadoClient, client))
+            if (stops && StoppedByTheMeasurement(client))
             {
                 status("Starting Monado again.");
                 var outcome = await session.StartMonadoAsync().ConfigureAwait(false);
@@ -117,7 +125,7 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
         if (programRan && stops)
         {
             await WaitForStopAsync(client, ct).ConfigureAwait(false);
-            if (!ReferenceEquals(session.MonadoClient, client))
+            if (StoppedByTheMeasurement(client))
             {
                 status("Starting Monado again.");
                 var outcome = await session.StartMonadoAsync().ConfigureAwait(false);
@@ -129,13 +137,23 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
     }
 
     /// <summary>
-    /// Waits until the session no longer has <paramref name="client"/> (Monado stopped), at most <see cref="StopWait"/>.
-    /// A Start asked for while the session is still stopping waits for the stop.
+    /// Whether Monado stopped because the measuring program closed ("exit on disconnect"): the run ended as an app's
+    /// disconnect does, not by the user's Stop, nor for a problem, and Mirador isn't quitting. Only then is it started again.
+    /// </summary>
+    private bool StoppedByTheMeasurement(IMonadoClient client) =>
+        !ReferenceEquals(session.MonadoClient, client)
+        && !session.Quitting
+        && session.LastEnd is { Problem: false } end
+        && end.Message != SessionController.StoppedMessage;
+
+    /// <summary>
+    /// Waits until the session no longer has <paramref name="client"/> and has said how it ended, at most
+    /// <see cref="StopWait"/>. A Start asked for while the session is still stopping waits for the stop.
     /// </summary>
     private async Task WaitForStopAsync(IMonadoClient client, CancellationToken ct)
     {
         var until = time.GetUtcNow() + StopWait;
-        while (ReferenceEquals(session.MonadoClient, client) && time.GetUtcNow() < until)
+        while ((ReferenceEquals(session.MonadoClient, client) || session.LastEnd is null) && time.GetUtcNow() < until)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(100), time, ct).ConfigureAwait(false);
         }

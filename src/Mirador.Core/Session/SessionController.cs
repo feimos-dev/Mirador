@@ -54,6 +54,15 @@ public sealed class SessionController(SessionDeps deps)
     /// <summary>How long Start waits for Monado to be ready for apps once its service runs.</summary>
     public static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(45);
 
+    /// <summary>The end's message when the session was stopped as asked (<see cref="StopAsync"/>).</summary>
+    public const string StoppedMessage = "Stopped.";
+
+    // Set as Mirador quits: no Start may begin after its last Stop.
+    private volatile bool startsEnded;
+
+    /// <summary>From now on every Start is refused ("Mirador is quitting."); Mirador calls it before its last Stop.</summary>
+    public void EndStarts() => startsEnded = true;
+
     private const string ServiceName = "monado-service";
     private const string NotActiveNotice = "Monado (this profile) isn't the active OpenXR runtime, so games won't find it.";
     private const int KeptLogs = 10;
@@ -298,6 +307,11 @@ public sealed class SessionController(SessionDeps deps)
     public async Task<StartOutcome> StartAsync(StartReason reason, string? gameStandIn, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        if (startsEnded)
+        {
+            return new StartOutcome(false, "Mirador is quitting.");
+        }
+
         while (true)
         {
             Task? stopFirst = null;
@@ -416,7 +430,7 @@ public sealed class SessionController(SessionDeps deps)
                         stop = stopping;
                         break;
                     default:
-                        stop = BeginStop(current!, "Stopped.", clean: !restart);
+                        stop = BeginStop(current!, StoppedMessage, clean: !restart);
                         break;
                 }
             }

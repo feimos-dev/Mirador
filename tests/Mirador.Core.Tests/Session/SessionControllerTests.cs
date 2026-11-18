@@ -286,6 +286,21 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task No_start_once_starts_have_ended()
+    {
+        // Mirador quits: a Start asked for afterwards (a room setup step, a game) starts nothing.
+        await using var h = new Harness();
+        h.Controller.EndStarts();
+
+        var outcome = await Start(h).WaitAsync(Limit);
+
+        Assert.Equal(new StartOutcome(false, "Mirador is quitting."), outcome);
+        Assert.Equal(0, h.Module.BeforeStartCalls);
+        Assert.Equal(0, h.Launcher.Starts);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+    }
+
+    [Fact]
     public async Task A_profile_without_a_module_starts_while_steamvr_runs()
     {
         await using var h = new Harness();

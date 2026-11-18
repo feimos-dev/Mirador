@@ -1018,6 +1018,7 @@ public sealed class AppHost : IAsyncDisposable
         // Mirador's own off goes now, beside Monado's stop (a headset's end can take long). The session's end has its off
         // waiting its few seconds when Mirador's isn't wanted: the flush sends it at once.
         Stations.QuittingNow();
+        Session.EndStarts(); // nothing (a room setup step, a game) starts Monado again behind the last Stop
         try
         {
             await Session.StopAsync(CancellationToken.None).ConfigureAwait(false);
