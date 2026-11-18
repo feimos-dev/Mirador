@@ -732,6 +732,11 @@ public sealed class AppHost : IAsyncDisposable
             return problem;
         }
 
+        if (folder != AppArgs.Bundled && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
+        {
+            return "Stop Monado first: it runs from this profile's approved copy, which the approval replaces.";
+        }
+
         var info = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Mirador.exe"))
         {
             Verb = "runas",
