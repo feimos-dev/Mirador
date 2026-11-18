@@ -19,10 +19,11 @@ inline constexpr int kExitNotUsed = 3;
 inline constexpr int kDefaultSeconds = 20;
 inline constexpr int kMaxSeconds = 3600;
 
-// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20]
+// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]
 struct Options {
     bool no_heartbeat = false;   // Do not send the board heartbeat.
     bool ignore_holders = false; // Skip the holder checks (tests only, design 4).
+    bool enable_direct_mode = false; // Only turn direct mode on for the headset: no holder checks, no display session.
     bool help = false;
     int seconds = kDefaultSeconds;
 };

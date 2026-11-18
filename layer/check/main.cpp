@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20]  (design 7)
+// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]  (design 7)
 //
 // The order: arguments, then the holder checks (before anything is touched: no NVAPI, no HID if Pimax or Monado runs),
 // then the board heartbeat, then the NVAPI check, then the verdict. Exit code: 0 PASS, 1 a check failed, 2 usage,
@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <exception>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,10 @@ int main(int argc, char** argv)
     }
 
     StdoutOutput out;
+    if (options.enable_direct_mode) {
+        const std::unique_ptr<nvdm::Api> api = nvdm::make_nvapi();
+        return run_enable_direct_mode(*api, out);
+    }
     say(out, "mirador-display-check %s: NVAPI only, %d s%s%s", DVL_CHECK_VERSION, options.seconds,
         options.no_heartbeat ? ", no heartbeat" : "", options.ignore_holders ? ", holder checks skipped" : "");
 

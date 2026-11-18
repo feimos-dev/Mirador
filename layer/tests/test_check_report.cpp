@@ -47,6 +47,15 @@ TEST_CASE("options_default_to_the_nvapi_check_of_20_seconds")
     CHECK(parsed.options.seconds == 20);
 }
 
+TEST_CASE("options parse --enable-direct-mode")
+{
+    const dvl::ParsedOptions parsed = dvl::parse_options({"--enable-direct-mode"});
+    REQUIRE(parsed.ok());
+    CHECK(parsed.options.enable_direct_mode);
+    CHECK_FALSE(dvl::parse_options({}).options.enable_direct_mode);
+    CHECK(contains(dvl::usage_text(), "--enable-direct-mode"));
+}
+
 TEST_CASE("options_take_every_flag_in_any_order")
 {
     const dvl::ParsedOptions parsed =

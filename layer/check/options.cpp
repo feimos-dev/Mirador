@@ -46,6 +46,8 @@ ParsedOptions parse_options(const std::vector<std::string>& args)
     for (const std::string& arg : args) {
         if (arg == "--no-heartbeat") {
             o.no_heartbeat = true;
+        } else if (arg == "--enable-direct-mode") {
+            o.enable_direct_mode = true;
         } else if (arg == "--ignore-holders") {
             o.ignore_holders = true;
         } else if (arg == "--help" || arg == "-h" || arg == "/?") {
@@ -66,7 +68,7 @@ ParsedOptions parse_options(const std::vector<std::string>& args)
 
 std::string usage_text()
 {
-    return "usage: mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20]\n"
+    return "usage: mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]\n"
            "\n"
            "Checks the headset's direct mode on this machine: the NVIDIA driver version, that every NVAPI call the\n"
            "layer needs is there, that the display is found, bound and flipping, presenting solid colours for\n"
@@ -76,6 +78,8 @@ std::string usage_text()
            "  --no-heartbeat    Do not send the board heartbeat (something else does).\n"
            "  --ignore-holders  Skip the holder checks (tests only).\n"
            "  --seconds=N       How long to present, 1 to 3600 (default 20; 20 s is 1800 presents at 90 Hz).\n"
+           "  --enable-direct-mode  Only turn direct mode on for the headset (NVAPI Initialize, then EnableDirectMode),\n"
+           "                    then exit: no holder checks, no display session. Run it after Pimax Play or SteamVR.\n"
            "  --help            This text.\n"
            "\n"
            "Exit code: 0 if the verdict is PASS, 1 if a check failed, 2 for a usage error (and --help).\n";

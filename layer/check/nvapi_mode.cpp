@@ -459,6 +459,26 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
     return result;
 }
 
+int run_enable_direct_mode(nvdm::Api& api, Output& out)
+{
+    const int init = api.initialize();
+    if (init != 0) {
+        say(out, "FAIL: NVAPI could not be initialised (status %d)", init);
+        say(out, "what to do: install NVIDIA's driver; AMD and Intel GPUs are not supported");
+        return kExitFail;
+    }
+    const uint32_t vendor = nvdm::kVendorPvr;
+    const int ret = api.enable_direct_mode(vendor);
+    if (ret != 0) {
+        say(out, "FAIL: NVAPI EnableDirectMode for the headset (vendor 0x%04x) returned %d", vendor, ret);
+        say(out, "what to do: run this as administrator; if it still fails, quit Pimax Play and SteamVR, unplug and "
+                 "replug the headset, then try again");
+        return kExitFail;
+    }
+    say(out, "PASS: direct mode is on for the headset.");
+    return kExitPass;
+}
+
 ModeResult run_nvapi_mode(const Options& options, Output& out)
 {
     // The session's own lines (driver version, EDID route, the failing step) go to the console as they come.

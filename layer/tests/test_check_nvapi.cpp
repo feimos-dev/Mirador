@@ -217,6 +217,47 @@ TEST_CASE("nvapi_mode_names_the_step_and_status_of_a_refused_bind")
     CHECK(rig.printed("FAILED"));
 }
 
+TEST_CASE("enable-direct-mode reports PASS when NVAPI succeeds")
+{
+    NvapiRig rig;
+    const int code = dvl::run_enable_direct_mode(rig.api, rig.out);
+    CHECK(code == dvl::kExitPass);
+    CHECK(rig.printed("PASS: direct mode is on for the headset."));
+    CHECK(rig.api.count("initialize") == 1);
+    CHECK(rig.api.count("enable_direct_mode") == 1);
+    // No display session: nothing is enumerated, bound or presented.
+    CHECK(rig.api.count("enumerate") == 0);
+    CHECK(rig.api.count("bind_device") == 0);
+    CHECK(rig.api.count("present") == 0);
+    for (const auto& call : rig.api.calls()) {
+        if (call.name == "enable_direct_mode") {
+            CHECK(call.arg == 0xd242);
+        }
+    }
+}
+
+TEST_CASE("enable-direct-mode reports FAIL with the NVAPI status otherwise")
+{
+    NvapiRig rig;
+    rig.api.queue(nvdm::FakeApi::Fn::EnableDirectMode, -5);
+    const int code = dvl::run_enable_direct_mode(rig.api, rig.out);
+    CHECK(code == dvl::kExitFail);
+    CHECK(rig.printed("FAIL: "));
+    CHECK(rig.printed("-5"));
+    CHECK(rig.printed("what to do:"));
+    CHECK_FALSE(rig.printed("PASS"));
+}
+
+TEST_CASE("enable-direct-mode reports FAIL when NVAPI does not initialise")
+{
+    NvapiRig rig;
+    rig.api.queue(nvdm::FakeApi::Fn::Initialize, -1);
+    CHECK(dvl::run_enable_direct_mode(rig.api, rig.out) == dvl::kExitFail);
+    CHECK(rig.printed("FAIL: "));
+    CHECK(rig.printed("what to do:"));
+    CHECK(rig.api.count("enable_direct_mode") == 0);
+}
+
 TEST_CASE("nvapi_mode_fails_when_the_display_does_not_appear")
 {
     NvapiRig rig(1);
