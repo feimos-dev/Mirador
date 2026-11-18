@@ -82,6 +82,7 @@ public:
     std::string missing_id;                      // first_missing_id(); empty means none is missing
     std::vector<uint32_t> display_ids{0x80061086}; // enumerate(kVendorPvr); the id Finn's machine has
     int64_t appears_at_ns = 0;                   // enumerate() finds nothing before this clock time
+    uint32_t enables_needed = 0;                 // enumerate() finds nothing until enable_direct_mode() was called this often
     LUID luid = {0x1234, 0x56};                  // adapter_luid()
     std::vector<uint8_t> edid;                   // read_edid(); empty means unreadable
     EdidRoute edid_route = EdidRoute::Nvapi;     // What read_edid() reports as the route when it succeeds
@@ -247,7 +248,8 @@ public:
     {
         Scope call(*this, Fn::Enumerate, vendor);
         ids.clear();
-        if (call.status == 0 && vendor == kVendorPvr && clock_.now_ns() >= appears_at_ns) {
+        if (call.status == 0 && vendor == kVendorPvr && clock_.now_ns() >= appears_at_ns &&
+            enable_calls_ >= enables_needed) {
             ids = display_ids;
         }
         return call.status;
@@ -280,6 +282,7 @@ public:
     int enable_direct_mode(uint32_t vendor) override
     {
         Scope call(*this, Fn::EnableDirectMode, vendor);
+        enable_calls_++;
         return call.status;
     }
 
@@ -435,6 +438,7 @@ private:
     std::map<Fn, int> defaults_;
     size_t handed_out_ = 0;
     bool bound_ = false; // A bind_device() succeeded and no later one failed.
+    uint32_t enable_calls_ = 0;
 
     bool running_ = true;
     uint32_t base_count_ = 0;

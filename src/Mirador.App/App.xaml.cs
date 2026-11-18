@@ -111,10 +111,10 @@ public partial class App : Application
             AppLog.Write($"Warning: {w.Text}");
             Ui.TryEnqueue(() => NotifyUnlessSeen("While Monado runs", w.Text));
         };
-        Host.Session.Ended += text =>
+        Host.Session.Ended += end =>
         {
-            AppLog.Write($"Monado ended: {text}");
-            Ui.TryEnqueue(() => OnEnded(text));
+            AppLog.Write($"Monado ended: {end.Message}");
+            Ui.TryEnqueue(() => OnEnded(end));
         };
         AppHost.RecordAppPath();
         _ = Task.Run(Host.Session.PlaceStandIn);
@@ -352,13 +352,13 @@ public partial class App : Application
         UpdateTray();
     }
 
-    /// <summary>Monado ended: by itself is a problem (the tray says so, and a toast when the window isn't in front).</summary>
-    private void OnEnded(string text)
+    /// <summary>Monado ended: an ending that is a problem (it stopped by itself, or Mirador stopped it because something failed) shows in the tray, and as a toast when the window isn't in front.</summary>
+    private void OnEnded(SessionEnd end)
     {
-        if (text.StartsWith("Monado stopped by itself", StringComparison.Ordinal))
+        if (end.Problem)
         {
             endedBadly = true;
-            NotifyUnlessSeen("Monado stopped", text);
+            NotifyUnlessSeen("Monado stopped", end.Message);
         }
 
         UpdateTray();
@@ -461,7 +461,7 @@ public partial class App : Application
                 : (TrayState.Running, "Mirador: Monado is running", "Stop"),
             SessionState.Starting => (TrayState.Running, "Mirador: Monado is starting", "Stop"),
             SessionState.Stopping => (TrayState.Stopped, "Mirador: Monado is stopping", "Stop"),
-            _ => (problem ? TrayState.Problem : TrayState.Stopped, problem ? (endedBadly ? "Mirador: Monado stopped by itself" : "Mirador: Monado didn't start") : "Mirador: Monado is stopped", "Start"),
+            _ => (problem ? TrayState.Problem : TrayState.Stopped, problem ? (endedBadly ? "Mirador: Monado stopped with a problem" : "Mirador: Monado didn't start") : "Mirador: Monado is stopped", "Start"),
         };
         tray.Show(look, tooltip, action);
     }

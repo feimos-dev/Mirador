@@ -12,6 +12,7 @@ using Mirador.Core.Monado;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
+using Mirador.Pimax;
 using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
@@ -67,7 +68,7 @@ public sealed partial class HomeViewModel : ObservableObject
         host.Session.StatusChanged += () => ui.TryEnqueue(RefreshStatus);
         host.Stations.Changed += OnStationsChanged;
         host.Session.Warning += w => ui.TryEnqueue(() => AddWarning(w));
-        host.Session.Ended += text => ui.TryEnqueue(() => OnEnded(text));
+        host.Session.Ended += end => ui.TryEnqueue(() => OnEnded(end));
         App.Current.StartFailed += message =>
         {
             // Through null, so that the same message again opens the bar again after it was closed.
@@ -161,6 +162,17 @@ public sealed partial class HomeViewModel : ObservableObject
     /// <summary>False while "Allow again" waits for its UAC prompt.</summary>
     [ObservableProperty]
     public partial bool CanAllowAgain { get; set; } = true;
+
+    /// <summary>What the headset check says while the headset shows as a normal monitor (direct mode is off); null otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDirectModeNotice))]
+    public partial string? DirectModeNotice { get; set; }
+
+    public bool HasDirectModeNotice => DirectModeNotice is not null;
+
+    /// <summary>False while "Fix direct mode" runs.</summary>
+    [ObservableProperty]
+    public partial bool CanFixDirectMode { get; set; } = true;
 
     /// <summary>The "OpenXR runtime" row of the runtimes card.</summary>
     [ObservableProperty]
@@ -682,6 +694,12 @@ public sealed partial class HomeViewModel : ObservableObject
             CheckSteamVrButtonStart();
         }
 
+        if (State != SessionState.Stopped)
+        {
+            // The headset on the desktop only matters while Monado doesn't run.
+            DirectModeNotice = null;
+        }
+
         RefreshStatus();
         UpdateDevicePolling();
         if (devicePolling is { } polling)
@@ -938,7 +956,11 @@ public sealed partial class HomeViewModel : ObservableObject
             }
         }
 
-        foreach (var r in results.Where(r => r.Level is StatusLevel.Warning or StatusLevel.Error))
+        // Only while Monado is stopped: a check that finished after a Start began is stale.
+        DirectModeNotice = State == SessionState.Stopped
+            ? results.FirstOrDefault(r => r.Label == PimaxModule.DirectModeOffLabel)?.Text
+            : null;
+        foreach (var r in results.Where(r => r.Level is StatusLevel.Warning or StatusLevel.Error && r.Label != PimaxModule.DirectModeOffLabel))
         {
             Notices.Add(new NoticeItem(
                 "check:" + r.Label,
@@ -949,13 +971,46 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Monado ended other than by Stop: by itself (a problem), or after the last app closed (as asked).</summary>
-    private void OnEnded(string text)
+    /// <summary>
+    /// "Fix direct mode" on the direct mode warning: Pimax's software is stopped and the display check turns direct mode
+    /// on, while Monado is stopped (through the session, which keeps Starts out meanwhile). The checks run again after.
+    /// </summary>
+    [RelayCommand]
+    private async Task FixDirectModeAsync()
     {
-        if (text != "Stopped.")
+        if (host.Modules.GetValueOrDefault(PimaxModule.ModuleId) is not PimaxModule module)
         {
-            var problem = text.StartsWith("Monado stopped by itself", StringComparison.Ordinal);
-            ShowNotice("ended", "Monado stopped", text, problem ? InfoBarSeverity.Error : InfoBarSeverity.Informational);
+            return;
+        }
+
+        CanFixDirectMode = false;
+        RemoveNotice("fix-direct-mode");
+        try
+        {
+            var problem = await host.Session.RunWhileStoppedAsync(
+                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
+            if (problem is not null)
+            {
+                ShowNotice("fix-direct-mode", "Direct mode", problem, InfoBarSeverity.Error);
+            }
+        }
+        catch (MiradorException e)
+        {
+            ShowNotice("fix-direct-mode", "Direct mode", e.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            CanFixDirectMode = true;
+            await RunChecksAsync();
+        }
+    }
+
+    /// <summary>Monado ended other than by Stop: a problem (it stopped by itself, or failed to come up) or as asked (after the last app closed).</summary>
+    private void OnEnded(SessionEnd end)
+    {
+        if (end.Message != "Stopped.")
+        {
+            ShowNotice("ended", "Monado stopped", end.Message, end.Problem ? InfoBarSeverity.Error : InfoBarSeverity.Informational);
         }
     }
 

@@ -27,6 +27,12 @@ public abstract class ModuleSession
     public event Action<SessionWarning>? Warning;
 
     /// <summary>
+    /// Raised, on any thread, when the session finds that Monado can't work (such as the headset's display never coming
+    /// up) and should be stopped, with the reason, which becomes the run's problem. Mirador stops Monado its usual way.
+    /// </summary>
+    public event Action<string>? StopRequested;
+
+    /// <summary>
     /// Takes the next line of Monado's output. Called on a background thread, one line at a time, while Monado's
     /// output waits: it must not block, and must not wait for another thread (the UI's above all).
     /// </summary>
@@ -45,4 +51,6 @@ public abstract class ModuleSession
     protected void RaiseStatusChanged() => StatusChanged?.Invoke();
 
     protected void RaiseWarning(SessionWarning w) => Warning?.Invoke(w);
+
+    protected void RaiseStopRequested(string reason) => StopRequested?.Invoke(reason);
 }

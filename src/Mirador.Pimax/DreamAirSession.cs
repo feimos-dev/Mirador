@@ -33,6 +33,7 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     private bool pimaxSeen;
     private bool steamVrSeen;
     private bool ended;
+    private bool stopRequested;
 
     /// <param name="ctx">The module's context: the helper, the process list and the clock.</param>
     /// <param name="environment">The variables Monado gets for the Dream Air.</param>
@@ -41,14 +42,15 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     /// <param name="warnings">Warnings from getting ready, raised at the first look (Mirador listens only once it has the session).</param>
     public DreamAirSession(
         ModuleContext ctx, IReadOnlyList<EnvVar> environment, bool pimaxWasRunning, GeometryResult? upload,
-        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true)
+        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true,
+        bool layerUsed = true)
     {
         this.ctx = ctx;
         pending = warnings is { Count: > 0 } ? [.. warnings] : null;
         this.pimaxWasRunning = pimaxWasRunning;
         Environment = environment;
         RecoveryData = Recovery(pimaxWasRunning);
-        parser = new DreamAirLogParser(upload, headset, headsetThere);
+        parser = new DreamAirLogParser(upload, headset, headsetThere, ctx.Time, layerUsed);
         timer = ctx.Time.CreateTimer(_ => Poll(), null, PollInterval, Timeout.InfiniteTimeSpan);
     }
 
@@ -68,6 +70,9 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         {
             RaiseStatusChanged();
         }
+
+        // Monado found no driver for the headset: it idles, so it stops now, not after the display's wait.
+        StopIfFailed();
     }
 
     /// <summary>
@@ -152,6 +157,30 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         foreach (var warning in warnings)
         {
             RaiseWarning(warning);
+        }
+
+        // The layer's display never came up: Monado idles for ever otherwise.
+        parser.Tick();
+        StopIfFailed();
+    }
+
+    /// <summary>Asks Mirador once to stop Monado when the parser says it can't work.</summary>
+    private void StopIfFailed()
+    {
+        if (parser.Failed is { } failed)
+        {
+            lock (gate)
+            {
+                if (stopRequested || ended)
+                {
+                    return;
+                }
+
+                stopRequested = true;
+            }
+
+            RaiseStatusChanged();
+            RaiseStopRequested(failed);
         }
     }
 }

@@ -1,0 +1,83 @@
+using System.Runtime.InteropServices;
+
+namespace Mirador.Core.DirectMode;
+
+/// <summary>A monitor Windows knows: its device interface path and whether its adapter is part of the desktop.</summary>
+public sealed record MonitorEntry(string DeviceId, bool OnDesktop);
+
+/// <summary>
+/// Whether the headset shows up among the desktop's monitors. In direct mode NVIDIA keeps it off the desktop; when
+/// something such as Pimax Play or SteamVR has handed it back, Windows lists it as an ordinary monitor.
+/// </summary>
+public static class HeadsetMonitor
+{
+    private const uint EddGetDeviceInterfaceName = 0x1;
+    private const uint AttachedToDesktop = 0x1;
+
+    /// <summary>The most adapters and monitors per adapter looked at, so a misbehaving driver can't make this loop.</summary>
+    private const int Limit = 64;
+
+    /// <summary>
+    /// True when a monitor on the desktop belongs to <paramref name="pnpVendor"/> (Pimax is <c>PVR</c>): its device
+    /// id contains <c>#PVR</c> or <c>\PVR</c>, in any case.
+    /// </summary>
+    public static bool HeadsetOnDesktop(IReadOnlyList<MonitorEntry> monitors, string pnpVendor = "PVR")
+    {
+        return monitors.Any(monitor =>
+            monitor.OnDesktop
+            && (monitor.DeviceId.Contains("#" + pnpVendor, StringComparison.OrdinalIgnoreCase)
+                || monitor.DeviceId.Contains(@"\" + pnpVendor, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// Every monitor Windows lists, per adapter (<c>EnumDisplayDevicesW</c>), with its device interface path.
+    /// <see cref="MonitorEntry.OnDesktop"/> is the adapter's "attached to desktop" state. Changes nothing.
+    /// </summary>
+    public static IReadOnlyList<MonitorEntry> List()
+    {
+        var monitors = new List<MonitorEntry>();
+        for (uint adapterIndex = 0; adapterIndex < Limit; adapterIndex++)
+        {
+            var adapter = NewDevice();
+            if (!EnumDisplayDevicesW(null, adapterIndex, ref adapter, 0))
+            {
+                break;
+            }
+
+            var onDesktop = (adapter.StateFlags & AttachedToDesktop) != 0;
+            for (uint monitorIndex = 0; monitorIndex < Limit; monitorIndex++)
+            {
+                var monitor = NewDevice();
+                if (!EnumDisplayDevicesW(adapter.DeviceName, monitorIndex, ref monitor, EddGetDeviceInterfaceName))
+                {
+                    break;
+                }
+
+                monitors.Add(new MonitorEntry(monitor.DeviceId, onDesktop));
+            }
+        }
+
+        return monitors;
+    }
+
+    private static DisplayDevice NewDevice() => new() { Size = Marshal.SizeOf<DisplayDevice>() };
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DisplayDevice
+    {
+        public int Size;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceString;
+        public uint StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceId;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceKey;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumDisplayDevicesW(string? device, uint devNum, ref DisplayDevice displayDevice, uint flags);
+}

@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.Build;
+using Mirador.Core.DirectMode;
 using Mirador.Core.Diagnostics;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Profiles;
@@ -51,7 +52,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     public partial string Versions { get; set; } = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CheckDisplayCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CheckDisplayCommand), nameof(FixDirectModeCommand))]
     public partial bool CanCheckDisplay { get; set; }
 
     [ObservableProperty]
@@ -73,7 +74,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     public partial string? Message { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CheckDisplayCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CheckDisplayCommand), nameof(FixDirectModeCommand))]
     public partial bool IsBusy { get; set; }
 
     /// <summary>Whether a profile has a "Verify build for Windows" result.</summary>
@@ -193,6 +194,43 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     }
 
     private bool CanRunCheck() => CanCheckDisplay && !IsBusy;
+
+    /// <summary>
+    /// "Fix direct mode": Pimax's software is stopped and the display check turns direct mode on, while Monado is
+    /// stopped. Then the monitors are looked at again: the headset must be gone from the desktop.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRunCheck))]
+    private async Task FixDirectModeAsync()
+    {
+        if (host.Modules.GetValueOrDefault(PimaxModule.ModuleId) is not PimaxModule module)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        CheckResult = null;
+        try
+        {
+            var problem = await host.Session.RunWhileStoppedAsync(
+                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
+            problem ??= await Task.Run(() => HeadsetMonitor.HeadsetOnDesktop(HeadsetMonitor.List()))
+                ? "Direct mode was turned on, but the headset still shows as a monitor. Unplug and plug in the headset's DisplayPort cable, then try again."
+                : null;
+            CheckPassed = problem is null;
+            CheckResult = problem is null ? "Direct mode is on for the headset." : Sentence(problem);
+            host.NotifyDevicesChanged(); // Home looks at its checks again
+        }
+        catch (MiradorException e)
+        {
+            CheckPassed = false;
+            CheckResult = e.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            Refresh();
+        }
+    }
 
     [RelayCommand]
     private async Task SaveDiagnosticsAsync()

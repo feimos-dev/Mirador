@@ -115,9 +115,10 @@ public sealed class SessionController(SessionDeps deps)
 
     /// <summary>
     /// Raised once a running session has ended, after <see cref="State"/> is <see cref="SessionState.Stopped"/>, with
-    /// what happened ("Stopped.", or why Monado stopped by itself). A Start that fails says so through its outcome instead.
+    /// what happened ("Stopped.", or why Monado stopped on its own or was stopped because something failed) and whether that is a problem. A Start that fails
+    /// says so through its outcome instead.
     /// </summary>
-    public event Action<string>? Ended;
+    public event Action<SessionEnd>? Ended;
 
     public SessionState State
     {
@@ -611,12 +612,12 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>Moves a running session to Stopping and sets its end off. Called under the lock.</summary>
-    private Task BeginStop(Run run, string endedMessage, bool clean = true)
+    private Task BeginStop(Run run, string endedMessage, bool clean = true, bool problem = false)
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         state = SessionState.Stopping;
         stopping = done.Task;
-        _ = Task.Run(() => FinishAsync(run, done, endedMessage, clean), CancellationToken.None);
+        _ = Task.Run(() => FinishAsync(run, done, new SessionEnd(endedMessage, problem), clean), CancellationToken.None);
         return done.Task;
     }
 
@@ -631,6 +632,18 @@ public sealed class SessionController(SessionDeps deps)
             {
                 await recovery.WaitAsync(ct).ConfigureAwait(false);
                 outcome = await StartCoreAsync(run, ct).ConfigureAwait(false);
+                if (outcome.Ok)
+                {
+                    // Monado said while it started (the pipe or libmonado wait) that it can't work: that is the Start's
+                    // outcome, so no game is told Monado runs, and the end below stops it.
+                    lock (gate)
+                    {
+                        if (run.StopReason is { } reason)
+                        {
+                            outcome = Fail(reason);
+                        }
+                    }
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -658,6 +671,11 @@ public sealed class SessionController(SessionDeps deps)
                 state = outcome.Ok ? SessionState.Running : SessionState.Stopped;
                 starting = null;
                 startCancel = null;
+                if (outcome.Ok && run.StopReason is { } reason)
+                {
+                    _ = BeginStop(run, reason, problem: true);
+                }
+
                 if (!outcome.Ok)
                 {
                     current = null;
@@ -1002,12 +1020,14 @@ public sealed class SessionController(SessionDeps deps)
     private async Task WatchAsync(Run run)
     {
         string message;
+        var problem = true;
         try
         {
             var code = await run.Process!.Exited.ConfigureAwait(false);
-            message = run.Settings.StopWhenLastAppCloses && code == 0
-                ? "Monado stopped after the last app closed."
-                : $"Monado stopped by itself (exit code {Number(code)}).";
+            problem = !(run.Settings.StopWhenLastAppCloses && code == 0);
+            message = problem
+                ? $"Monado stopped by itself (exit code {Number(code)})."
+                : "Monado stopped after the last app closed.";
         }
         catch (Exception)
         {
@@ -1020,13 +1040,13 @@ public sealed class SessionController(SessionDeps deps)
         {
             if (current == run && state == SessionState.Running) // else a Stop got there first
             {
-                _ = BeginStop(run, message);
+                _ = BeginStop(run, message, problem: problem);
             }
         }
     }
 
     /// <summary>Ends a running session (state Stopping), then moves to Stopped and raises <see cref="Ended"/>.</summary>
-    private async Task FinishAsync(Run run, TaskCompletionSource done, string endedMessage, bool clean)
+    private async Task FinishAsync(Run run, TaskCompletionSource done, SessionEnd ended, bool clean)
     {
         try
         {
@@ -1047,7 +1067,7 @@ public sealed class SessionController(SessionDeps deps)
 
             RaiseChanged();
             RaiseStatusChanged();
-            Raise(Ended, endedMessage);
+            Raise(Ended, ended);
             done.SetResult();
         }
     }
@@ -1138,6 +1158,7 @@ public sealed class SessionController(SessionDeps deps)
 
             session.StatusChanged -= run.OnModuleStatus;
             session.Warning -= run.OnModuleWarning;
+            session.StopRequested -= run.OnModuleStopRequested;
         }
 
         if (run.WroteSessionFile && !keepSessionFile)
@@ -1192,6 +1213,8 @@ public sealed class SessionController(SessionDeps deps)
         run.OnModuleWarning = RaiseWarning;
         session.StatusChanged += run.OnModuleStatus;
         session.Warning += run.OnModuleWarning;
+        run.OnModuleStopRequested = reason => RequestStopAsync(run, reason);
+        session.StopRequested += run.OnModuleStopRequested;
         lock (gate)
         {
             run.Session = session;
@@ -1239,6 +1262,11 @@ public sealed class SessionController(SessionDeps deps)
             (failures ??= []).Add(new LogWriteException(e));
         }
 
+        if (line.Contains(CompositorFailure, StringComparison.Ordinal))
+        {
+            RequestStopAsync(run, CompositorMessage);
+        }
+
         var appsChanged = run.Clients.Feed(line);
         var trackingChanged = run.Lighthouse.Feed(line) && run.UsesLighthouse;
         Raise(LogLine, line);
@@ -1261,6 +1289,37 @@ public sealed class SessionController(SessionDeps deps)
             throw failures.Count == 1 ? failures[0] : new AggregateException(failures);
         }
     }
+
+    /// <summary>Monado's own line when it can't set up its compositor: it then idles with nothing to show.</summary>
+    private const string CompositorFailure = "[comp_main_create_system_compositor] Failed to init compositor";
+
+    private const string CompositorMessage =
+        "Monado couldn't start its compositor. Check Diagnostics for the reason in Monado's log, then start again.";
+
+    /// <summary>
+    /// Stops a running session for <paramref name="reason"/>, which becomes how it ended. Asynchronous: it is asked for
+    /// from the output's reader or a module's thread, and Stop then runs its usual path from another one, so nothing
+    /// waits for the thread that asked. A session that is still starting stops as soon as it runs.
+    /// </summary>
+    private void RequestStopAsync(Run run, string reason) => _ = Task.Run(() =>
+    {
+        lock (gate)
+        {
+            if (current != run)
+            {
+                return;
+            }
+
+            if (state == SessionState.Running)
+            {
+                _ = BeginStop(run, reason, problem: true);
+            }
+            else if (state == SessionState.Starting)
+            {
+                run.StopReason ??= reason;
+            }
+        }
+    });
 
     /// <summary>
     /// Warns once per session about each kind of failure while following the output, with the first one's message: the
@@ -1670,5 +1729,10 @@ public sealed class SessionController(SessionDeps deps)
         public int LogFailureReported;
 
         public int ModuleFailureReported;
+
+        public Action<string>? OnModuleStopRequested { get; set; }
+
+        /// <summary>Why the run must stop, asked for before it was running; it stops as soon as it is. Under the lock.</summary>
+        public string? StopReason { get; set; }
     }
 }

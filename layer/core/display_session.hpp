@@ -122,6 +122,7 @@ private:
     OpenResult load_nvapi();
     OpenResult check_ids();
     OpenResult find_display();
+    void enable_all_vendors();
     OpenResult check_adapter(const LUID& queried);
     OpenResult identify_product();
     OpenResult enable_direct_mode();

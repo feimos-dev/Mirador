@@ -58,7 +58,7 @@ public sealed class DirectModeCheck(Func<string?> driverNow, Func<ProcessSpec, I
         $"Direct mode isn't used for this headset: {Sentence(checkMessage)} Monado shows an image on it only through " +
         "Windows' own headset route (WinRT/WDDC, upstream merge request !2811), which upstream Monado doesn't have yet.";
 
-    internal static string Sentence(string s) => s.EndsWith('.') || s.EndsWith('!') || s.EndsWith('?') ? s : s + ".";
+    public static string Sentence(string s) => s.EndsWith('.') || s.EndsWith('!') || s.EndsWith('?') ? s : s + ".";
 
-    internal static string Capitalized(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
+    public static string Capitalized(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 }

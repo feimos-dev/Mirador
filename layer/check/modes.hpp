@@ -11,6 +11,7 @@
 
 #include "check/options.hpp"
 #include "check/report.hpp"
+#include "core/api.hpp"
 #include "core/display_session.hpp"
 
 namespace dvl {
@@ -54,6 +55,11 @@ struct NvapiEnv {
     bool clear_back_buffers = true;   // Clear them through a D3D11 device (the real handles only); false: not at all.
     std::function<std::vector<std::string>()> session_lines; // The session's log so far, for the driver version.
 };
+
+// --enable-direct-mode: NVAPI Initialize, then EnableDirectMode for the Pimax vendor, and nothing else (no display
+// session, no heartbeat). Prints "PASS: direct mode is on for the headset." and returns kExitPass, or "FAIL: ..." with
+// "what to do:" and returns kExitFail.
+int run_enable_direct_mode(nvdm::Api& api, Output& out);
 
 ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& out);
 

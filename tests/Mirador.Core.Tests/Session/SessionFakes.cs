@@ -443,6 +443,8 @@ internal sealed class FakeModuleSession(
     }
 
     public void Warn(SessionWarning warning) => RaiseWarning(warning);
+
+    public void RequestStop(string reason) => RaiseStopRequested(reason);
 }
 
 internal sealed class FakeModule(Steps steps) : IHeadsetModule
@@ -709,10 +711,11 @@ internal sealed class Harness : IAsyncDisposable
         Controller.Changed += () => Changes.Enqueue(Controller.State);
         Controller.Warning += w => Warnings.Enqueue(w);
         Controller.LogLine += l => LogLines.Enqueue(l);
-        Controller.Ended += m =>
+        Controller.Ended += e =>
         {
-            EndedMessages.Enqueue(m);
-            HasEnded.TrySetResult(m);
+            EndedMessages.Enqueue(e.Message);
+            EndedProblems.Enqueue(e.Problem);
+            HasEnded.TrySetResult(e.Message);
         };
     }
 
@@ -788,6 +791,8 @@ internal sealed class Harness : IAsyncDisposable
     public ConcurrentQueue<string> LogLines { get; } = new();
 
     public ConcurrentQueue<string> EndedMessages { get; } = new();
+
+    public ConcurrentQueue<bool> EndedProblems { get; } = new();
 
     public TaskCompletionSource<string> HasEnded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

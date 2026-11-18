@@ -297,6 +297,22 @@
                 </InfoBar>
 
                 <InfoBar
+                    Title="Direct mode"
+                    IsClosable="False"
+                    IsOpen="{x:Bind ViewModel.HasDirectModeNotice, Mode=OneWay}"
+                    Message="{x:Bind ViewModel.DirectModeNotice, Mode=OneWay}"
+                    Severity="Warning"
+                    Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}">
+                    <!-- The headset is on the desktop as a monitor: Pimax's software is stopped and direct mode turned on again. -->
+                    <InfoBar.ActionButton>
+                        <Button
+                            Command="{x:Bind ViewModel.FixDirectModeCommand}"
+                            Content="Fix direct mode"
+                            IsEnabled="{x:Bind ViewModel.CanFixDirectMode, Mode=OneWay}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <InfoBar
                     Title="GPU scheduling"
                     IsClosable="False"
                     IsOpen="{x:Bind ViewModel.HasGpuSchedulingNotice, Mode=OneWay}"

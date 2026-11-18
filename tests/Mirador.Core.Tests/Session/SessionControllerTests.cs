@@ -934,6 +934,153 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_failed_compositor_stops_monado_with_its_message()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Launcher.Last!.Emit(
+            " INFO [ipc_server_process] Starting",
+            "ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
+        var message = await h.HasEnded.Task.WaitAsync(Limit);
+
+        Assert.StartsWith("Monado couldn't start its compositor", message);
+        Assert.DoesNotContain("000001F2", message);
+        Assert.Equal([true], h.EndedProblems);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.Equal(1, h.Module.Session!.Ends);
+    }
+
+    [Fact]
+    public async Task A_compositor_failure_for_one_session_does_not_stop_monado()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Launcher.Last!.Emit("ERROR [compositor_begin_session] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100);
+
+        Assert.Equal(SessionState.Running, h.Controller.State);
+        Assert.Empty(h.EndedMessages);
+    }
+
+    [Fact]
+    public async Task An_idle_monado_without_a_game_is_not_stopped()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Time.Advance(TimeSpan.FromMinutes(5));
+        h.Launcher.Last!.Emit(" INFO [ipc_server_process] Waiting for applications");
+        await Task.Delay(50);
+
+        Assert.Equal(SessionState.Running, h.Controller.State);
+        Assert.Empty(h.EndedMessages);
+    }
+
+    [Fact]
+    public async Task A_module_asking_to_stop_ends_the_run_with_its_reason()
+    {
+        await using var h = new Harness();
+        await h.StartRunningAsync();
+
+        h.Module.Session!.RequestStop("The headset's display didn't come up within a minute.");
+        var message = await h.HasEnded.Task.WaitAsync(Limit);
+
+        Assert.Equal("The headset's display didn't come up within a minute.", message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.Equal([true], h.EndedProblems);
+    }
+
+    [Fact]
+    public async Task A_compositor_failure_before_the_pipe_is_there_stops_the_run_once_it_runs()
+    {
+        await using var h = new Harness();
+        var start = h.Controller.StartAsync(StartReason.Button, CancellationToken.None);
+        await h.Pipe.FirstPoll.Task.WaitAsync(Limit); // Monado runs, its pipe isn't up yet: the run is still Starting
+        h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100); // the asynchronous request has taken the lock and left its reason with the run
+        Assert.Equal(SessionState.Starting, h.Controller.State);
+
+        h.Pipe.Up = true;
+        h.Time.Advance(TimeSpan.FromSeconds(1));
+        var outcome = await start.WaitAsync(Limit);
+
+        // The Start fails with the reason: a game is never told Monado runs, and Monado is stopped.
+        Assert.False(outcome.Ok);
+        Assert.StartsWith("Monado couldn't start its compositor", outcome.Message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.True(h.Launcher.Last!.Killed);
+        Assert.Empty(h.EndedMessages); // a failed Start says so through its outcome
+    }
+
+    [Fact]
+    public async Task A_compositor_failure_during_the_libmonado_wait_fails_the_start()
+    {
+        await using var h = new Harness();
+        h.Libmonado.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Pipe.Up = true;
+
+        var start = Start(h);
+        await h.Libmonado.Entered.Task.WaitAsync(Limit); // the pipe is there, libmonado waits for Monado's system
+        h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100);
+        await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
+        var outcome = await start.WaitAsync(Limit);
+        h.Libmonado.Gate.SetResult();
+
+        Assert.False(outcome.Ok);
+        Assert.StartsWith("Monado couldn't start its compositor", outcome.Message);
+        Assert.Equal(SessionState.Stopped, h.Controller.State);
+        Assert.True(h.Launcher.Last!.Killed);
+    }
+
+    [Fact]
+    public async Task A_stop_while_starting_drops_the_reason_for_stopping()
+    {
+        await using var h = new Harness();
+        var start = h.Controller.StartAsync(StartReason.Button, CancellationToken.None);
+        await h.Pipe.FirstPoll.Task.WaitAsync(Limit);
+        h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
+        await Task.Delay(100);
+
+        await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
+        Assert.False((await start.WaitAsync(Limit)).Ok);
+
+        await h.StartRunningAsync();
+        await Task.Delay(100);
+        Assert.Equal(SessionState.Running, h.Controller.State);
+        Assert.Empty(h.EndedMessages);
+    }
+
+    [Fact]
+    public async Task Endings_that_are_a_problem_are_marked_and_asked_for_stops_are_not()
+    {
+        await using (var self = new Harness())
+        {
+            await self.StartRunningAsync();
+            self.Launcher.Last!.Exit(5);
+            await self.HasEnded.Task.WaitAsync(Limit);
+            Assert.Equal([true], self.EndedProblems);
+        }
+
+        await using (var asked = new Harness())
+        {
+            await asked.StartRunningAsync();
+            await asked.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
+            Assert.Equal([false], asked.EndedProblems);
+        }
+
+        await using var lastApp = new Harness();
+        lastApp.Settings.Save(new MonadoSettings(StopWhenLastAppCloses: true));
+        await lastApp.StartRunningAsync();
+        lastApp.Launcher.Last!.Exit(0);
+        await lastApp.HasEnded.Task.WaitAsync(Limit);
+        Assert.Equal([false], lastApp.EndedProblems);
+    }
+
+    [Fact]
     public async Task Exit_after_the_last_app_closed_says_so()
     {
         await using var h = new Harness();
