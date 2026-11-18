@@ -175,6 +175,12 @@ public sealed class AppHost : IAsyncDisposable
             problem = $"Couldn't apply the room setup: {e.Message}";
         }
 
+        // Only the current run's result reaches Home: an earlier run's must not clear a newer run's warning.
+        if (!ReferenceEquals(Session.Monado, client))
+        {
+            return;
+        }
+
         try
         {
             RoomSetupApplied?.Invoke(problem);
