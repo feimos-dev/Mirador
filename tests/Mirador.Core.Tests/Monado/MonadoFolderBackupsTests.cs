@@ -259,4 +259,56 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         Assert.Null(problem);
         Assert.NotNull(made);
     }
+
+    /// <summary>A zip with <paramref name="manifest"/> (path → the text it says the file holds) and <paramref name="entries"/> (zip name → text).</summary>
+    private string Zip(IReadOnlyDictionary<string, string> manifest, IReadOnlyDictionary<string, string> entries)
+    {
+        static string Sha(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+
+        var files = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (path, text) in manifest)
+        {
+            files[path] = new System.Text.Json.Nodes.JsonObject { ["size"] = System.Text.Encoding.UTF8.GetByteCount(text), ["sha256"] = Sha(text) };
+        }
+
+        var zip = dir.File("crafted-" + Guid.NewGuid().ToString("N") + ".zip");
+        using var archive = ZipFile.Open(zip, ZipArchiveMode.Create);
+        using (var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open()))
+        {
+            writer.Write(new System.Text.Json.Nodes.JsonObject { ["files"] = files }.ToJsonString());
+        }
+
+        foreach (var (name, text) in entries)
+        {
+            using var writer = new StreamWriter(archive.CreateEntry(name).Open());
+            writer.Write(text);
+        }
+
+        return zip;
+    }
+
+    public static TheoryData<string> CraftedZips => ["traversal", "rooted", "colon", "hash", "extra", "missing"];
+
+    [Theory]
+    [MemberData(nameof(CraftedZips))]
+    public void An_import_that_leaves_its_folder_or_differs_from_its_manifest_is_refused_and_writes_nothing(string kind)
+    {
+        WriteFirstState();
+        var before = Contents(MonadoDir);
+        var zip = kind switch
+        {
+            "traversal" => Zip(new Dictionary<string, string> { ["../x"] = "out" }, new Dictionary<string, string> { ["files/../x"] = "out" }),
+            "rooted" => Zip(new Dictionary<string, string> { ["/x"] = "out" }, new Dictionary<string, string> { ["files//x"] = "out" }),
+            "colon" => Zip(new Dictionary<string, string> { ["C:x"] = "out" }, new Dictionary<string, string> { ["files/C:x"] = "out" }),
+            "hash" => Zip(new Dictionary<string, string> { ["a.json"] = "what the manifest says" }, new Dictionary<string, string> { ["files/a.json"] = "something else" }),
+            "extra" => Zip(new Dictionary<string, string> { ["a.json"] = "a" }, new Dictionary<string, string> { ["files/a.json"] = "a", ["files/x"] = "out" }),
+            _ => Zip(new Dictionary<string, string> { ["a.json"] = "a", ["x"] = "out" }, new Dictionary<string, string> { ["files/a.json"] = "a" }),
+        };
+
+        Assert.Equal(MonadoFolderBackups.NotAnExport, Assert.Throws<MiradorException>(() => Backups().Import(zip)).Message);
+
+        Assert.Equal(before, Contents(MonadoDir));
+        Assert.Empty(Directory.EnumerateFiles(dir.Path, "x", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(dir.Path, "*.mirador-*", SearchOption.TopDirectoryOnly));
+    }
 }
