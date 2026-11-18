@@ -167,7 +167,7 @@ public class ElevatedEnvironmentTests
         Assert.Throws<ArgumentException>(() => Build(Start(module: "vive")));
 
     [Fact]
-    public void The_dream_airs_elevated_table_is_exactly_its_eight_variables()
+    public void The_dream_airs_elevated_table_is_exactly_its_six_variables()
     {
         var expected = new Dictionary<string, string>
         {
@@ -177,12 +177,10 @@ public class ElevatedEnvironmentTests
             ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
             ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
             ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            ["U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS"] = "8.9",
-            ["DREAMAIR_LOG"] = "info",
         };
 
         Assert.Equal(expected, DreamAirEnvironment.FixedEnvironment.ToDictionary(p => p.Key, p => p.Value));
-        Assert.Equal(8, DreamAirEnvironment.FixedEnvironment.Count);
+        Assert.Equal(6, DreamAirEnvironment.FixedEnvironment.Count);
         Assert.Equal(
             ["MIRADOR_DIRECT_MODE", "DISABLE_RTSS_LAYER", "VK_LOADER_LAYERS_ALLOW", "XRT_COMPOSITOR_FORCE_VK_DISPLAY", "XRT_COMPOSITOR_USE_PRESENT_WAIT"],
             DirectModeEnvironment.Variables.Select(p => p.Key));

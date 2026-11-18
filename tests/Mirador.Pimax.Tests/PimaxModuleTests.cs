@@ -120,12 +120,7 @@ public sealed class PimaxModuleTests : IDisposable
         // The layer's variables are the session's (the module uses NVIDIA direct mode); the helper's table has both.
         Assert.True(Module().UsesNvidiaDirectMode);
         Assert.Equal(
-            new EnvVar[]
-            {
-                new("STEAMVR_LH_ENABLE", "1"),
-                new("U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS", "8.9"),
-                new("DREAMAIR_LOG", "info"),
-            },
+            new EnvVar[] { new("STEAMVR_LH_ENABLE", "1") },
             session.Environment);
         Assert.Equal(new Dictionary<string, string> { ["pimaxWasRunning"] = "true" }, session.RecoveryData);
         Assert.Equal(
@@ -196,8 +191,6 @@ public sealed class PimaxModuleTests : IDisposable
             ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
             ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
             ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            ["U_PACING_COMP_PRESENT_TO_DISPLAY_OFFSET_MS"] = "8.9",
-            ["DREAMAIR_LOG"] = "info",
         };
         foreach (var (name, value) in expected)
         {
@@ -858,10 +851,10 @@ public sealed class PimaxModuleTests : IDisposable
 
         session.OnServiceLine("\tNo builder can be used to create a head device");
 
-        var board = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.BoardKey);
-        Assert.Equal(StatusLevel.Error, board.Level);
-        Assert.DoesNotContain("no driver", board.Text);
-        Assert.Contains("found no headset", board.Text);
+        var headset = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.HeadsetKey);
+        Assert.Equal(StatusLevel.Error, headset.Level);
+        Assert.DoesNotContain("no driver", headset.Text);
+        Assert.Contains("found no headset", headset.Text);
     }
 
     [Fact]
@@ -872,8 +865,15 @@ public sealed class PimaxModuleTests : IDisposable
 
         session.OnServiceLine("\tNo builder can be used to create a head device");
 
-        var board = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.BoardKey);
-        Assert.Equal(StatusLevel.Error, board.Level);
-        Assert.Contains("no driver for the Pimax Crystal Light", board.Text);
+        var headset = Assert.Single(session.Status, l => l.Key == DreamAirLogParser.HeadsetKey);
+        Assert.Equal(StatusLevel.Error, headset.Level);
+        Assert.Contains("no driver for the Pimax Crystal Light", headset.Text);
+    }
+
+    [Fact]
+    public void Module_variables_are_only_the_lighthouse_switch()
+    {
+        Assert.Equal([new KeyValuePair<string, string>("STEAMVR_LH_ENABLE", "1")], DreamAirEnvironment.ModuleVariables);
+        Assert.Equal([new EnvVar("STEAMVR_LH_ENABLE", "1")], PimaxModule.EnvironmentFor(PimaxModels.DreamAir));
     }
 }

@@ -6,23 +6,19 @@ public class DreamAirLogParserTests
 {
     private static StatusLine Line(DreamAirLogParser parser, string key) => parser.Lines.Single(l => l.Key == key);
 
+    private static readonly GeometryResult Uploaded = new(true, "XR5DA-P501G0D202652600422", GeometryUploader.Uploaded, "log");
+
     [Fact]
-    public void Log_parser_reads_a_real_run()
+    public void Log_parser_reads_the_layers_lines()
     {
-        // Lines of a real run with DREAMAIR_LOG=info (DreamAirWin\captures\hidapi-2026-11-03\monado.log, and the layer's
-        // statistics from Mirador's first run, 2026-11-04), in their order: the driver applies the calibration before
-        // it says the tracker is connected. The correction line is the driver's format string with a real file name.
+        // The layer's lines of a real run, in their order.
         string[] run =
         [
-            " INFO [dreamair_hid_create] Pimax Dream Air opened.",
-            " INFO [load_correction] Gaze correction loaded from dreamair/eye_correction_XR5DA-P501G0D202652600422.json, with a pupil size part.",
-            " INFO [sync_calibration] Eye calibration applied (from the tracker).",
-            " INFO [open_tracker] Eye tracker connected.",
             "[dvl] info: display session open: Pimax Dream Air, 7104x3840 at 90.000 Hz, display 0x80061086, adapter 00000000:00014f8d",
             "[dvl] info: 90 presents in 1.0 s (89.6 Hz), 90 flips (89.6 Hz), 0 missed (0.00 %), 0 link drops; dropped 0, failed 0, unconfirmed 0, reserved 0, held 0, target skips 0; event wake median 0.05 ms, max 0.13 ms",
             "[dvl] info: 2700 presents in 30.0 s (90.0 Hz), 2701 flips (90.0 Hz), 1 missed (0.04 %), 0 link drops; dropped 0, failed 0, unconfirmed 0, reserved 0, held 0, target skips 0; event wake median 0.04 ms, max 0.86 ms",
         ];
-        var parser = new DreamAirLogParser(new GeometryResult(true, "XR5DA-P501G0D202652600422", GeometryUploader.Uploaded, "log"));
+        var parser = new DreamAirLogParser(Uploaded);
 
         foreach (var line in run)
         {
@@ -33,49 +29,9 @@ public class DreamAirLogParserTests
             new StatusLine[]
             {
                 new("display", "Display", StatusLevel.Ok, "Direct mode, 7104×3840 at 90 Hz, 1 missed of 2,790 frames"),
-                new("board", "Headset board", StatusLevel.Ok, "Connected"),
-                new("eye", "Eye tracker", StatusLevel.Ok, "Calibration applied (from the tracker), gaze correction on"),
+                new("eye", "Eye tracker", StatusLevel.Ok, "Geometry uploaded"),
             },
             parser.Lines);
-    }
-
-    [Fact]
-    public void A_correction_for_another_calibration_is_named_on_the_eye_line()
-    {
-        // Mirador's run of 2026-11-04 with Finn's builds, in order.
-        var parser = new DreamAirLogParser(new GeometryResult(true, null, GeometryUploader.Uploaded, "log"));
-        parser.Feed(" INFO [load_correction] The gaze correction in dreamair/eye_correction_XR5DA-P501G0D202652600422.json is for another calibration, not used.");
-        parser.Feed(" INFO [sync_calibration] Eye calibration applied (from file).");
-        parser.Feed(" INFO [open_tracker] Eye tracker connected.");
-
-        Assert.Equal(
-            new StatusLine("eye", "Eye tracker", StatusLevel.Ok, "Calibration applied (from file); gaze correction not used: it was made for another calibration"),
-            parser.Lines[2]);
-    }
-
-    [Fact]
-    public void A_tracker_without_a_calibration_is_connected()
-    {
-        var parser = new DreamAirLogParser(new GeometryResult(true, null, GeometryUploader.Uploaded, "log"));
-
-        parser.Feed(" INFO [open_tracker] Eye tracker connected.");
-
-        Assert.Equal(new StatusLine("eye", "Eye tracker", StatusLevel.Info, "Connected"), parser.Lines[2]);
-    }
-
-    [Fact]
-    public void A_reconnected_tracker_shows_its_calibration_again()
-    {
-        var parser = new DreamAirLogParser(new GeometryResult(true, null, GeometryUploader.Uploaded, "log"));
-        parser.Feed(" INFO [sync_calibration] Eye calibration applied (from file).");
-        parser.Feed(" INFO [open_tracker] Eye tracker connected.");
-
-        parser.Feed(" WARN [poll_thread] Lost the eye tracker (LIBUSB_ERROR_IO), reconnecting.");
-        Assert.Equal("Lost the eye tracker; reconnecting", parser.Lines[2].Text);
-
-        parser.Feed(" INFO [sync_calibration] Eye calibration applied (from file).");
-        parser.Feed(" INFO [open_tracker] Eye tracker connected.");
-        Assert.Equal(new StatusLine("eye", "Eye tracker", StatusLevel.Ok, "Calibration applied (from file)"), parser.Lines[2]);
     }
 
     [Fact]
@@ -85,10 +41,17 @@ public class DreamAirLogParserTests
             new StatusLine[]
             {
                 new("display", "Display", StatusLevel.Info, "Waiting for the display"),
-                new("board", "Headset board", StatusLevel.Info, "Not opened yet"),
                 new("eye", "Eye tracker", StatusLevel.Ok, "Geometry uploaded"),
             },
-            new DreamAirLogParser(new GeometryResult(true, null, GeometryUploader.Uploaded, "log")).Lines);
+            new DreamAirLogParser(Uploaded).Lines);
+    }
+
+    [Fact]
+    public void Without_a_geometry_upload_there_is_no_eye_line()
+    {
+        Assert.Equal(
+            [new StatusLine("display", "Display", StatusLevel.Info, "Waiting for the display")],
+            new DreamAirLogParser().Lines);
     }
 
     [Fact]
@@ -116,74 +79,51 @@ public class DreamAirLogParserTests
     }
 
     [Fact]
-    public void A_lost_board_is_an_error_with_monados_words()
-    {
-        var parser = new DreamAirLogParser();
-        parser.Feed("INFO [dreamair] Pimax Dream Air opened.");
-
-        parser.Feed("ERROR [dreamair_run] Lost the headset, the panels stay dark until Monado restarts.");
-
-        Assert.Equal(
-            new StatusLine("board", "Headset board", StatusLevel.Error, "Lost the headset, the panels stay dark until Monado restarts."),
-            Line(parser, "board"));
-    }
-
-    [Fact]
-    public void The_trackers_calibration_and_its_replacement()
-    {
-        var parser = new DreamAirLogParser();
-
-        parser.Feed("Eye tracker connected.");
-        Assert.Equal(new StatusLine("eye", "Eye tracker", StatusLevel.Info, "Connected"), Line(parser, "eye"));
-
-        parser.Feed("Eye calibration applied (from the tracker).");
-        Assert.Equal(new StatusLine("eye", "Eye tracker", StatusLevel.Ok, "Calibration applied (from the tracker)"), Line(parser, "eye"));
-
-        parser.Feed("WARN [sync_calibration] Replaced the saved calibration in C:\\x\\eye_calibration_XR5DA-1.bin with the tracker's.");
-        Assert.Equal(
-            new StatusLine("eye", "Eye tracker", StatusLevel.Warning, "Pimax Play's calibration replaced the one Mirador kept (a backup is in Eye tracking)."),
-            Line(parser, "eye"));
-    }
-
-    [Fact]
-    public void The_replaced_calibration_warning_stays_whatever_comes_after()
-    {
-        var parser = new DreamAirLogParser();
-
-        parser.Feed("Replaced the saved calibration in C:\\x\\eye_calibration_XR5DA-1.bin with the tracker's.");
-        parser.Feed("Eye calibration applied (from the tracker).");
-        parser.Feed("Gaze correction loaded from C:\\x\\eye_correction_XR5DA-1.json");
-
-        Assert.Equal(
-            new StatusLine("eye", "Eye tracker", StatusLevel.Warning, "Pimax Play's calibration replaced the one Mirador kept (a backup is in Eye tracking)."),
-            Line(parser, "eye"));
-    }
-
-    [Fact]
-    public void A_lost_eye_tracker_is_a_warning()
-    {
-        var parser = new DreamAirLogParser();
-        parser.Feed("Eye calibration applied (from file).");
-
-        parser.Feed("WARN [tobii] Lost the eye tracker (LIBUSB_ERROR_NO_DEVICE), reconnecting.");
-
-        Assert.Equal(new StatusLine("eye", "Eye tracker", StatusLevel.Warning, "Lost the eye tracker; reconnecting"), Line(parser, "eye"));
-    }
-
-    [Fact]
-    public void A_failed_upload_starts_the_eye_line_and_stays_on_it()
+    public void A_failed_upload_is_the_eye_line()
     {
         var parser = new DreamAirLogParser(new GeometryResult(false, null, "The eye tracker isn't on USB. Is the headset connected and switched on?", "log"));
 
         Assert.Equal(
             new StatusLine("eye", "Eye tracker", StatusLevel.Warning, "The eye tracker isn't on USB. Is the headset connected and switched on?"),
             Line(parser, "eye"));
+    }
 
-        parser.Feed("Eye calibration applied (from file).");
+    [Fact]
+    public void No_builder_for_the_head_adds_the_headset_line()
+    {
+        var parser = new DreamAirLogParser(headset: "Pimax Crystal Light");
+        Assert.DoesNotContain(parser.Lines, l => l.Key == DreamAirLogParser.HeadsetKey);
 
-        Assert.Equal(
-            new StatusLine("eye", "Eye tracker", StatusLevel.Warning, "Calibration applied (from file); geometry not uploaded, gaze about 10° off"),
-            Line(parser, "eye"));
+        Assert.True(parser.Feed("\tNo builder can be used to create a head device"));
+
+        var headset = Line(parser, DreamAirLogParser.HeadsetKey);
+        Assert.Equal(StatusLevel.Error, headset.Level);
+        Assert.Contains("no driver for the Pimax Crystal Light", headset.Text);
+        Assert.Equal(["display", "headset"], parser.Lines.Select(l => l.Key));
+    }
+
+    [Fact]
+    public void Driver_log_lines_change_nothing()
+    {
+        var parser = new DreamAirLogParser(Uploaded);
+        var before = parser.Lines;
+        string[] driver =
+        [
+            "Pimax Dream Air opened.",
+            "Eye tracker connected.",
+            "Eye calibration applied (from file).",
+            "Gaze correction loaded from x",
+            "Lost the headset, the panels stay dark until Monado restarts.",
+            "Replaced the saved calibration in x",
+            "Lost the eye tracker (x), reconnecting.",
+        ];
+
+        foreach (var line in driver)
+        {
+            Assert.False(parser.Feed(line), line);
+        }
+
+        Assert.Equal(before, parser.Lines);
     }
 
     [Fact]

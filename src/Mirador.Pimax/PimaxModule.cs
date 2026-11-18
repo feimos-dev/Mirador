@@ -42,11 +42,9 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     public const string ModuleId = PimaxEnvironment.ModuleId;
 
     /// <summary>
-    /// The Dream Air's own variables (Mirador.md §4.3): SteamVR's Lighthouse driver, the pacing for its panels, and the
-    /// Dream Air drivers' log at info, whose lines the board and eye tracker status come from (their default, warn,
-    /// leaves those out). The layer's variables the session adds, since the module uses direct mode
-    /// (<see cref="DirectModeLayer.Environment"/>). The one table lives in <see cref="DreamAirEnvironment"/>, so the
-    /// elevated path (the helper) writes the same one.
+    /// The Dream Air's own variables: the switch for SteamVR's Lighthouse driver. The layer's variables the session
+    /// adds, since the module uses direct mode (<see cref="DirectModeLayer.Environment"/>). The one table lives in
+    /// <see cref="DreamAirEnvironment"/>, so the elevated path (the helper) writes the same one.
     /// </summary>
     public static IReadOnlyList<EnvVar> FixedEnvironment { get; } =
         [.. DreamAirEnvironment.ModuleVariables.Select(v => new EnvVar(v.Key, v.Value))];
@@ -83,11 +81,8 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     /// <summary>The model among <paramref name="devices"/>, kept as the current one.</summary>
     private PimaxModel Remember(IReadOnlySet<UsbId> devices) => model = PimaxModels.DetectOrDreamAir(devices);
 
-    /// <summary>The variables a model's Monado gets from the module: the Dream Air's three; another model's Lighthouse switch, if it has one.</summary>
-    public static IReadOnlyList<EnvVar> EnvironmentFor(PimaxModel model) =>
-        model == PimaxModels.DreamAir ? FixedEnvironment
-        : model.Lighthouse ? [new EnvVar("STEAMVR_LH_ENABLE", "1")]
-        : [];
+    /// <summary>The variables a model's Monado gets from the module: the Lighthouse switch for a model that tracks with Lighthouse, else none.</summary>
+    public static IReadOnlyList<EnvVar> EnvironmentFor(PimaxModel model) => model.Lighthouse ? FixedEnvironment : [];
 
     public bool IsPresent(IReadOnlySet<UsbId> devices) =>
         PimaxModels.Detect(devices) is not null || devices.Contains(DreamAirIds.EyeTracker);
