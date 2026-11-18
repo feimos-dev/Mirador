@@ -640,7 +640,7 @@ public sealed class PimaxModuleTests : IDisposable
 
         var problem = await Module().FixDirectModeAsync(Context, Save, CancellationToken.None);
 
-        Assert.Equal("NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5 run this as administrator.", problem);
+        Assert.Equal("NVAPI EnableDirectMode for the headset (vendor 0xd242) returned -5. Run this as administrator.", problem);
     }
 
     [Fact]
