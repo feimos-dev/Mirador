@@ -53,6 +53,53 @@ public sealed partial class LighthousePage : Page
 
     private void UpdateShown() => ViewModel.SetShown(current && App.Current.MainWindow.IsShown);
 
+    private bool askingSteamVr;
+
+    /// <summary>
+    /// "Stop SteamVR starting when a controller turns on", flipped by the user: refused while SteamVR runs; turning it on
+    /// asks first. Whatever happens, the switch then shows SteamVR's setting as it is.
+    /// </summary>
+    private async void OnSteamVrButtonStartToggled(object sender, RoutedEventArgs e)
+    {
+        var toggle = (ToggleSwitch)sender;
+        if (askingSteamVr || toggle.IsOn == ViewModel.SteamVrButtonStartStopped)
+        {
+            return; // the binding showing the state, not the user
+        }
+
+        askingSteamVr = true;
+        try
+        {
+            if (toggle.IsOn && ViewModel.SteamVrStillRunning() is null)
+            {
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = XamlRoot,
+                    Title = "Change SteamVR's setting?",
+                    Content = LighthouseViewModel.SteamVrButtonStartQuestion,
+                    PrimaryButtonText = "Change it",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary,
+                };
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+            }
+
+            ViewModel.SetSteamVrButtonStart(toggle.IsOn);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Changing SteamVR's setting failed", ex);
+        }
+        finally
+        {
+            askingSteamVr = false;
+            toggle.IsOn = ViewModel.SteamVrButtonStartStopped;
+        }
+    }
+
     private async void OnBluetoothSettings(object sender, RoutedEventArgs e)
     {
         try

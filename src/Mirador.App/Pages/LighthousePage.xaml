@@ -178,6 +178,18 @@
                 Header="Turn off controllers and trackers when Monado stops">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.ControllersOffAtMonadoStop, Mode=TwoWay}" />
             </toolkit:SettingsCard>
+            <toolkit:SettingsCard
+                Description="{x:Bind ViewModel.SteamVrButtonStartDescription}"
+                Header="Stop SteamVR starting when a controller turns on"
+                IsEnabled="{x:Bind ViewModel.CanStopSteamVrButtonStart}">
+                <ToggleSwitch x:Name="SteamVrButtonStartSwitch" IsOn="{x:Bind ViewModel.SteamVrButtonStartStopped, Mode=OneWay}" Toggled="OnSteamVrButtonStartToggled" />
+            </toolkit:SettingsCard>
+            <InfoBar
+                IsClosable="False"
+                IsOpen="{x:Bind ViewModel.HasSteamVrButtonStartProblem, Mode=OneWay}"
+                Message="{x:Bind ViewModel.SteamVrButtonStartProblem, Mode=OneWay}"
+                Severity="Error"
+                Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
             <toolkit:SettingsCard Description="Constant: Scan base station state at all times. When Relevant: Scan base station state only when interacting with them from Mirador" Header="Station state tracking rate">
                 <!-- Below 700 wide the ComboBox goes under the text (the toolkit's default is 476), so the long description keeps its width. -->
                 <toolkit:SettingsCard.Resources>

@@ -5,6 +5,7 @@ using Mirador.Core.BaseStations;
 using Mirador.Core.Build;
 using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.OpenVr;
@@ -72,6 +73,9 @@ public sealed class AppHost : IAsyncDisposable
         DreamAirState = new DreamAirStateStore(paths.DreamAirFile);
         FolderBackups = new MonadoFolderBackups(
             MonadoFolderBackups.DefaultMonadoDir, paths.BackupsDir, TimeProvider.System, () => Session!.State != SessionState.Stopped);
+        SteamVrSettings = SteamVrSettings.DefaultPath() is { } vrsettings
+            ? new SteamVrSettings(vrsettings, Path.Combine(paths.BackupsDir, "steamvr"), TimeProvider.System)
+            : null;
 
         var dreamAir = new PimaxModule(new PimaxDeps(
             new WindowsRegistryReader(),
@@ -241,6 +245,27 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>Mirador's dated copies of Monado's folder.</summary>
     public MonadoFolderBackups FolderBackups { get; }
+
+    /// <summary>SteamVR's settings file, for its start on a controller button; null when Steam isn't installed.</summary>
+    public SteamVrSettings? SteamVrSettings { get; }
+
+    /// <summary>
+    /// Home's warning when "Stop SteamVR starting when a controller turns on" is on but SteamVR's setting no longer
+    /// says so (SteamVR rewrites its settings when it exits); null when all is as it should be.
+    /// </summary>
+    public string? SteamVrButtonStartWarning()
+    {
+        try
+        {
+            return Settings.Load().KeepSteamVrFromButtonStart && SteamVrSettings is { } steamVr && steamVr.AutoLaunchOnButton() != false
+                ? "SteamVR's setting changed back, so a controller button can start SteamVR again. Turn the switch off and on on the Lighthouse page."
+                : null;
+        }
+        catch (Exception e) when (e is SteamVrSettingsException or IOException or UnauthorizedAccessException)
+        {
+            return e.Message;
+        }
+    }
 
     /// <summary>Raised on the UI thread after the profiles or the selected one changed (Home, the Profiles page).</summary>
     public event Action? ProfilesChanged;

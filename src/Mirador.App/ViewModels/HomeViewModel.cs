@@ -74,6 +74,7 @@ public sealed partial class HomeViewModel : ObservableObject
         LoadProfiles();
         OnSessionChanged();
         RefreshStations();
+        CheckSteamVrButtonStart();
     }
 
     public ObservableCollection<ProfileItem> Profiles { get; } = [];
@@ -655,6 +656,7 @@ public sealed partial class HomeViewModel : ObservableObject
             // A new session, however it was started: the last one's warnings and end are history.
             ClearWarnings();
             RemoveNotice("ended");
+            CheckSteamVrButtonStart();
         }
 
         RefreshStatus();
@@ -939,6 +941,22 @@ public sealed partial class HomeViewModel : ObservableObject
     {
         ShowNotice("miradors-monado", "Bundled Monado", message, ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         RefreshRuntime();
+    }
+
+    /// <summary>
+    /// At launch and at each Start: whether SteamVR changed its setting back while "Stop SteamVR starting when a
+    /// controller turns on" is on (SteamVR rewrites its settings when it exits).
+    /// </summary>
+    public void CheckSteamVrButtonStart()
+    {
+        if (host.SteamVrButtonStartWarning() is { } warning)
+        {
+            ShowNotice("steamvr-button", "SteamVR", warning, InfoBarSeverity.Warning);
+        }
+        else
+        {
+            RemoveNotice("steamvr-button");
+        }
     }
 
     private void ShowNotice(string key, string title, string message, InfoBarSeverity severity)
