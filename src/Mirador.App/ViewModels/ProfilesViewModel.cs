@@ -312,8 +312,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public void Detach()
     {
+        // The list stays for a return to the page (it is kept in the cache); only a listing under way stops.
         CancelListing();
-        branchOffer?.Forget();
         host.Session.Changed -= OnSessionChanged;
         host.Builds.Changed -= OnBuildsChanged;
         Build.Detach();
@@ -631,7 +631,9 @@ public sealed partial class ProfilesViewModel : ObservableObject
                 return; // listed already for this link: nothing changes
             }
 
-            var (items, pick) = BranchOffer.Offer(branches, MonadoBranch, keepCurrent);
+            // The saved profile's own repository keeps its branch, even one it no longer lists; another link's doesn't.
+            var savedLink = editing?.Monado.Kind == SourceKind.Branch && string.Equals(editing.Monado.Url, url, StringComparison.OrdinalIgnoreCase);
+            var (items, pick) = BranchOffer.Offer(branches, MonadoBranch, keepCurrent || savedLink);
             Branches.Clear();
             foreach (var branch in items)
             {
@@ -668,6 +670,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
         listing?.Cancel();
         listing = null;
         listingUrl = null;
+        IsListingBranches = false;
     }
 
     private void ClearBranches()
