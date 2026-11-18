@@ -77,12 +77,18 @@ public class RoomSetupWarningTests
     {
         RoomSetup Setup(string origin, string? universe) => new(origin, universe, MonadoPose.Identity, Taken);
 
-        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "1500000001")], "1500000001"));
-        Assert.True(RoomSetupWarning.HasSetup([Setup("simulated", null)], "1500000001"));
-        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", null)], null));
-        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], "1500000001"));
-        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], null));
-        Assert.False(RoomSetupWarning.HasSetup([], "1500000001"));
+        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "1500000001")], "1500000001", false));
+        Assert.True(RoomSetupWarning.HasSetup([Setup("simulated", null)], "1500000001", false));
+        Assert.True(RoomSetupWarning.HasSetup([Setup("steamvr_lh", null)], null, false));
+        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], "1500000001", false));
+        Assert.False(RoomSetupWarning.HasSetup([Setup("steamvr_lh", "30")], null, false));
+        Assert.False(RoomSetupWarning.HasSetup([], "1500000001", false));
+
+        // A profile with steamvr_lh: only setups of its origin count, not another profile's taken without a space.
+        Assert.False(RoomSetupWarning.HasSetup([Setup("simulated", null)], "1500000001", true));
+        Assert.True(RoomSetupWarning.HasSetup([Setup(SteamVrRoom.LighthouseOrigin, null)], "1500000001", true));
+        Assert.True(RoomSetupWarning.HasSetup([Setup(SteamVrRoom.LighthouseOrigin, "1500000001")], "1500000001", true));
+        Assert.False(RoomSetupWarning.HasSetup([Setup(SteamVrRoom.LighthouseOrigin, "30")], "1500000001", true));
     }
 
     private const string Changed =
@@ -127,10 +133,10 @@ public class RoomSetupWarningTests
 
         Assert.Equal(OtherSpace, RoomSetupWarning.FromSteam(steam.Path, stations, [], profileUsesSteamVrLh: true));
         Assert.Null(RoomSetupWarning.FromSteam(steam.Path, [], [], profileUsesSteamVrLh: true));
-        Assert.Null(RoomSetupWarning.FromSteam(steam.Path, stations, [new RoomSetup("steamvr_lh", "1500000001", MonadoPose.Identity, Taken)], true));
+        Assert.Null(RoomSetupWarning.FromSteam(steam.Path, stations, [new RoomSetup(SteamVrRoom.LighthouseOrigin, "1500000001", MonadoPose.Identity, Taken)], true));
 
         // No Steam: only Mirador's own setup counts.
         Assert.Equal(NoSetup, RoomSetupWarning.FromSteam(null, stations, [], profileUsesSteamVrLh: true));
-        Assert.Null(RoomSetupWarning.FromSteam(null, stations, [new RoomSetup("steamvr_lh", null, MonadoPose.Identity, Taken)], true));
+        Assert.Null(RoomSetupWarning.FromSteam(null, stations, [new RoomSetup(SteamVrRoom.LighthouseOrigin, null, MonadoPose.Identity, Taken)], true));
     }
 }

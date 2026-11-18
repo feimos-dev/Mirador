@@ -61,16 +61,19 @@ public static class RoomSetupWarning
 
     /// <summary>
     /// Whether Mirador applies a setup in <paramref name="universe"/>: one kept for it, or one taken without a Lighthouse
-    /// universe (<see cref="RoomSetupApplier"/>'s fallback), for any origin.
+    /// universe (<see cref="RoomSetupApplier"/>'s fallback); for <c>steamvr_lh</c>'s origin only when the profile uses
+    /// it, else for any origin.
     /// </summary>
-    public static bool HasSetup(IReadOnlyList<RoomSetup> setups, string? universe) =>
-        setups.Any(s => s.Universe is null || string.Equals(s.Universe, universe, StringComparison.Ordinal));
+    public static bool HasSetup(IReadOnlyList<RoomSetup> setups, string? universe, bool profileUsesSteamVrLh) =>
+        profileUsesSteamVrLh
+            ? RoomSetupApplier.InUse(setups, SteamVrRoom.LighthouseOrigin, universe) is not null
+            : setups.Any(s => s.Universe is null || string.Equals(s.Universe, universe, StringComparison.Ordinal));
 
     /// <summary><see cref="For"/> on Steam's files as they are now (none without Steam) and Mirador's setups.</summary>
     public static string? FromSteam(string? steamDir, IReadOnlyList<KnownStation> stations, IReadOnlyList<RoomSetup> setups, bool profileUsesSteamVrLh)
     {
         var (universes, roomSetups) = SteamVrRoom.Read(steamDir);
         var pick = CurrentUniverse.Pick(universes, roomSetups, stations);
-        return For(pick, roomSetups, HasSetup(setups, pick.Id), profileUsesSteamVrLh);
+        return For(pick, roomSetups, HasSetup(setups, pick.Id, profileUsesSteamVrLh), profileUsesSteamVrLh);
     }
 }

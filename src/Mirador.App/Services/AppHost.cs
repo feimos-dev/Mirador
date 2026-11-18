@@ -158,12 +158,12 @@ public sealed class AppHost : IAsyncDisposable
         {
             var profile = Profiles.Load().Selected;
             var moduleUsesLighthouse = ModuleUsesLighthouse(profile);
-            if (!profile.UsesBaseStations(moduleUsesLighthouse))
+            var usesSteamVrLh = LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse);
+            if (!profile.UsesBaseStations(moduleUsesLighthouse) && !usesSteamVrLh)
             {
                 return (null, null);
             }
 
-            var usesSteamVrLh = LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse);
             var stations = KnownStations();
             var setups = RoomSetups.All();
             SteamVrNow now;
@@ -177,7 +177,7 @@ public sealed class AppHost : IAsyncDisposable
                 return (RoomSetupWarning.FromSteam(SteamDir(), stations, setups, usesSteamVrLh), null);
             }
 
-            var missing = RoomSetupWarning.For(now.Pick, now.RoomSetups, RoomSetupWarning.HasSetup(setups, now.Pick.Id), usesSteamVrLh);
+            var missing = RoomSetupWarning.For(now.Pick, now.RoomSetups, RoomSetupWarning.HasSetup(setups, now.Pick.Id, usesSteamVrLh), usesSteamVrLh);
             var changed = RoomSetupWarning.BaseChanged(setups, now.Pick.Id, now.Base, usesSteamVrLh) ? RoomSetupWarning.SteamVrChanged : null;
             return (missing, changed);
         }
@@ -190,13 +190,14 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Whether the running profile (else the selected one) uses base stations: only then is a room setup kept per
-    /// Lighthouse universe, and SteamVR's files read for it.
+    /// Whether the running profile (else the selected one) uses base stations or <c>steamvr_lh</c>: only then is a room
+    /// setup kept per Lighthouse universe, and SteamVR's files read for it.
     /// </summary>
     public bool RunUsesBaseStations()
     {
         var profile = Session.CurrentProfile?.Profile ?? Profiles.Load().Selected;
-        return profile.UsesBaseStations(ModuleUsesLighthouse(profile));
+        var moduleUsesLighthouse = ModuleUsesLighthouse(profile);
+        return profile.UsesBaseStations(moduleUsesLighthouse) || LighthouseConflicts.UsesLighthouse(profile, moduleUsesLighthouse);
     }
 
     private bool ModuleUsesLighthouse(Profile profile) =>
