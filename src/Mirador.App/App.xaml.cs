@@ -352,7 +352,7 @@ public partial class App : Application
         UpdateTray();
     }
 
-    /// <summary>Monado ended: by itself is a problem (the tray says so, and a toast when the window isn't in front).</summary>
+    /// <summary>Monado ended: an ending that is a problem (it stopped by itself, or Mirador stopped it because something failed) shows in the tray, and as a toast when the window isn't in front.</summary>
     private void OnEnded(SessionEnd end)
     {
         if (end.Problem)
@@ -461,7 +461,7 @@ public partial class App : Application
                 : (TrayState.Running, "Mirador: Monado is running", "Stop"),
             SessionState.Starting => (TrayState.Running, "Mirador: Monado is starting", "Stop"),
             SessionState.Stopping => (TrayState.Stopped, "Mirador: Monado is stopping", "Stop"),
-            _ => (problem ? TrayState.Problem : TrayState.Stopped, problem ? (endedBadly ? "Mirador: Monado stopped by itself" : "Mirador: Monado didn't start") : "Mirador: Monado is stopped", "Start"),
+            _ => (problem ? TrayState.Problem : TrayState.Stopped, problem ? (endedBadly ? "Mirador: Monado stopped with a problem" : "Mirador: Monado didn't start") : "Mirador: Monado is stopped", "Start"),
         };
         tray.Show(look, tooltip, action);
     }

@@ -14,7 +14,7 @@ public class DreamAirLogParserTests
     {
         var time = new FakeTimeProvider();
         var parser = new DreamAirLogParser(timeProvider: time);
-        parser.Feed("[dvl] warning: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
+        parser.Feed("[dvl] warn: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
 
         time.Advance(TimeSpan.FromSeconds(59));
         parser.Tick();
@@ -27,7 +27,7 @@ public class DreamAirLogParserTests
         Assert.NotNull(parser.Failed);
         Assert.StartsWith("The headset's display didn't come up within a minute. ", parser.Failed);
         Assert.Contains(" NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display.", parser.Failed);
-        Assert.DoesNotContain("warning:", parser.Failed);
+        Assert.DoesNotContain("warn:", parser.Failed);
         Assert.EndsWith(" Check Diagnostics, then start again.", parser.Failed);
         var display = Line(parser, "display");
         Assert.Equal(StatusLevel.Error, display.Level);

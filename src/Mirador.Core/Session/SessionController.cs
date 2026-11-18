@@ -115,7 +115,7 @@ public sealed class SessionController(SessionDeps deps)
 
     /// <summary>
     /// Raised once a running session has ended, after <see cref="State"/> is <see cref="SessionState.Stopped"/>, with
-    /// what happened ("Stopped.", or why Monado stopped by itself) and whether that is a problem. A Start that fails
+    /// what happened ("Stopped.", or why Monado stopped on its own or was stopped because something failed) and whether that is a problem. A Start that fails
     /// says so through its outcome instead.
     /// </summary>
     public event Action<SessionEnd>? Ended;

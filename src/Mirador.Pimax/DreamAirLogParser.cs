@@ -94,10 +94,10 @@ public sealed partial class DreamAirLogParser
         }
     }
 
-    /// <summary>The layer's text without the <c>warning: </c> or <c>info: </c> its level puts in front.</summary>
+    /// <summary>The layer's text without the level name (<c>error</c>, <c>warn</c>, <c>info</c>, <c>debug</c>) it puts in front.</summary>
     private static string WithoutLevel(string text)
     {
-        foreach (var level in new[] { "info", "warning", "error", "debug", "trace" })
+        foreach (var level in new[] { "error", "warn", "info", "debug" })
         {
             if (text.StartsWith(level + ": ", StringComparison.Ordinal))
             {

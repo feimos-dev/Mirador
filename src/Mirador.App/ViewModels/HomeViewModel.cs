@@ -1002,7 +1002,7 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Monado ended other than by Stop: by itself (a problem), or after the last app closed (as asked).</summary>
+    /// <summary>Monado ended other than by Stop: a problem (it stopped by itself, or failed to come up) or as asked (after the last app closed).</summary>
     private void OnEnded(SessionEnd end)
     {
         if (end.Message != "Stopped.")

@@ -797,7 +797,7 @@ public sealed class PimaxModuleTests : IDisposable
         var session = (DreamAirSession)await BeforeStart();
         var reasons = new List<string>();
         session.StopRequested += reasons.Add;
-        session.OnServiceLine("[dvl] warning: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
+        session.OnServiceLine("[dvl] warn: NVAPI EnableDirectMode for vendor PVR returned -5; still waiting for the display");
 
         Poll(11);
         Assert.Empty(reasons);
