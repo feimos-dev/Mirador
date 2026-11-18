@@ -20,16 +20,16 @@ public class CurrentUniverseTests
            "known_universes" : [
               {
                  "base_stations" : [ { "base_serial_number" : {{DeadBeef}} }, { "base_serial_number" : {{BadFood}} } ],
-                 "id" : "1793836993"
+                 "id" : "1500000001"
               },
               { "base_stations" : [ { "base_serial_number" : {{Abcd}} } ], "id" : "30" },
               { "base_stations" : [ { "base_serial_number" : {{Coffee}} }, { "base_serial_number" : {{DeadBeef}} } ], "id" : "2" },
-              { "base_stations" : [], "id" : "1779499028" }
+              { "base_stations" : [], "id" : "1500000004" }
            ]
         }
         """);
 
-    private static readonly IReadOnlySet<string> RoomSetups = new HashSet<string> { "2", "30", "31", "1779499028" };
+    private static readonly IReadOnlySet<string> RoomSetups = new HashSet<string> { "2", "30", "31", "1500000004" };
 
     private static KnownStation V2(string hex) => new("AA:BB:CC:DD:EE:" + hex[^2..], "LHB-" + hex);
 
@@ -40,11 +40,11 @@ public class CurrentUniverseTests
     {
         Assert.Equal(new UniversePick("30", false), CurrentUniverse.Pick(Universes, RoomSetups, [V2("1234ABCD")]));
 
-        // Both stations are only in 1793836993; one of them is in 2 as well.
-        Assert.Equal("1793836993", CurrentUniverse.Pick(Universes, RoomSetups, [V2("DEADBEEF"), V2("0BADF00D")]).Id);
+        // Both stations are only in 1500000001; one of them is in 2 as well.
+        Assert.Equal("1500000001", CurrentUniverse.Pick(Universes, RoomSetups, [V2("DEADBEEF"), V2("0BADF00D")]).Id);
 
         // Names compare case-insensitively.
-        Assert.Equal("1793836993", CurrentUniverse.Pick(Universes, RoomSetups, [V2("deadbeef"), V2("0badf00d")]).Id);
+        Assert.Equal("1500000001", CurrentUniverse.Pick(Universes, RoomSetups, [V2("deadbeef"), V2("0badf00d")]).Id);
 
         // A station in no universe (a new one SteamVR never saw) doesn't count.
         Assert.Equal("2", CurrentUniverse.Pick(Universes, RoomSetups, [V2("00C0FFEE"), V2("FFFFFFFF")]).Id);
@@ -78,7 +78,7 @@ public class CurrentUniverseTests
     [Fact]
     public void Two_matching_universes_fall_back_to_steamvr_lh()
     {
-        // DEADBEEF is in 1793836993 and in 2.
+        // DEADBEEF is in 1500000001 and in 2.
         Assert.Equal(new UniversePick("30", false), CurrentUniverse.Pick(Universes, RoomSetups, [V2("DEADBEEF")]));
 
         // No universe holds both.
@@ -95,15 +95,15 @@ public class CurrentUniverseTests
         Directory.CreateDirectory(steam.File("config", "lighthouse"));
         File.WriteAllText(steam.File("config", "lighthouse", "lighthousedb.json"), $$"""
             { "known_universes" : [
-                { "base_stations" : [ { "base_serial_number" : {{DeadBeef}} } ], "id" : "1793836993" },
+                { "base_stations" : [ { "base_serial_number" : {{DeadBeef}} } ], "id" : "1500000001" },
                 { "base_stations" : [ { "base_serial_number" : {{Abcd}} } ], "id" : "30" } ] }
             """);
 
         // No room setups: the stations still say which universe.
-        Assert.Equal(new UniversePick("1793836993", false), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
+        Assert.Equal(new UniversePick("1500000001", false), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
 
         File.WriteAllText(steam.File("config", "chaperone_info.vrchap"), """{ "universes" : [ { "universeID" : "30" } ] }""");
-        Assert.Equal(new UniversePick("1793836993", true), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
+        Assert.Equal(new UniversePick("1500000001", true), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
         Assert.Equal(new UniversePick("30", false), CurrentUniverse.FromSteam(steam.Path, []));
     }
 
@@ -111,12 +111,12 @@ public class CurrentUniverseTests
     public void A_current_universe_other_than_steamvr_lhs_is_flagged()
     {
         Assert.Equal(
-            new UniversePick("1793836993", true),
+            new UniversePick("1500000001", true),
             CurrentUniverse.Pick(Universes, RoomSetups, [V2("DEADBEEF"), V2("0BADF00D")]));
 
         // Without any room setup SteamVR's isn't used, so there is nothing to flag.
         Assert.Equal(
-            new UniversePick("1793836993", false),
+            new UniversePick("1500000001", false),
             CurrentUniverse.Pick(Universes, new HashSet<string>(), [V2("DEADBEEF"), V2("0BADF00D")]));
     }
 }

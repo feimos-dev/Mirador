@@ -20,49 +20,49 @@ public sealed class RoomSetupStoreTests : IDisposable
     [Fact]
     public void Set_get_and_clear_round_trip()
     {
-        Assert.Null(Store().Get("steamvr_lh", "1793836993"));
+        Assert.Null(Store().Get("steamvr_lh", "1500000001"));
 
-        var setup = new RoomSetup("steamvr_lh", "1793836993", Lowered, Taken);
+        var setup = new RoomSetup("steamvr_lh", "1500000001", Lowered, Taken);
         Store().Set(setup);
-        Assert.Equal(setup, Store().Get("steamvr_lh", "1793836993"));
+        Assert.Equal(setup, Store().Get("steamvr_lh", "1500000001"));
         Assert.False(System.IO.File.Exists(File + ".tmp"));
 
         // Set again for the same origin and universe: replaced, not added.
         var again = setup with { Offset = MonadoPose.Identity, Taken = Taken.AddMinutes(5) };
         Store().Set(again);
-        Assert.Equal(again, Store().Get("steamvr_lh", "1793836993"));
+        Assert.Equal(again, Store().Get("steamvr_lh", "1500000001"));
         Assert.Single(Store().All());
 
-        Store().Clear("steamvr_lh", "1793836993");
-        Assert.Null(Store().Get("steamvr_lh", "1793836993"));
+        Store().Clear("steamvr_lh", "1500000001");
+        Assert.Null(Store().Get("steamvr_lh", "1500000001"));
         Assert.Empty(Store().All());
 
         // Clearing what isn't there does nothing.
-        Store().Clear("steamvr_lh", "1793836993");
+        Store().Clear("steamvr_lh", "1500000001");
     }
 
     [Fact]
     public void A_universe_keeps_its_own_setup()
     {
-        var current = new RoomSetup("steamvr_lh", "1793836993", Lowered, Taken);
+        var current = new RoomSetup("steamvr_lh", "1500000001", Lowered, Taken);
         var other = new RoomSetup("steamvr_lh", "30", MonadoPose.Identity with { Y = -1.2f }, Taken);
         var none = new RoomSetup("steamvr_lh", null, MonadoPose.Identity with { Y = -0.9f }, Taken);
-        var simulated = new RoomSetup("simulated", "1793836993", MonadoPose.Identity with { X = 1 }, Taken);
+        var simulated = new RoomSetup("simulated", "1500000001", MonadoPose.Identity with { X = 1 }, Taken);
         Store().Set(current);
         Store().Set(other);
         Store().Set(none);
         Store().Set(simulated);
 
-        Assert.Equal(current, Store().Get("steamvr_lh", "1793836993"));
+        Assert.Equal(current, Store().Get("steamvr_lh", "1500000001"));
         Assert.Equal(other, Store().Get("steamvr_lh", "30"));
         Assert.Equal(none, Store().Get("steamvr_lh", null));
-        Assert.Equal(simulated, Store().Get("simulated", "1793836993"));
+        Assert.Equal(simulated, Store().Get("simulated", "1500000001"));
         Assert.Null(Store().Get("simulated", null));
         Assert.Null(Store().Get("steamvr_lh", "2"));
 
         Store().Clear("steamvr_lh", "30");
         Assert.Null(Store().Get("steamvr_lh", "30"));
-        Assert.Equal(current, Store().Get("steamvr_lh", "1793836993"));
+        Assert.Equal(current, Store().Get("steamvr_lh", "1500000001"));
         Assert.Equal(none, Store().Get("steamvr_lh", null));
     }
 

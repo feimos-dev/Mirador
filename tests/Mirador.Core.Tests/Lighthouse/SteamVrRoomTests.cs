@@ -25,7 +25,7 @@ public class SteamVrRoomTests
                     { "base_serial_number" : 439041101, "pose" : [ 0.0, 0.0, 0.0, 1.0, 0.5, 2.1, -1.3 ] },
                     { "base_serial_number" : 1584364171, "pose" : [ 0.0, 0.0, 0.0, 1.0, -0.5, 2.2, 1.4 ] }
                  ],
-                 "id" : "1793836993",
+                 "id" : "1500000001",
                  "last_modified_timestamp" : 1762900000
               },
               {
@@ -42,7 +42,7 @@ public class SteamVrRoomTests
                  "base_stations" : [
                     { "base_serial_number" : 2618105391 }
                  ],
-                 "id" : "1779499028"
+                 "id" : "1500000004"
               }
            ],
            "revision" : 4
@@ -63,7 +63,7 @@ public class SteamVrRoomTests
               },
               { "standing" : { "translation" : [ 0.0, 0.0, 0.0 ], "yaw" : 0.0 }, "universeID" : "30" },
               { "standing" : { "translation" : [ 0.0, 0.0, 0.0 ], "yaw" : 0.0 }, "universeID" : "31" },
-              { "standing" : { "translation" : [ 0.0, 0.0, 0.0 ], "yaw" : 0.0 }, "universeID" : "1779499028" }
+              { "standing" : { "translation" : [ 0.0, 0.0, 0.0 ], "yaw" : 0.0 }, "universeID" : "1500000004" }
            ],
            "version" : 5
         }
@@ -74,7 +74,7 @@ public class SteamVrRoomTests
     {
         var universes = SteamVrRoom.Universes(Lighthousedb);
 
-        Assert.Equal(["1793836993", "30", "2", "1779499028"], universes.Select(u => u.Id));
+        Assert.Equal(["1500000001", "30", "2", "1500000004"], universes.Select(u => u.Id));
         Assert.Equal(["439041101", "1584364171"], universes[0].StationSerials);
         Assert.Equal(["48"], universes[1].StationSerials);
         Assert.Empty(universes[2].StationSerials);
@@ -114,7 +114,7 @@ public class SteamVrRoomTests
     [Fact]
     public void Room_setups_list_universe_ids()
     {
-        Assert.Equal(new HashSet<string> { "2", "30", "31", "1779499028" }, SteamVrRoom.RoomSetups(Vrchap));
+        Assert.Equal(new HashSet<string> { "2", "30", "31", "1500000004" }, SteamVrRoom.RoomSetups(Vrchap));
 
         // Numbers are kept in their written form too.
         Assert.Equal(
@@ -214,15 +214,15 @@ public class SteamVrRoomTests
     [Fact]
     public void With_standing_adds_a_missing_universe_from_an_existing_entry()
     {
-        var written = SteamVrRoom.WithStanding(TwoSpaces, "1793836993", [0, -0.1f, 0], -1.5f);
+        var written = SteamVrRoom.WithStanding(TwoSpaces, "1500000001", [0, -0.1f, 0], -1.5f);
 
-        var added = Entry(written, "1793836993");
+        var added = Entry(written, "1500000001");
         Assert.Equal([0f, -0.1f, 0f], added["standing"]!["translation"]!.AsArray().Select(n => (float)n!));
         Assert.Equal(-1.5f, (float)added["standing"]!["yaw"]!);
 
         // A copy of the first entry with only its id and standing changed.
         var first = Entry(TwoSpaces, "30").DeepClone().AsObject();
-        first["universeID"] = "1793836993";
+        first["universeID"] = "1500000001";
         first["standing"] = added["standing"]!.DeepClone();
         Assert.True(JsonNode.DeepEquals(first, added));
         Assert.Equal(3, JsonNode.Parse(written)!["universes"]!.AsArray().Count);
@@ -235,7 +235,7 @@ public class SteamVrRoomTests
     [InlineData("""{ "universes" : [ 7, null ] }""")]
     public void With_standing_without_any_entry_fails_with_the_message(string vrchap)
     {
-        var e = Assert.Throws<MiradorException>(() => SteamVrRoom.WithStanding(vrchap, "1793836993", [0, 0, 0], 0));
+        var e = Assert.Throws<MiradorException>(() => SteamVrRoom.WithStanding(vrchap, "1500000001", [0, 0, 0], 0));
         Assert.Equal("SteamVR has no room setup to copy; run SteamVR's Room Setup once.", e.Message);
     }
 
@@ -253,7 +253,7 @@ public class SteamVrRoomTests
     public void Standing_is_read_as_steamvr_lh_reads_it()
     {
         Assert.Equal("0.25 -1.5 0.125 / 1", Standing(TwoSpaces, "30"));
-        Assert.Null(SteamVrRoom.Standing(TwoSpaces, "1793836993"));
+        Assert.Null(SteamVrRoom.Standing(TwoSpaces, "1500000001"));
 
         // Missing numbers count as 0, as in the driver.
         Assert.Equal("0.5 0 0 / 0", Standing("""{ "universes" : [ { "universeID" : "9", "standing" : { "translation" : [ 0.5 ] } } ] }""", "9"));
@@ -394,17 +394,17 @@ public class SteamVrRoomTests
     public void An_export_that_makes_steamvr_use_this_space_goes_ahead()
     {
         // The space in use is listed first and has no entry: steamvr_lh falls back to 30 now, and takes it after the export.
-        using var steam = SteamWith(TwoSpaces, "1793836993", "30", "2");
+        using var steam = SteamWith(TwoSpaces, "1500000001", "30", "2");
         var (universes, roomSetups) = SteamVrRoom.Read(steam.Path);
         Assert.Equal("30", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
-        Assert.Null(SteamVrRoom.ExportRefusal(steam.Path, "1793836993"));
+        Assert.Null(SteamVrRoom.ExportRefusal(steam.Path, "1500000001"));
         var cleared = false;
 
-        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1793836993", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System);
+        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1500000001", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System);
 
         Assert.True(cleared);
         (universes, roomSetups) = SteamVrRoom.Read(steam.Path);
-        Assert.Equal("1793836993", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
+        Assert.Equal("1500000001", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
     }
 
     [Fact]
@@ -412,13 +412,13 @@ public class SteamVrRoomTests
     {
         // The space in use has no entry; steamvr_lh applies 30's (translation [0.25, −1.5, 0.125], yaw 1) now, and Mirador's
         // offset was measured on top of that. After the export steamvr_lh applies the new entry alone.
-        using var steam = SteamWith(TwoSpaces, "1793836993", "30", "2");
+        using var steam = SteamWith(TwoSpaces, "1500000001", "30", "2");
         var (usedTranslation, usedYaw) = SteamVrRoom.Standing(TwoSpaces, "30")!.Value;
         var offset = RoomSetupMath.Correct(MonadoPose.Identity, -0.08f, 0.4f);
 
-        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1793836993", offset, () => { }, TimeProvider.System);
+        SteamVrRoom.Export(steam.Path, steam.File("backups"), "1500000001", offset, () => { }, TimeProvider.System);
 
-        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), "1793836993")!.Value;
+        var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), "1500000001")!.Value;
         MonadoPose[] devices = [MonadoPose.Identity, new(0.1f, 0.6f, 0.05f, 0.79f, -0.3f, 1.6f, 0.2f), new(0, 0, 0, 1, 1, 0.05f, -2)];
         foreach (var raw in devices)
         {
@@ -441,14 +441,14 @@ public class SteamVrRoomTests
     public void An_export_steamvr_still_wouldnt_use_is_refused()
     {
         // 30 is listed before the space in use and has an entry: steamvr_lh would still take 30.
-        using var steam = SteamWith(TwoSpaces, "30", "1793836993", "2");
+        using var steam = SteamWith(TwoSpaces, "30", "1500000001", "2");
         const string refusal =
             "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
-        Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "1793836993"));
+        Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "1500000001"));
         var cleared = false;
 
         var e = Assert.Throws<MiradorException>(() => SteamVrRoom.Export(
-            steam.Path, steam.File("backups"), "1793836993", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System));
+            steam.Path, steam.File("backups"), "1500000001", MonadoPose.Identity with { Y = 0.1f }, () => cleared = true, TimeProvider.System));
 
         Assert.Equal(refusal, e.Message);
         Assert.False(cleared);

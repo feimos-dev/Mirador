@@ -55,28 +55,28 @@ public sealed class RoomSetupApplierTests : IDisposable
     [Fact]
     public void Apply_sets_each_stored_origin_by_name()
     {
-        store.Set(new RoomSetup("steamvr_lh", "1793836993", Lighthouse, Taken));
-        store.Set(new RoomSetup("simulated", "1793836993", Simulated, Taken));
+        store.Set(new RoomSetup("steamvr_lh", "1500000001", Lighthouse, Taken));
+        store.Set(new RoomSetup("simulated", "1500000001", Simulated, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
 
-        Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1793836993"));
+        Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1500000001"));
         Assert.Equal([(0u, Lighthouse), (1u, Simulated)], client.Set);
     }
 
     [Fact]
     public void Apply_skips_origins_without_a_setup()
     {
-        store.Set(new RoomSetup("simulated", "1793836993", Simulated, Taken));
+        store.Set(new RoomSetup("simulated", "1500000001", Simulated, Taken));
 
         // Another universe's setup and one for an origin this Monado hasn't got.
         store.Set(new RoomSetup("steamvr_lh", "30", Lighthouse, Taken));
-        store.Set(new RoomSetup("survive", "1793836993", Lighthouse, Taken));
+        store.Set(new RoomSetup("survive", "1500000001", Lighthouse, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
 
-        Assert.Equal(1, RoomSetupApplier.Apply(client, store, "1793836993"));
+        Assert.Equal(1, RoomSetupApplier.Apply(client, store, "1500000001"));
         Assert.Equal([(1u, Simulated)], client.Set);
 
-        Assert.Equal(0, RoomSetupApplier.Apply(new OriginsClient(), store, "1793836993"));
+        Assert.Equal(0, RoomSetupApplier.Apply(new OriginsClient(), store, "1500000001"));
     }
 
     [Fact]
@@ -85,18 +85,18 @@ public sealed class RoomSetupApplierTests : IDisposable
         var noSpace = MonadoPose.Identity with { Y = -0.75f };
         store.Set(new RoomSetup("steamvr_lh", null, noSpace, Taken));
         store.Set(new RoomSetup("simulated", null, noSpace, Taken));
-        store.Set(new RoomSetup("simulated", "1793836993", Simulated, Taken));
+        store.Set(new RoomSetup("simulated", "1500000001", Simulated, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
 
         // The universe's own setup wins; without one, the setup taken without a space is used.
-        Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1793836993"));
+        Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1500000001"));
         Assert.Equal([(0u, noSpace), (1u, Simulated)], client.Set);
     }
 
     [Fact]
     public void Without_a_lighthouse_space_only_setups_taken_without_one_apply()
     {
-        store.Set(new RoomSetup("steamvr_lh", "1793836993", Lighthouse, Taken));
+        store.Set(new RoomSetup("steamvr_lh", "1500000001", Lighthouse, Taken));
         store.Set(new RoomSetup("simulated", null, Simulated, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
 

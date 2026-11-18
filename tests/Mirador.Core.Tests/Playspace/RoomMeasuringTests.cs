@@ -107,11 +107,11 @@ public class RoomMeasuringTests
         var poses = XrPoses.Parse([Measured])!;
         TrackedOrigin[] origins = [new(0, "steamvr_lh", MonadoPose.Identity), new(1, "Pimax", MonadoPose.Identity with { Y = 0.2f })];
 
-        var setups = RoomMeasuring.Corrected(origins, RoomStep.Floor, poses, "1793836993", Now);
+        var setups = RoomMeasuring.Corrected(origins, RoomStep.Floor, poses, "1500000001", Now);
 
         // The left grip rests at −0.02 m: the floor is at −0.07 m.
         Assert.Equal(["steamvr_lh", "Pimax"], setups.Select(s => s.OriginName));
-        Assert.All(setups, s => Assert.Equal("1793836993", s.Universe));
+        Assert.All(setups, s => Assert.Equal("1500000001", s.Universe));
         Assert.All(setups, s => Assert.Equal(Now, s.Taken));
         Assert.Equal(0.07f, setups[0].Offset.Y, Tolerance);
         Assert.Equal(0.27f, setups[1].Offset.Y, Tolerance);

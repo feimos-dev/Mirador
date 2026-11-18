@@ -7,7 +7,7 @@ namespace Mirador.Core.Tests.Playspace;
 
 public sealed class RoomSetupExportTests : IDisposable
 {
-    private const string Universe = "1793836993";
+    private const string Universe = "1500000001";
     private const string Origin = SteamVrRoom.LighthouseOrigin;
     private static readonly DateTimeOffset Taken = new(2026, 11, 18, 9, 30, 0, TimeSpan.Zero);
     private static readonly MonadoPose Lifted = MonadoPose.Identity with { Y = 0.1f };
@@ -44,7 +44,7 @@ public sealed class RoomSetupExportTests : IDisposable
         File.WriteAllText(vrchap, Vrchap);
         var db = SteamVrRoom.LighthousedbPath(steam.Path);
         Directory.CreateDirectory(Path.GetDirectoryName(db)!);
-        File.WriteAllText(db, """{ "known_universes" : [ { "id" : "1793836993" }, { "id" : "30" } ] }""");
+        File.WriteAllText(db, """{ "known_universes" : [ { "id" : "1500000001" }, { "id" : "30" } ] }""");
     }
 
     public void Dispose() => steam.Dispose();

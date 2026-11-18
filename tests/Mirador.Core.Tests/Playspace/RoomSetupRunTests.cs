@@ -74,7 +74,7 @@ public sealed class RoomSetupRunTests : IDisposable
         public IReadOnlyDictionary<string, string>? MonadoEnvironment =>
             ExitOnDisconnect ? new Dictionary<string, string> { ["IPC_EXIT_ON_DISCONNECT"] = "1" } : null;
 
-        public string? CurrentUniverse() => "1793836993";
+        public string? CurrentUniverse() => "1500000001";
 
         public Task<StartOutcome> StartMonadoAsync()
         {
@@ -118,7 +118,7 @@ public sealed class RoomSetupRunTests : IDisposable
 
         Assert.Equal(new RoomStepOutcome("The floor is set.", RoomStepLevel.Success), await Step(RoomStep.Floor));
         Assert.Equal(0.07f, monado.Client.Offsets[0].Y, 1e-4f);
-        Assert.Equal(0.07f, store.Get("steamvr_lh", "1793836993")!.Offset.Y, 1e-4f);
+        Assert.Equal(0.07f, store.Get("steamvr_lh", "1500000001")!.Offset.Y, 1e-4f);
         Assert.Equal(0, monado.Starts);
     }
 
@@ -132,7 +132,7 @@ public sealed class RoomSetupRunTests : IDisposable
         // The start sets the kept setup.
         Assert.Equal(new RoomStepOutcome("The floor is set.", RoomStepLevel.Success), await Step(RoomStep.Floor));
         Assert.Equal(1, monado.Starts);
-        Assert.Equal(0.07f, store.Get("steamvr_lh", "1793836993")!.Offset.Y, 1e-4f);
+        Assert.Equal(0.07f, store.Get("steamvr_lh", "1500000001")!.Offset.Y, 1e-4f);
 
         monado.Current = monado.Client;
         monado.Client.Stopped = false;
@@ -153,7 +153,7 @@ public sealed class RoomSetupRunTests : IDisposable
             new RoomStepOutcome("Mirador couldn't measure: no poses within 30 s (after 12 frames). Monado started again.", RoomStepLevel.Error),
             await Step(RoomStep.Floor));
         Assert.Equal(1, monado.Starts);
-        Assert.Null(store.Get("steamvr_lh", "1793836993"));
+        Assert.Null(store.Get("steamvr_lh", "1500000001"));
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class RoomSetupRunTests : IDisposable
             new RoomStepOutcome("The floor is measured and kept; Monado stopped, so it is set when Monado next starts.", RoomStepLevel.Warning),
             await Step(RoomStep.Floor));
         Assert.Equal(0, monado.Starts);
-        Assert.NotNull(store.Get("steamvr_lh", "1793836993"));
+        Assert.NotNull(store.Get("steamvr_lh", "1500000001"));
     }
 
     [Fact]
