@@ -233,7 +233,7 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     /// <summary>Steam's folder from the registry; null when Steam isn't installed or the registry can't be read.</summary>
-    private static string? SteamDir()
+    public static string? SteamDir()
     {
         try
         {

@@ -100,6 +100,36 @@ public sealed partial class LighthousePage : Page
         }
     }
 
+    /// <summary>"Export to SteamVR": refused while SteamVR runs or another space's setup is in use; asks first.</summary>
+    private async void OnExportToSteamVr(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!await ViewModel.PrepareExportAsync())
+            {
+                return;
+            }
+
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "Export to SteamVR?",
+                Content = LighthouseViewModel.ExportQuestion,
+                PrimaryButtonText = "Export",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                await ViewModel.ExportAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Exporting the room setup failed", ex);
+        }
+    }
+
     private async void OnBluetoothSettings(object sender, RoutedEventArgs e)
     {
         try

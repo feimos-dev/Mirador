@@ -193,6 +193,14 @@
             <toolkit:SettingsCard Description="Look straight ahead where forward should be, then Set forward" Header="Forward">
                 <Button Command="{x:Bind ViewModel.SetForwardCommand}" Content="Set forward" />
             </toolkit:SettingsCard>
+            <toolkit:SettingsCard
+                Description="Writes Mirador's room setup of this space into SteamVR's, so SteamVR keeps it too. Mirador then clears its own copy, so the two never both apply."
+                Header="Export to SteamVR">
+                <Button
+                    Click="OnExportToSteamVr"
+                    Content="Export"
+                    IsEnabled="{x:Bind ViewModel.CanExport, Mode=OneWay}" />
+            </toolkit:SettingsCard>
 
             <!-- Saved at once, as App settings are; what went wrong shows right here, by the switch that was flipped. -->
             <TextBlock Style="{StaticResource SectionHeader}" Text="Settings" />
