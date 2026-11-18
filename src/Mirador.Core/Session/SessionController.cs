@@ -96,7 +96,12 @@ public sealed class SessionController(SessionDeps deps)
     /// </summary>
     public event Action? Changed;
 
-    /// <summary>Raised once a run's libmonado connection is open, with it (<see cref="Monado"/>).</summary>
+    /// <summary>
+    /// Raised once a run's libmonado connection is open, with it (<see cref="Monado"/>). It comes on a pool thread, and may
+    /// come while <see cref="State"/> is still <see cref="SessionState.Starting"/> (the connection opens once Monado's pipe
+    /// is there, before the Start ends), or later, when libmonado was slow to answer. A subscriber hands UI work to its UI
+    /// thread, as for the other events.
+    /// </summary>
     public event Action<IMonadoClient>? MonadoConnected;
 
     /// <summary>Raised when <see cref="Status"/> may be different.</summary>
