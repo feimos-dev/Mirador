@@ -49,6 +49,39 @@ public static class CurrentUniverse
         return new UniversePick(current, steamVr is not null && steamVr != current);
     }
 
+    /// <summary>
+    /// <see cref="Pick"/> on Steam's <c>lighthousedb.json</c> and <c>chaperone_info.vrchap</c> as they are now. A file
+    /// that is missing or can't be read counts as empty; without Steam (<paramref name="steamDir"/> null) there is no
+    /// universe.
+    /// </summary>
+    public static UniversePick FromSteam(string? steamDir, IReadOnlyList<KnownStation> stations)
+    {
+        if (steamDir is null)
+        {
+            return new UniversePick(null, false);
+        }
+
+        return Pick(
+            SteamVrRoom.Universes(ReadOrEmpty(SteamVrRoom.LighthousedbPath(steamDir))),
+            SteamVrRoom.RoomSetups(ReadOrEmpty(SteamVrRoom.ChaperoneInfoPath(steamDir))),
+            stations);
+    }
+
+    /// <summary>The file's text; empty when it is missing or can't be read. Shared, as SteamVR may be writing it.</summary>
+    private static string ReadOrEmpty(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return "";
+        }
+    }
+
     /// <summary>The 8 hex digits of a second-generation station's name (<c>LHB-XXXXXXXX</c>); null for any other name.</summary>
     private static string? NameHex(string name)
     {

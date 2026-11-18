@@ -22,6 +22,7 @@ public class AppPathsTests
         Assert.Equal(@"C:\data\Mirador\settings.json", p.SettingsFile);
         Assert.Equal(@"C:\data\Mirador\session.json", p.SessionFile);
         Assert.Equal(@"C:\data\Mirador\dreamair.json", p.DreamAirFile);
+        Assert.Equal(@"C:\data\Mirador\roomsetup.json", p.RoomSetupFile);
         Assert.Equal(@"C:\data\Mirador\logs", p.LogsDir);
         Assert.Equal(@"C:\data\Mirador\geometry", p.GeometryDir);
         Assert.Equal(@"C:\data\Mirador\checks", p.ChecksDir);

@@ -86,6 +86,28 @@ public class CurrentUniverseTests
     }
 
     [Fact]
+    public void Steams_files_are_read_from_its_config_folder()
+    {
+        using var steam = new Mirador.Tests.TempDir();
+        Assert.Equal(new UniversePick(null, false), CurrentUniverse.FromSteam(null, [V2("DEADBEEF")]));
+        Assert.Equal(new UniversePick(null, false), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
+
+        Directory.CreateDirectory(steam.File("config", "lighthouse"));
+        File.WriteAllText(steam.File("config", "lighthouse", "lighthousedb.json"), $$"""
+            { "known_universes" : [
+                { "base_stations" : [ { "base_serial_number" : {{DeadBeef}} } ], "id" : "1793836993" },
+                { "base_stations" : [ { "base_serial_number" : {{Abcd}} } ], "id" : "30" } ] }
+            """);
+
+        // No room setups: the stations still say which universe.
+        Assert.Equal(new UniversePick("1793836993", false), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
+
+        File.WriteAllText(steam.File("config", "chaperone_info.vrchap"), """{ "universes" : [ { "universeID" : "30" } ] }""");
+        Assert.Equal(new UniversePick("1793836993", true), CurrentUniverse.FromSteam(steam.Path, [V2("DEADBEEF")]));
+        Assert.Equal(new UniversePick("30", false), CurrentUniverse.FromSteam(steam.Path, []));
+    }
+
+    [Fact]
     public void A_current_universe_other_than_steamvr_lhs_is_flagged()
     {
         Assert.Equal(

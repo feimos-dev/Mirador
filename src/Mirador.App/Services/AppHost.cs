@@ -8,7 +8,9 @@ using Mirador.Core.Elevation;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.OpenVr;
+using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
@@ -132,6 +134,68 @@ public sealed class AppHost : IAsyncDisposable
             ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
             FolderBackups: FolderBackups,
             VariablesApproved: VariablesApproved));
+
+        RoomSetups = new RoomSetupStore(paths.RoomSetupFile);
+        Session.MonadoConnected += client => _ = Task.Run(() => ApplyRoomSetup(client));
+    }
+
+    /// <summary>Mirador's room setups, one per tracking origin and Lighthouse universe.</summary>
+    public RoomSetupStore RoomSetups { get; }
+
+    /// <summary>
+    /// Raised on a pool thread after each Monado start that Mirador put its room setups into: with Home's warning when
+    /// that failed, or null when it went well.
+    /// </summary>
+    public event Action<string?>? RoomSetupApplied;
+
+    /// <summary>
+    /// Puts the stored room setups of the current Lighthouse universe into the Monado that just started (whoever started
+    /// it). Runs off the UI thread and never throws. A failure becomes Home's warning, unless Monado stopped meanwhile.
+    /// </summary>
+    private void ApplyRoomSetup(IMonadoClient client)
+    {
+        string? problem = null;
+        try
+        {
+            var universe = CurrentUniverse.FromSteam(SteamDir(), [.. Stations.Stations.Select(v => v.Station)]).Id;
+            var applied = RoomSetupApplier.Apply(client, RoomSetups, universe);
+            if (applied > 0)
+            {
+                AppLog.Write($"Room setup set for {applied} tracking origin{(applied == 1 ? "" : "s")}.");
+            }
+        }
+        catch (Exception e)
+        {
+            if (!ReferenceEquals(Session.Monado, client))
+            {
+                return;
+            }
+
+            AppLog.Write("Couldn't apply the room setup", e);
+            problem = $"Couldn't apply the room setup: {e.Message}";
+        }
+
+        try
+        {
+            RoomSetupApplied?.Invoke(problem);
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Couldn't show how the room setup went", e);
+        }
+    }
+
+    /// <summary>Steam's folder from the registry; null when Steam isn't installed or the registry can't be read.</summary>
+    private static string? SteamDir()
+    {
+        try
+        {
+            return Mirador.Ipc.SteamVr.SteamPathFromRegistry() is { Length: > 0 } steam ? Path.GetFullPath(steam) : null;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed (Mirador.md §4.10 item 46).</summary>
@@ -616,6 +680,7 @@ public sealed class AppHost : IAsyncDisposable
         // Before anything reads the stations: the manager reads its list at first use, and a file it set aside then
         // would go unnoticed here.
         host.CheckStore("base stations", paths.BaseStationsFile, () => host.stationStore.Load());
+        host.CheckStore("room setups", paths.RoomSetupFile, () => host.RoomSetups.All());
         _ = Task.Run(host.StartStationsAsync);
         _ = Task.Run(() => host.IsInstalledCopy(askHelper: true));
         return host;
