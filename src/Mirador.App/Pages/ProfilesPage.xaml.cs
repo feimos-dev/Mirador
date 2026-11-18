@@ -16,6 +16,11 @@ public sealed partial class ProfilesPage : Page
     {
         ViewModel = new ProfilesViewModel(App.Current.Host);
         InitializeComponent();
+        ViewModel.Build.PropertyChanged += OnBuildChanged;
+        if (ViewModel.Build.IsBuilding)
+        {
+            BuildExpander.IsExpanded = true;
+        }
     }
 
     public ProfilesViewModel ViewModel { get; }
@@ -27,20 +32,49 @@ public sealed partial class ProfilesPage : Page
     private void OnBuildLogChanged(object sender, TextChangedEventArgs e) => ShowBuildLogEnd();
 
     /// <summary>Opened, the log shows its end.</summary>
-    private void OnBuildLogExpanding(Expander sender, ExpanderExpandingEventArgs args) => ShowBuildLogEnd();
+    private void OnBuildLogExpanded(object? sender, EventArgs e) => ShowBuildLogEnd();
+
+    /// <summary>A build that starts opens the card, so its log can be followed.</summary>
+    private void OnBuildChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BuildViewModel.IsBuilding) && ViewModel.Build.IsBuilding)
+        {
+            BuildExpander.IsExpanded = true;
+        }
+    }
+
+    /// <summary>The box's own scroller, found once, when the box is first laid out (the card opened).</summary>
+    private void OnBuildLogLoaded(object sender, RoutedEventArgs e)
+    {
+        buildLogViewer ??= FindChild<ScrollViewer>(BuildLog);
+        ShowBuildLogEnd();
+    }
 
     private ScrollViewer? buildLogViewer;
+    private bool buildLogEndQueued;
 
-    private void ShowBuildLogEnd() =>
-        // After the layout that measures the new text (and, the first time it opens, makes the box's scroller).
-        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+    /// <summary>
+    /// Puts the caret, and the view, at the end of the log. Text comes in bursts; one scroll after the layout that
+    /// measures the newest text is enough, so a burst queues it once.
+    /// </summary>
+    private void ShowBuildLogEnd()
+    {
+        BuildLog.SelectionStart = BuildLog.Text.Length;
+        if (buildLogEndQueued)
         {
-            if ((buildLogViewer ??= FindChild<ScrollViewer>(BuildLog)) is { } viewer)
+            return;
+        }
+
+        buildLogEndQueued = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            buildLogEndQueued = false;
+            if (buildLogViewer is { } viewer)
             {
                 viewer.UpdateLayout();
                 viewer.ChangeView(null, viewer.ScrollableHeight, null, disableAnimation: true);
             }
         });
+    }
 
     private static T? FindChild<T>(DependencyObject parent)
         where T : DependencyObject
