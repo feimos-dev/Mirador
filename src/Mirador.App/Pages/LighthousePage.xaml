@@ -153,6 +153,41 @@
                 TextWrapping="Wrap"
                 Visibility="{x:Bind ViewModel.HasNoStations, Mode=OneWay}" />
 
+            <!--
+                Room setup: two steps, each measured by Mirador's small OpenXR program against the running Monado. Why
+                they can't be used shows under the header; how the last one went, in the bar.
+            -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Room setup" />
+            <TextBlock
+                Margin="1,0,0,4"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind ViewModel.RoomSetupUnavailable, Mode=OneWay}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind ViewModel.HasRoomSetupUnavailable, Mode=OneWay}" />
+            <TextBlock
+                Margin="1,0,0,4"
+                Text="{x:Bind vm:LighthouseViewModel.RoomSetupRestartNote}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind ViewModel.RoomSetupStopsMonado, Mode=OneWay}" />
+            <InfoBar
+                IsClosable="False"
+                IsOpen="{x:Bind ViewModel.HasRoomSetupMessage, Mode=OneWay}"
+                Message="{x:Bind ViewModel.RoomSetupMessage, Mode=OneWay}"
+                Severity="{x:Bind ViewModel.RoomSetupSeverity, Mode=OneWay}"
+                Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
+            <toolkit:SettingsCard Description="Lay a controller on the floor, then Measure floor" Header="Floor">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing
+                        Width="20"
+                        Height="20"
+                        IsActive="{x:Bind ViewModel.RoomSetupBusy, Mode=OneWay}" />
+                    <Button Command="{x:Bind ViewModel.MeasureFloorCommand}" Content="Measure floor" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Description="Look straight ahead where forward should be, then Set forward" Header="Forward">
+                <Button Command="{x:Bind ViewModel.SetForwardCommand}" Content="Set forward" />
+            </toolkit:SettingsCard>
+
             <!-- Saved at once, as App settings are; what went wrong shows right here, by the switch that was flipped. -->
             <TextBlock Style="{StaticResource SectionHeader}" Text="Settings" />
             <InfoBar

@@ -136,11 +136,22 @@ public sealed class AppHost : IAsyncDisposable
             VariablesApproved: VariablesApproved));
 
         RoomSetups = new RoomSetupStore(paths.RoomSetupFile);
+        RoomMeasuring = new RoomMeasuring(new CommandRunner(), Path.Combine(appDir, "tools", "xr-check.exe"));
         Session.MonadoConnected += client => _ = Task.Run(() => ApplyRoomSetup(client));
     }
 
     /// <summary>Mirador's room setups, one per tracking origin and Lighthouse universe.</summary>
     public RoomSetupStore RoomSetups { get; }
+
+    /// <summary>The room setup's measuring, with Mirador's <c>xr-check</c>.</summary>
+    public RoomMeasuring RoomMeasuring { get; }
+
+    /// <summary>
+    /// The Lighthouse universe in use, from SteamVR's files and the base stations Mirador knows (no universe without
+    /// Steam). Reads files: not on the UI thread.
+    /// </summary>
+    public UniversePick CurrentUniverse() =>
+        Mirador.Core.Lighthouse.CurrentUniverse.FromSteam(SteamDir(), [.. Stations.Stations.Select(v => v.Station)]);
 
     /// <summary>
     /// Raised on a pool thread after each Monado start that Mirador put its room setups into: with Home's warning when
@@ -157,7 +168,7 @@ public sealed class AppHost : IAsyncDisposable
         string? problem = null;
         try
         {
-            var universe = CurrentUniverse.FromSteam(SteamDir(), [.. Stations.Stations.Select(v => v.Station)]).Id;
+            var universe = CurrentUniverse().Id;
             var applied = RoomSetupApplier.Apply(client, RoomSetups, universe);
             if (applied > 0)
             {
