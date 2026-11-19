@@ -371,8 +371,7 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         options.seconds, static_cast<unsigned long long>(expected_flips(options.seconds, refresh_hz)), refresh_hz,
         static_cast<double>(env.warm_up_ns) / 1e9);
 
-    // The run presents through a warm-up first, and counts presents, flips and time only from its end: a display that
-    // works can still stutter for its first second or two. A present that failed anywhere in the run still fails it.
+    // Only failed presents count from the run's start, warm-up included.
     const nvdm::FrameModel::Counters run_before = counters_of(*r);
     nvdm::FrameModel::Counters before = run_before;
     const int64_t t_start = r->clock.now_ns();
