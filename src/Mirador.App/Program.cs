@@ -66,7 +66,7 @@ public static partial class Program
                 var runtimeWasThisProfiles = active is not null && Path.GetFullPath(active).StartsWith(profileRoot, StringComparison.OrdinalIgnoreCase);
                 var build = Mirador.Ipc.ApprovedBuilds.Approve(
                     owner, approve.ProfileId, commit, source,
-                    AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approve.Variables);
+                    AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approve.Variables, AppLog.Write);
 
                 // When the machine's runtime was this profile's earlier approved copy, it is the new copy now. An approval
                 // of the bundled Monado has no copy, and the earlier one goes: Mirador's Monado takes over, when it is there.

@@ -837,7 +837,7 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>
     /// The approved copy of <paramref name="install"/>, <paramref name="profile"/>'s build as it is now, or null when it
-    /// isn't the approved one (the locator's lookup). The build's DLL and service are hashed only when they changed.
+    /// isn't the approved one (the locator's lookup). The build's DLL, service and libmonado are hashed only when they changed.
     /// </summary>
     private ApprovedBuild? ApprovedCopyOf(Profile profile, MonadoInstall install)
     {

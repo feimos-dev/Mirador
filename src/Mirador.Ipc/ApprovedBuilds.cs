@@ -91,12 +91,13 @@ public static partial class ApprovedBuilds
     /// until the next approval). A link or junction anywhere in the source is refused: it could point the copy at files
     /// outside the build. The profile's <paramref name="variables"/> are recorded with it. For the bundled Monado
     /// (<see cref="BundledCommit"/>) nothing is copied: the record holds the variables only, and the profile's earlier
-    /// copies go.
+    /// copies go. The copy's manifest carries Monado's own fields over from the build's (<see cref="WriteManifest"/>);
+    /// <paramref name="log"/> is told about any it leaves out.
     /// </summary>
     /// <exception cref="InvalidOperationException">The source or a variable can't be approved; the message says why.</exception>
     public static ApprovedBuild Approve(
         string owner, string profileId, string commit, string source, string appDir, IApprovedBuildStore store,
-        IReadOnlyList<KeyValuePair<string, string>>? variables = null)
+        IReadOnlyList<KeyValuePair<string, string>>? variables = null, Action<string>? log = null)
     {
         if (!IsOwner(owner) || !IsProfileId(profileId))
         {
@@ -148,7 +149,7 @@ public static partial class ApprovedBuilds
         var staging = target + ".new";
         Cleanup.TryDeleteDirectory(staging);
         Copy(new DirectoryInfo(from), staging);
-        WriteManifest(staging);
+        WriteManifest(from, staging, log);
         PlaceStandIn(appDir, staging);
         var files = Hash(staging);
 
@@ -237,13 +238,20 @@ public static partial class ApprovedBuilds
 
     /// <summary>
     /// Whether the build in <paramref name="sourceInstall"/> (the profile's build as it is now) is the one approved: its
-    /// runtime DLL and service have the approved copy's hashes. A rebuild is new code and runs as the user until approved.
+    /// runtime DLL and service have the approved copy's hashes, and so has its libmonado when either has one (games load
+    /// it through the copy's manifest). A rebuild is new code and runs as the user until approved.
     /// </summary>
     /// <param name="hashOf">The SHA-256 of a file, lower case: <see cref="HashOf"/>, or a cache in front of it.</param>
     public static bool Matches(ApprovedBuild build, string sourceInstall, Func<string, string>? hashOf = null)
     {
         hashOf ??= HashOf;
-        foreach (var relative in new[] { RuntimeDll, Path.Combine("bin", "monado-service.exe") })
+        var required = new List<string> { RuntimeDll, Path.Combine("bin", "monado-service.exe") };
+        if (build.Files.ContainsKey(LibmonadoDll) || File.Exists(Path.Combine(sourceInstall, LibmonadoDll)))
+        {
+            required.Add(LibmonadoDll);
+        }
+
+        foreach (var relative in required)
         {
             var file = Path.Combine(sourceInstall, relative);
             if (!build.Files.TryGetValue(relative, out var hash) || !File.Exists(file)
@@ -270,15 +278,146 @@ public static partial class ApprovedBuilds
         return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
 
+    /// <summary>libmonado, relative to the copy, which Monado's manifest names in <c>MND_libmonado_path</c>.</summary>
+    internal static readonly string LibmonadoDll = Path.Combine("bin", "monado.dll");
+
+    private const string LibmonadoKey = "MND_libmonado_path";
+
     /// <summary>
     /// The copy's manifest, written by Mirador: a build's own may name a DLL anywhere (an absolute path into the user's
     /// build folder), and every OpenXR program would load that. The path has backslashes: the OpenXR loader joins it to
     /// the manifest's folder and loads it, and with forward slashes in that path Windows doesn't look in the DLL's own
     /// folder for the DLLs it needs, so it fails to load.
+    /// Monado's own <c>MND_*</c> fields come from the build's manifest (the copy's, before it is replaced), each path
+    /// rewritten to the same file in the copy or left out; without a libmonado there, the copy's own is named.
     /// </summary>
-    private static void WriteManifest(string folder) =>
-        File.WriteAllText(Path.Combine(folder, "openxr_monado.json"),
-            """{"file_format_version": "1.0.0", "runtime": {"name": "Monado (Mirador, approved build)", "library_path": "bin\\openxr_monado.dll"}}""");
+    internal static void WriteManifest(string source, string copy, Action<string>? log = null)
+    {
+        var manifest = Path.Combine(copy, "openxr_monado.json");
+        var fields = MonadoFields(manifest, source, copy, log);
+        if (!fields.Any(f => f.Key == LibmonadoKey) && File.Exists(Path.Combine(copy, LibmonadoDll)))
+        {
+            fields.Add(new(LibmonadoKey, LibmonadoDll));
+        }
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("file_format_version", "1.0.0");
+            writer.WriteStartObject("runtime");
+            writer.WriteString("name", "Monado (Mirador, approved build)");
+            writer.WriteString("library_path", RuntimeDll);
+            foreach (var (name, value) in fields)
+            {
+                writer.WritePropertyName(name);
+                if (value is string path)
+                {
+                    writer.WriteStringValue(path);
+                }
+                else
+                {
+                    ((JsonElement)value).WriteTo(writer);
+                }
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        File.WriteAllBytes(manifest, stream.ToArray());
+    }
+
+    /// <summary>A path (a key ending in <c>_path</c>) as a string; other text, numbers and true/false as they are.</summary>
+    private static List<KeyValuePair<string, object>> MonadoFields(string manifest, string source, string copy, Action<string>? log)
+    {
+        var fields = new List<KeyValuePair<string, object>>();
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(File.ReadAllText(manifest));
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            log?.Invoke($"The build's runtime manifest can't be read ({e.Message.TrimEnd('.')}): the approved copy's manifest carries none of its fields.");
+            return fields;
+        }
+
+        using (doc)
+        {
+            if (doc.RootElement.ValueKind != JsonValueKind.Object || !doc.RootElement.TryGetProperty("runtime", out var runtime)
+                || runtime.ValueKind != JsonValueKind.Object)
+            {
+                return fields;
+            }
+
+            foreach (var property in runtime.EnumerateObject())
+            {
+                if (!property.Name.StartsWith("MND_", StringComparison.Ordinal) || fields.Any(f => f.Key == property.Name))
+                {
+                    continue;
+                }
+
+                if (property.Name.EndsWith("_path", StringComparison.Ordinal))
+                {
+                    if (CopiedPath(property.Value, source, copy) is { } path)
+                    {
+                        fields.Add(new(property.Name, path));
+                    }
+                    else
+                    {
+                        log?.Invoke($"The approved copy's manifest leaves out {property.Name}: it doesn't name a file of the copy ({property.Value.GetRawText()}).");
+                    }
+                }
+                else if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                {
+                    fields.Add(new(property.Name, property.Value.Clone()));
+                }
+                else
+                {
+                    log?.Invoke($"The approved copy's manifest leaves out {property.Name}: it isn't text, a number or true/false.");
+                }
+            }
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// The same file of the copy, relative to it; null when it isn't a file of the build in the copy. A bare file name is
+    /// one the loader searches for, so only the copy's <c>bin</c> file of that name.
+    /// </summary>
+    private static string? CopiedPath(JsonElement value, string source, string copy)
+    {
+        try
+        {
+            if (value.ValueKind != JsonValueKind.String || value.GetString() is not { Length: > 0 } path)
+            {
+                return null;
+            }
+
+            if (path.IndexOfAny(['/', '\\']) < 0 && !Path.IsPathRooted(path))
+            {
+                var inBin = Path.Combine("bin", path);
+                return !path.Contains(':') && File.Exists(Path.Combine(copy, inBin)) ? inBin : null;
+            }
+
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(source));
+            var full = Path.GetFullPath(path, root);
+            if (!IsUnder(full, root))
+            {
+                return null;
+            }
+
+            var relative = Path.GetRelativePath(root, full);
+            // A colon here names a stream of the file (file::$DATA).
+            return !relative.Contains(':') && File.Exists(Path.Combine(copy, relative)) ? relative : null;
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Mirador's own stand-in (<c>{app}\standin</c>) where the copy's runtime DLL looks for the service, whatever the build

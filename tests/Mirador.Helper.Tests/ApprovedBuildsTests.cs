@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Win32;
 using Mirador.Ipc;
 
@@ -294,7 +295,7 @@ public sealed class ApprovedBuildsTests : IDisposable
 
     private static string? LibraryPathOf(string manifest)
     {
-        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+        using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
         return doc.RootElement.GetProperty("runtime").GetProperty("library_path").GetString();
     }
 
@@ -372,6 +373,201 @@ public sealed class ApprovedBuildsTests : IDisposable
 
         Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.Approve(Finn, "p1", ApprovedBuilds.BundledCommit, source, App, store));
         Assert.Null(store.Get(Finn, "p1"));
+    }
+
+    private string MakeInstallWithManifest(string manifest, bool libmonado = true)
+    {
+        var source = MakeInstall();
+        File.WriteAllText(Path.Combine(source, "openxr_monado.json"), manifest);
+        if (libmonado)
+        {
+            File.WriteAllText(Path.Combine(source, "bin", "monado.dll"), "libmonado v1");
+        }
+
+        return source;
+    }
+
+    private static string Runtime(string fields) =>
+        $$$"""{"file_format_version": "1.0.0", "runtime": {"name": "Monado", "library_path": "bin\\openxr_monado.dll"{{{fields}}}}}""";
+
+    private static JsonElement RuntimeOf(string manifest)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+        return doc.RootElement.GetProperty("runtime").Clone();
+    }
+
+    private static string? Field(string manifest, string name) =>
+        RuntimeOf(manifest).TryGetProperty(name, out var value) ? value.GetString() : null;
+
+    private static string Json(string text) => JsonSerializer.Serialize(text);
+
+    [Fact]
+    public void An_absolute_libmonado_path_into_the_build_names_the_same_file_in_the_copy()
+    {
+        var source = MakeInstallWithManifest(Runtime($", \"MND_libmonado_path\": {Json(temp.File("user", "install", "bin", "monado.dll"))}"));
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.Equal(@"bin\monado.dll", Field(build.Manifest, "MND_libmonado_path"));
+        Assert.Equal(@"bin\openxr_monado.dll", LibraryPathOf(build.Manifest));
+        Assert.Equal("Monado (Mirador, approved build)", Field(build.Manifest, "name"));
+        Assert.Null(ApprovedBuilds.Verify(build, App));
+        Assert.True(ApprovedBuilds.NamesOwnDll(build));
+    }
+
+    [Theory]
+    [InlineData("bin/monado.dll", @"bin\monado.dll")]
+    [InlineData(@"bin\\monado.dll", @"bin\monado.dll")]
+    [InlineData(@".\\lib\\..\\bin\\monado.dll", @"bin\monado.dll")]
+    [InlineData("lib/monado.dll", @"lib\monado.dll")]
+    [InlineData("bin/monado.dll::$DATA", @"bin\monado.dll")]
+    public void A_relative_path_is_rewritten_relative_to_the_copys_manifest_with_backslashes(string given, string written)
+    {
+        var source = MakeInstallWithManifest(Runtime($", \"MND_libmonado_path\": \"{given}\""));
+        Directory.CreateDirectory(Path.Combine(source, "lib"));
+        File.WriteAllText(Path.Combine(source, "lib", "monado.dll"), "libmonado in lib");
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.Equal(written, Field(build.Manifest, "MND_libmonado_path"));
+        Assert.True(File.Exists(Path.Combine(build.Folder, written)));
+    }
+
+    [Fact]
+    public void A_bare_file_name_stays_only_as_the_copys_bin_file_of_that_name()
+    {
+        var source = MakeInstallWithManifest(Runtime(", \"MND_libmonado_path\": \"monado.dll\", \"MND_other_path\": \"other.dll\""));
+        var log = new List<string>();
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store, log: log.Add);
+
+        Assert.Equal(@"bin\monado.dll", Field(build.Manifest, "MND_libmonado_path"));
+        Assert.False(RuntimeOf(build.Manifest).TryGetProperty("MND_other_path", out _));
+        Assert.Contains(log, l => l.Contains("MND_other_path", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_path_outside_the_build_is_left_out_and_libmonado_is_named_as_the_copys_own()
+    {
+        var elsewhere = temp.File("user", "elsewhere", "monado.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(elsewhere)!);
+        File.WriteAllText(elsewhere, "someone else's");
+        var source = MakeInstallWithManifest(Runtime(
+            $", \"MND_libmonado_path\": {Json(elsewhere)}, \"MND_up_path\": \"..\\\\elsewhere\\\\monado.dll\", \"MND_gone_path\": \"bin\\\\gone.dll\", \"MND_number_path\": 3"));
+        var log = new List<string>();
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store, log: log.Add);
+
+        var runtime = RuntimeOf(build.Manifest);
+        Assert.Equal(@"bin\monado.dll", Field(build.Manifest, "MND_libmonado_path"));
+        Assert.False(runtime.TryGetProperty("MND_up_path", out _));
+        Assert.False(runtime.TryGetProperty("MND_gone_path", out _));
+        Assert.False(runtime.TryGetProperty("MND_number_path", out _));
+        Assert.Equal(4, log.Count);
+        Assert.Null(ApprovedBuilds.Verify(build, App));
+    }
+
+    [Fact]
+    public void A_path_outside_the_build_is_left_out_without_a_libmonado_in_the_copy()
+    {
+        var source = MakeInstallWithManifest(Runtime(", \"MND_libmonado_path\": \"C:\\\\Windows\\\\System32\\\\kernel32.dll\""), libmonado: false);
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.False(RuntimeOf(build.Manifest).TryGetProperty("MND_libmonado_path", out _));
+    }
+
+    [Fact]
+    public void Monados_other_fields_are_carried_as_they_are_and_other_keys_are_not()
+    {
+        var source = MakeInstallWithManifest(Runtime(
+            ", \"MND_text\": \"a\\\\b/c\", \"MND_number\": 1.5, \"MND_flag\": true, \"MND_object\": {\"x\": 1}, \"api_version\": \"1.0\", \"functions\": {}, \"XYZ_dll_path\": \"bin\\\\monado.dll\", \"mnd_lower\": 1"),
+            libmonado: false);
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        var runtime = RuntimeOf(build.Manifest);
+        Assert.Equal(@"a\b/c", runtime.GetProperty("MND_text").GetString());
+        Assert.Equal(1.5, runtime.GetProperty("MND_number").GetDouble());
+        Assert.True(runtime.GetProperty("MND_flag").GetBoolean());
+        Assert.Equal(["name", "library_path", "MND_text", "MND_number", "MND_flag"], runtime.EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void The_copys_manifest_keeps_its_own_name_and_dll_whatever_the_builds_says()
+    {
+        var source = MakeInstallWithManifest(
+            $$$"""{"file_format_version": "1.0.0", "runtime": {"name": "Not Monado", "library_path": {{{Json(Path.Combine(temp.Path, "evil.dll"))}}}}}""");
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.Equal("Monado (Mirador, approved build)", Field(build.Manifest, "name"));
+        Assert.Equal(@"bin\openxr_monado.dll", LibraryPathOf(build.Manifest));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("not json")]
+    [InlineData("""{"runtime": "x"}""")]
+    [InlineData("[]")]
+    public void A_build_manifest_without_monados_fields_still_names_the_copys_libmonado(string manifest)
+    {
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstallWithManifest(manifest), App, store);
+
+        Assert.Equal(@"bin\monado.dll", Field(build.Manifest, "MND_libmonado_path"));
+        Assert.Equal(@"bin\openxr_monado.dll", LibraryPathOf(build.Manifest));
+        Assert.Null(ApprovedBuilds.Verify(build, App));
+    }
+
+    [Fact]
+    public void A_build_without_libmonado_or_a_readable_manifest_gets_the_plain_manifest()
+    {
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstallWithManifest("not json", libmonado: false), App, store);
+
+        Assert.Equal(["name", "library_path"], RuntimeOf(build.Manifest).EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void A_missing_build_manifest_writes_the_plain_manifest()
+    {
+        var copy = temp.File("copy");
+        Directory.CreateDirectory(Path.Combine(copy, "bin"));
+
+        ApprovedBuilds.WriteManifest(temp.File("user", "install"), copy);
+
+        var manifest = Path.Combine(copy, "openxr_monado.json");
+        Assert.Equal(["name", "library_path"], RuntimeOf(manifest).EnumerateObject().Select(p => p.Name));
+        Assert.Equal(@"bin\openxr_monado.dll", LibraryPathOf(manifest));
+    }
+
+    [Fact]
+    public void Libmonado_is_hashed_with_the_copy_and_a_rebuilt_one_is_not_the_approved_build()
+    {
+        var source = MakeInstallWithManifest(Runtime(", \"MND_libmonado_path\": \"bin\\\\monado.dll\""));
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.True(build.Files.ContainsKey(ApprovedBuilds.LibmonadoDll));
+        Assert.True(ApprovedBuilds.Matches(build, source));
+
+        File.WriteAllText(Path.Combine(source, "bin", "monado.dll"), "libmonado v2");
+        Assert.False(ApprovedBuilds.Matches(build, source));
+
+        File.Delete(Path.Combine(source, "bin", "monado.dll"));
+        Assert.False(ApprovedBuilds.Matches(build, source));
+
+        File.WriteAllText(Path.Combine(build.ServerDir, "monado.dll"), "changed in the copy");
+        Assert.NotNull(ApprovedBuilds.Verify(build, App));
+    }
+
+    [Fact]
+    public void A_libmonado_added_to_the_build_after_the_approval_is_not_the_approved_build()
+    {
+        var source = MakeInstall();
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        File.WriteAllText(Path.Combine(source, "bin", "monado.dll"), "libmonado v1");
+
+        Assert.False(ApprovedBuilds.Matches(build, source));
     }
 
     [Theory]
