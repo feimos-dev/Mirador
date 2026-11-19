@@ -53,6 +53,7 @@ struct NvapiEnv {
     nvdm::DisplaySession* session = nullptr;
     std::vector<LUID> adapters;       // The NVIDIA adapters to try, in order; none: one try that names the display's.
     bool clear_back_buffers = true;   // Clear them through a D3D11 device (the real handles only); false: not at all.
+    int64_t warm_up_ns = 3'000'000'000; // Presented, not counted: a working display stutters at first.
     std::function<std::vector<std::string>()> session_lines; // The session's log so far, for the driver version.
 };
 

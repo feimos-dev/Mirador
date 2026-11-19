@@ -19,7 +19,7 @@ public sealed class DirectModeCheck(Func<string?> driverNow, Func<ProcessSpec, I
     /// the Start goes on, since a Monado with Windows' own headset route may drive it, and the driver isn't kept as
     /// passed, since nothing showed that direct mode works with it.
     /// </summary>
-    /// <exception cref="MiradorException">Direct mode doesn't work with this driver, or couldn't be checked.</exception>
+    /// <exception cref="MiradorException">Direct mode didn't pass the check with this driver, or it couldn't be checked.</exception>
     public async Task<string?> EnsureAsync(
         LayerFiles layer,
         string? lastGoodDriver,
@@ -45,7 +45,7 @@ public sealed class DirectModeCheck(Func<string?> driverNow, Func<ProcessSpec, I
         if (!check.Pass)
         {
             throw new MiradorException(check.Finished
-                ? $"Direct mode doesn't work with NVIDIA driver {driver}: {Sentence(check.Message)}{(check.WhatToDo is null ? "" : " " + Sentence(Capitalized(check.WhatToDo)))}"
+                ? $"Direct mode didn't pass its check with NVIDIA driver {driver}: {Sentence(check.Message)}{(check.WhatToDo is null ? "" : " " + Sentence(Capitalized(check.WhatToDo)))}"
                 : $"Mirador couldn't check direct mode with the new NVIDIA driver {driver}: {Sentence(check.Message)} Try again.");
         }
 

@@ -356,7 +356,7 @@ public sealed class PimaxModuleTests : IDisposable
         var e = await Assert.ThrowsAsync<MiradorException>(() => BeforeStart());
 
         Assert.Equal(
-            "Direct mode doesn't work with NVIDIA driver 621.01: NVAPI call 0x1F2E3D4C is missing in this driver. Go back to driver 620.00.",
+            "Direct mode didn't pass its check with NVIDIA driver 621.01: NVAPI call 0x1F2E3D4C is missing in this driver. Go back to driver 620.00.",
             e.Message);
         Assert.Equal([HelperCommand.StopPimax, HelperCommand.StartPimax], helper.Sent);
         Assert.True(steps.IndexOf("save pimaxWasRunning=true") < steps.IndexOf("display check"));
