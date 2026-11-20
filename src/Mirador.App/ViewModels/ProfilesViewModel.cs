@@ -223,11 +223,16 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// <summary>False for a standard account, which has no administrator token to run Monado with.</summary>
     public bool CanRunAsAdministrator { get; } = !SafeIsStandardAccount();
 
-    /// <summary>The toggle's description, for the Monado the profile runs.</summary>
+    /// <summary>The toggle's description: why the saved profile can't be approved, when it can't; else what the switch does.</summary>
     public string RunAsAdministratorDescription
     {
         get
         {
+            if (ApprovalBlocked is { } blocked)
+            {
+                return blocked;
+            }
+
             var text = MonadoSource == MiradorSource
                 ? "Gives Monado realtime GPU priority."
                 : "Only for a branch you trust: it gets full control of your PC.";
@@ -247,20 +252,14 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Whether the approval card shows: the saved profile has something to approve (a branch's or build folder's build,
-    /// or the bundled Monado's extra variables) and runs as administrator, or is approved.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool CanApprove { get; set; }
-
-    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check.</summary>
+    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the toggle shows a check.</summary>
     [ObservableProperty]
     public partial bool IsApproved { get; set; }
 
-    /// <summary>The approval's state: approved, a newer build waiting, or none.</summary>
+    /// <summary>Why the saved profile, run as administrator, can't be approved; null when it can, or needs no approval.</summary>
     [ObservableProperty]
-    public partial string ApprovalStatus { get; set; } = "";
+    [NotifyPropertyChangedFor(nameof(RunAsAdministratorDescription))]
+    public partial string? ApprovalBlocked { get; set; }
 
     /// <summary>Extra CMake options for a branch, one per line or separated by spaces.</summary>
     [ObservableProperty]
@@ -774,19 +773,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     {
         var approvable = editing is not null && Approvable(editing);
         IsApproved = approvable && host.FullyApproved(editing!);
-        CanApprove = approvable && (editing!.RunAsAdministrator || IsApproved);
-        if (!CanApprove)
-        {
-            return;
-        }
-
-        ApprovalStatus = ElevatedChoice.ApprovalProblem(editing!) is { } blocked
-            ? blocked
-            : IsApproved
-                ? "Approved."
-                : host.WouldApprove(editing!)
-                    ? "Not approved yet. Windows asks at the next Start."
-                    : "Not approved.";
+        ApprovalBlocked = approvable && editing!.RunAsAdministrator ? ElevatedChoice.ApprovalProblem(editing!) : null;
     }
 
     partial void OnMonadoOptionsChanged(string value) => Changed();

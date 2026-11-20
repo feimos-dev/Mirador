@@ -130,17 +130,16 @@
                     Description="{x:Bind ViewModel.RunAsAdministratorDescription, Mode=OneWay}"
                     Header="Run as administrator"
                     IsEnabled="{x:Bind ViewModel.CanRunAsAdministrator}">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=TwoWay}" />
-                </toolkit:SettingsCard>
-                <toolkit:SettingsCard
-                    Description="{x:Bind ViewModel.ApprovalStatus, Mode=OneWay}"
-                    Header="Approved build"
-                    Visibility="{x:Bind ViewModel.CanApprove, Mode=OneWay}">
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource SystemFillColorSuccessBrush}"
-                        Glyph="&#xE73E;"
-                        Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Approved"
+                            Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                            Glyph="&#xE73E;"
+                            ToolTipService.ToolTip="Approved"
+                            Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=TwoWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <!--
                     The build with its log's newest line inside, opened only by its arrow; it closes when the build ends. The
