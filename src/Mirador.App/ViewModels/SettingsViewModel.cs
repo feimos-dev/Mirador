@@ -25,6 +25,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         var settings = Read(host, out var problem);
         Problem = problem;
         CloseToTray = settings.CloseToTray;
+        MinimizeToTray = settings.MinimizeToTray;
         CheckForUpdates = settings.CheckForUpdates;
         StartMiradorForGames = settings.StartMiradorForGames;
         StartMinimized = settings.StartMinimized;
@@ -50,6 +51,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     public partial bool CloseToTray { get; set; }
+
+    [ObservableProperty]
+    public partial bool MinimizeToTray { get; set; }
 
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
@@ -229,6 +233,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     partial void OnCloseToTrayChanged(bool value) => Save(s => s with { CloseToTray = value });
+
+    partial void OnMinimizeToTrayChanged(bool value) => Save(s => s with { MinimizeToTray = value });
 
     partial void OnStartAtSignInChanged(bool value)
     {

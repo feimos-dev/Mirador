@@ -22,16 +22,19 @@
             <toolkit:SettingsCard Header="Start Mirador when you sign in">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartAtSignIn, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Games then only find Monado while Mirador is open." Header="Start Mirador when a game needs Monado">
+            <toolkit:SettingsCard Header="Start Mirador when a game needs Monado">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartMiradorForGames, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Header="Start minimized" IsEnabled="{x:Bind ViewModel.StartAtSignIn, Mode=OneWay}">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Closing the window keeps Mirador in the notification area, so games can still start Monado." Header="Close to the tray">
+            <toolkit:SettingsCard Header="Close to the tray">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.CloseToTray, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Once a day at most, Mirador asks GitHub whether Mirador or OpenLamina has a newer release, and says so on Home." Header="Automatically Check for Updates">
+            <toolkit:SettingsCard Header="Minimize to the tray">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.MinimizeToTray, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Automatically Check for Updates">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.CheckForUpdates, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Description="{x:Bind ViewModel.UpdatesText, Mode=OneWay}" Header="Updates">
@@ -68,7 +71,6 @@
                 </toolkit:SettingsExpander.ItemTemplate>
                 <toolkit:SettingsExpander.ItemsFooter>
                     <toolkit:SettingsCard
-                        Description="Mirador copies the folder at the next Start, or when Mirador starts, once Monado has made it."
                         Header="No backups yet"
                         Visibility="{x:Bind Folder.HasNoBackups, Mode=OneWay}" />
                 </toolkit:SettingsExpander.ItemsFooter>
@@ -82,10 +84,10 @@
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
 
             <TextBlock Style="{StaticResource SectionHeader}" Text="About" />
-            <toolkit:SettingsCard Description="Runs Monado, the open-source OpenXR runtime, on Windows. Boost Software License 1.0." Header="{x:Bind ViewModel.Version}">
+            <toolkit:SettingsCard Description="Boost Software License 1.0" Header="{x:Bind ViewModel.Version}">
                 <HyperlinkButton Content="github.com/feimos-dev/Mirador" NavigateUri="https://github.com/feimos-dev/Mirador" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Upstream Monado's weekly build that Mirador installs." Header="{x:Bind ViewModel.BundledMonadoVersion}" />
+            <toolkit:SettingsCard Header="{x:Bind ViewModel.BundledMonadoVersion}" />
             <toolkit:SettingsCard Description="{x:Bind ViewModel.OpenCompositeDescription, Mode=OneWay}" Header="OpenLamina">
                 <HyperlinkButton Content="github.com/feimos-dev/OpenLamina" NavigateUri="https://github.com/feimos-dev/OpenLamina" />
             </toolkit:SettingsCard>
