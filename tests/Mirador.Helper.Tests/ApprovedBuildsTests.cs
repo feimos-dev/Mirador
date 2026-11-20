@@ -357,6 +357,58 @@ public sealed class ApprovedBuildsTests : IDisposable
     }
 
     [Fact]
+    public void Approving_variables_alone_keeps_the_copy_and_replaces_only_the_variables()
+    {
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, store, Variables);
+        var copied = File.GetLastWriteTimeUtc(build.Manifest);
+
+        var updated = ApprovedBuilds.ApproveVariables(Finn, "p1", App, store, [new("PIMAX_P3C_LOG", "info")]);
+
+        Assert.Equal((build.Commit, build.Folder), (updated.Commit, updated.Folder));
+        Assert.Equal(build.Files.OrderBy(f => f.Key), updated.Files.OrderBy(f => f.Key));
+        Assert.Equal([new KeyValuePair<string, string>("PIMAX_P3C_LOG", "info")], updated.Variables);
+        Assert.Same(updated, store.Get(Finn, "p1"));
+        Assert.Equal(copied, File.GetLastWriteTimeUtc(build.Manifest));
+        Assert.Null(ApprovedBuilds.Verify(updated, App));
+    }
+
+    [Fact]
+    public void Approving_variables_alone_works_for_the_bundled_monado()
+    {
+        ApprovedBuilds.Approve(Finn, "p1", ApprovedBuilds.BundledCommit, "", App, store, Variables);
+
+        var updated = ApprovedBuilds.ApproveVariables(Finn, "p1", App, store, []);
+
+        Assert.Equal(ApprovedBuilds.BundledCommit, updated.Commit);
+        Assert.Empty(updated.Variables);
+    }
+
+    [Fact]
+    public void Approving_variables_alone_needs_an_approval_whose_copy_is_intact()
+    {
+        Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.ApproveVariables(Finn, "p1", App, store, Variables));
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, store);
+        File.WriteAllText(Path.Combine(build.ServerDir, "monado-service.exe"), "evil");
+        var e = Assert.Throws<InvalidOperationException>(() => ApprovedBuilds.ApproveVariables(Finn, "p1", App, store, Variables));
+
+        Assert.Contains("changed since it was approved", e.Message);
+        Assert.Empty(store.Get(Finn, "p1")!.Variables);
+    }
+
+    [Fact]
+    public void Approving_variables_alone_refuses_a_name_refused_for_elevated_runs()
+    {
+        ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, store, Variables);
+
+        var e = Assert.Throws<InvalidOperationException>(() =>
+            ApprovedBuilds.ApproveVariables(Finn, "p1", App, store, [new("VK_LAYER_PATH", @"C:\x")]));
+
+        Assert.Contains("VK_LAYER_PATH", e.Message);
+        Assert.Equal(Variables, store.Get(Finn, "p1")!.Variables);
+    }
+
+    [Fact]
     public void An_approval_refuses_a_name_refused_for_elevated_runs()
     {
         var e = Assert.Throws<InvalidOperationException>(() =>

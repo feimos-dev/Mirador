@@ -17,9 +17,14 @@ namespace Mirador.Core;
 /// For the bundled Monado the commit and the folder are both <c>bundled</c>: only the variables are approved. Null
 /// without it, and with fewer values.
 /// </param>
+/// <param name="ApproveVariables">
+/// <c>--approve-variables &lt;profile&gt; [NAME=VALUE…]</c>: the elevated step that approves only a profile's variables,
+/// keeping its approved copy as it is (no copy, no hashing). Null without it.
+/// </param>
 public sealed record AppArgs(
     bool Start, bool Background, bool SignIn = false, bool RemoveSignIn = false, bool AllowElevatedMonado = false,
-    (string ProfileId, string Commit, string Source, IReadOnlyList<KeyValuePair<string, string>> Variables)? ApproveBuild = null)
+    (string ProfileId, string Commit, string Source, IReadOnlyList<KeyValuePair<string, string>> Variables)? ApproveBuild = null,
+    (string ProfileId, IReadOnlyList<KeyValuePair<string, string>> Variables)? ApproveVariables = null)
 {
     /// <summary>The commit and the folder of an approval of the bundled Monado's variables.</summary>
     public const string Bundled = "bundled";
@@ -32,6 +37,7 @@ public sealed record AppArgs(
         var removeSignIn = false;
         var allowElevatedMonado = false;
         (string, string, string, IReadOnlyList<KeyValuePair<string, string>>)? approveBuild = null;
+        (string, IReadOnlyList<KeyValuePair<string, string>>)? approveVariables = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i].ToLowerInvariant())
@@ -54,19 +60,29 @@ public sealed record AppArgs(
                 case ApproveBuildFlag when i + 3 < args.Length:
                     var (profileId, commit, source) = (args[i + 1], args[i + 2], args[i + 3]);
                     i += 3;
-                    var variables = new List<KeyValuePair<string, string>>();
-                    while (i + 1 < args.Length && args[i + 1].IndexOf('=', StringComparison.Ordinal) is > 0 and var at)
-                    {
-                        variables.Add(new(args[i + 1][..at], args[i + 1][(at + 1)..]));
-                        i++;
-                    }
-
-                    approveBuild = (profileId, commit, source, variables);
+                    approveBuild = (profileId, commit, source, ReadVariables(args, ref i));
+                    break;
+                case ApproveVariablesFlag when i + 1 < args.Length:
+                    var variablesOf = args[++i];
+                    approveVariables = (variablesOf, ReadVariables(args, ref i));
                     break;
             }
         }
 
-        return new AppArgs(start, background, signIn, removeSignIn, allowElevatedMonado, approveBuild);
+        return new AppArgs(start, background, signIn, removeSignIn, allowElevatedMonado, approveBuild, approveVariables);
+    }
+
+    /// <summary>The <c>NAME=VALUE</c> arguments after <paramref name="i"/>, up to the first that isn't one; <paramref name="i"/> ends on the last read.</summary>
+    private static List<KeyValuePair<string, string>> ReadVariables(string[] args, ref int i)
+    {
+        var variables = new List<KeyValuePair<string, string>>();
+        while (i + 1 < args.Length && args[i + 1].IndexOf('=', StringComparison.Ordinal) is > 0 and var at)
+        {
+            variables.Add(new(args[i + 1][..at], args[i + 1][(at + 1)..]));
+            i++;
+        }
+
+        return variables;
     }
 
     /// <summary>
@@ -92,4 +108,7 @@ public sealed record AppArgs(
 
     /// <summary>The flag of the approval step.</summary>
     public const string ApproveBuildFlag = "--approve-build";
+
+    /// <summary>The flag of the step that approves a profile's variables alone.</summary>
+    public const string ApproveVariablesFlag = "--approve-variables";
 }

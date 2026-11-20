@@ -19,7 +19,7 @@ namespace Mirador.Helper.ElevatedMonado;
 public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
 {
     private const string BundledMissing =
-        "This Monado has no monado-service.exe, so it can't be started as administrator. Install the bundled Monado again, or approve the build again, on the Profiles page.";
+        "This Monado has no monado-service.exe, so it can't be started as administrator. Install the bundled Monado again, or build again.";
 
     private const string NoSteamVr =
         "SteamVR isn't installed, so Monado can't track the headset as administrator. Install SteamVR, or turn off running Monado as administrator.";

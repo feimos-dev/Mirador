@@ -63,7 +63,8 @@ public sealed class AppHost : IAsyncDisposable
         Builds = new Builds(new MonadoBuilder(
             new CommandRunner(), Locator, Tools,
             new BuildChecks(new CommandRunner(), Environment.SystemDirectory, TimeProvider.System), TimeProvider.System,
-            (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)));
+            (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)),
+            ApproveNewBuildAsync);
         BuildToolsSetup = new BuildToolsSetup(
             new CommandRunner(), ToolsHttp, new UacLauncher(), paths.ToolsDir,
             BuildToolsCheck.ReadPin(Path.Combine(appDir, "tools", "vcpkg-commit.txt")) ?? "",
@@ -707,6 +708,19 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
+    /// <summary>Whether minimizing the window hides it in the tray (off when settings.json can't be read).</summary>
+    public bool MinimizeToTray()
+    {
+        try
+        {
+            return Settings.Load().MinimizeToTray;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>What went wrong while Mirador started that the user should read on Home: settings reset, files it couldn't read.</summary>
     public IReadOnlyList<string> StartupNotices => notices;
 
@@ -870,7 +884,10 @@ public sealed class AppHost : IAsyncDisposable
             return problem;
         }
 
-        if (folder != AppArgs.Bundled && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
+        // The build is the approved one and only the variables changed: they are approved alone, and the copy stays.
+        var variablesOnly = folder != AppArgs.Bundled && ApprovedBuildCurrent(profile);
+        if (folder != AppArgs.Bundled && !variablesOnly
+            && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
         {
             return "Stop Monado first: it runs from this profile's approved copy, which the approval replaces.";
         }
@@ -885,7 +902,7 @@ public sealed class AppHost : IAsyncDisposable
             info.ArgumentList.Add(AllowElevatedCommand.Flag);
         }
 
-        foreach (var argument in new[] { AppArgs.ApproveBuildFlag, profile.Id, commit, folder })
+        foreach (var argument in variablesOnly ? [AppArgs.ApproveVariablesFlag, profile.Id] : new[] { AppArgs.ApproveBuildFlag, profile.Id, commit, folder })
         {
             info.ArgumentList.Add(argument);
         }
@@ -920,6 +937,40 @@ public sealed class AppHost : IAsyncDisposable
         {
             return $"The approval couldn't be started ({e.Message.TrimEnd('.')}).";
         }
+    }
+
+    /// <summary>A branch was built: the saved profile, when it runs as administrator, is approved again right away.</summary>
+    private async Task ApproveNewBuildAsync(string profileId)
+    {
+        try
+        {
+            if (Profiles.Load().Profiles.FirstOrDefault(p => p.Id == profileId) is { } profile
+                && await ApproveIfNeededAsync(profile) is { } problem)
+            {
+                AppLog.Write($"Approving the new build: {problem}");
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Write("Approving the new build failed", e);
+        }
+    }
+
+    /// <summary>
+    /// Approves <paramref name="profile"/> as it is now (one UAC prompt) when "Run as administrator" is on and it isn't
+    /// approved: a new build, changed variables. Nothing is asked when it is approved, when it can't be (Home says why it
+    /// runs as you), or when this copy or the user's consent couldn't run it as administrator anyway. Null when nothing
+    /// went wrong.
+    /// </summary>
+    public async Task<string?> ApproveIfNeededAsync(Profile profile)
+    {
+        if (!profile.RunAsAdministrator || FullyApproved(profile) || ApprovalTarget(profile, out _, out _) is not null
+            || !IsInstalledCopy(askHelper: false) || !ElevatedMonadoAllowed())
+        {
+            return null;
+        }
+
+        return await ApproveBuildAsync(profile);
     }
 
     /// <summary>

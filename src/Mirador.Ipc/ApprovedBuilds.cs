@@ -115,17 +115,7 @@ public static partial class ApprovedBuilds
             throw new InvalidOperationException("An approval of the bundled Monado has no build folder.");
         }
 
-        IReadOnlyList<KeyValuePair<string, string>> approved = [.. variables ?? []];
-        if (ElevatedVariables.FirstRefused(approved) is { } refused)
-        {
-            throw new InvalidOperationException($"{refused} can't be set for Monado run as administrator.");
-        }
-
-        if (approved.Any(v => v.Value is null || v.Value.Contains('\0')))
-        {
-            throw new InvalidOperationException("A variable's value can't hold a null character.");
-        }
-
+        var approved = Approvable(variables);
         if (commit == BundledCommit)
         {
             var bundled = new ApprovedBuild(owner, profileId, BundledCommit, "", new Dictionary<string, string>(), approved);
@@ -170,6 +160,50 @@ public static partial class ApprovedBuilds
 
         SweepLeftovers(appDir, store);
         return build;
+    }
+
+    /// <summary>
+    /// Approves new <paramref name="variables"/> for a profile whose approval is otherwise kept: its copy isn't made
+    /// again, only checked (<see cref="Verify"/>) and its record's variables replaced. For a bundled Monado approval the
+    /// record holds the variables only anyway.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">There is no approval to keep, its copy changed, or a variable can't be approved.</exception>
+    public static ApprovedBuild ApproveVariables(
+        string owner, string profileId, string appDir, IApprovedBuildStore store, IReadOnlyList<KeyValuePair<string, string>>? variables)
+    {
+        if (!IsOwner(owner) || !IsProfileId(profileId))
+        {
+            throw new InvalidOperationException("That isn't a user's profile.");
+        }
+
+        var approved = Approvable(variables);
+        var record = store.Get(owner, profileId) ?? throw new InvalidOperationException("This profile has no approved build.");
+        if (record.Commit != BundledCommit && Verify(record, appDir) is { } problem)
+        {
+            throw new InvalidOperationException(problem);
+        }
+
+        var updated = record with { Variables = approved };
+        store.Set(updated);
+        return updated;
+    }
+
+    /// <summary>The variables as recorded, once each may be set for Monado as administrator.</summary>
+    /// <exception cref="InvalidOperationException">One may not.</exception>
+    private static IReadOnlyList<KeyValuePair<string, string>> Approvable(IReadOnlyList<KeyValuePair<string, string>>? variables)
+    {
+        IReadOnlyList<KeyValuePair<string, string>> approved = [.. variables ?? []];
+        if (ElevatedVariables.FirstRefused(approved) is { } refused)
+        {
+            throw new InvalidOperationException($"{refused} can't be set for Monado run as administrator.");
+        }
+
+        if (approved.Any(v => v.Value is null || v.Value.Contains('\0')))
+        {
+            throw new InvalidOperationException("A variable's value can't hold a null character.");
+        }
+
+        return approved;
     }
 
     /// <summary>

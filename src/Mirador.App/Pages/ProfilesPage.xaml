@@ -57,11 +57,14 @@
                     </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard Header="Name">
-                    <TextBox MinWidth="200" Text="{x:Bind ViewModel.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox
+                        MinWidth="200"
+                        IsSpellCheckEnabled="False"
+                        Text="{x:Bind ViewModel.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Builds" />
-                <toolkit:SettingsCard Description="The bundled Monado is upstream's weekly build, which Mirador downloads. Or Mirador builds a branch for you, or runs one you built." Header="Monado">
+                <toolkit:SettingsCard Header="Monado">
                     <ComboBox MinWidth="200" SelectedIndex="{x:Bind ViewModel.MonadoSource, Mode=TwoWay}">
                         <ComboBoxItem Content="Bundled Monado" />
                         <ComboBoxItem Content="Build upstream main" />
@@ -71,7 +74,6 @@
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
                     ContentAlignment="Vertical"
-                    Description="A branch or merge request on GitLab or GitHub: paste its page's link."
                     Header="Link"
                     HorizontalContentAlignment="Stretch"
                     Visibility="{x:Bind ViewModel.MonadoFromLink, Mode=OneWay}">
@@ -100,7 +102,6 @@
                     </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
-                    Description="The repository's branches."
                     Header="Branch"
                     Visibility="{x:Bind ViewModel.ShowBranches, Mode=OneWay}">
                     <ComboBox
@@ -135,20 +136,19 @@
                     Description="{x:Bind ViewModel.ApprovalStatus, Mode=OneWay}"
                     Header="Approved build"
                     Visibility="{x:Bind ViewModel.CanApprove, Mode=OneWay}">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <FontIcon
-                            VerticalAlignment="Center"
-                            Foreground="{ThemeResource SystemFillColorSuccessBrush}"
-                            Glyph="&#xE73E;"
-                            Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
-                        <Button Command="{x:Bind ViewModel.ApproveCommand}" Content="Approve" />
-                    </StackPanel>
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                        Glyph="&#xE73E;"
+                        Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
                 </toolkit:SettingsCard>
-                <!-- The build with its log inside: opened while a build runs, and the log follows its last line. -->
+                <!--
+                    The build with its log's newest line inside, opened only by its arrow; it closes when the build ends. The
+                    line keeps the card's width, cut short with an ellipsis.
+                -->
                 <toolkit:SettingsExpander
                     x:Name="BuildExpander"
                     Description="{x:Bind ViewModel.Build.Status, Mode=OneWay}"
-                    Expanded="OnBuildLogExpanded"
                     Header="Build"
                     Visibility="{x:Bind ViewModel.Build.IsVisible, Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -164,22 +164,18 @@
                             Style="{StaticResource AccentButtonStyle}" />
                     </StackPanel>
                     <toolkit:SettingsExpander.Items>
-                        <toolkit:SettingsCard ContentAlignment="Left" HorizontalContentAlignment="Stretch">
-                            <TextBox
-                                x:Name="BuildLog"
-                                MinHeight="240"
-                                MaxHeight="480"
+                        <toolkit:SettingsCard ContentAlignment="Vertical" HorizontalContentAlignment="Stretch">
+                            <TextBlock
                                 HorizontalAlignment="Stretch"
                                 AutomationProperties.Name="Build log"
                                 FontFamily="Consolas"
                                 FontSize="12"
-                                IsReadOnly="True"
-                                Loaded="OnBuildLogLoaded"
-                                ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                IsTextSelectionEnabled="True"
+                                MaxLines="1"
                                 Text="{x:Bind ViewModel.Build.Log, Mode=OneWay}"
-                                TextChanged="OnBuildLogChanged"
-                                TextWrapping="NoWrap" />
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap"
+                                ToolTipService.ToolTip="{x:Bind ViewModel.Build.Log, Mode=OneWay}" />
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
@@ -223,11 +219,15 @@
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
                     ContentAlignment="Vertical"
-                    Description="Only if the branch needs them: -DNAME=value, one per line. They come after Mirador's own."
                     Header="Extra CMake options"
                     HorizontalContentAlignment="Stretch"
                     Visibility="{x:Bind ViewModel.MonadoFromLink, Mode=OneWay}">
-                    <TextBox AcceptsReturn="True" MinHeight="60" Text="{x:Bind ViewModel.MonadoOptions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox
+                        MinHeight="60"
+                        AcceptsReturn="True"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="-DNAME=value"
+                        Text="{x:Bind ViewModel.MonadoOptions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </toolkit:SettingsCard>
 
                 <!-- What Mirador does on Windows for the headset: one choice turns all of it on, the layer included. -->
@@ -240,14 +240,13 @@
                 </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Lighthouse" />
-                <toolkit:SettingsCard Description="This setup tracks with base stations: Home gets their On and Off, and Mirador can switch them with Monado (App settings)." Header="Lighthouse base stations">
+                <toolkit:SettingsCard Header="Lighthouse base stations">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.UsesBaseStations, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Extra environment" />
                 <toolkit:SettingsCard
                     ContentAlignment="Vertical"
-                    Description="Variables for Monado; they override the Monado settings for this profile. An empty value removes one."
                     Header="Variables"
                     HorizontalContentAlignment="Stretch">
                     <StackPanel Spacing="8">
@@ -265,9 +264,13 @@
                                             <ColumnDefinition Width="2*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox PlaceholderText="Name" Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBox
+                                            IsSpellCheckEnabled="False"
+                                            PlaceholderText="Name"
+                                            Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBox
                                             Grid.Column="1"
+                                            IsSpellCheckEnabled="False"
                                             PlaceholderText="Value"
                                             Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                         <Button

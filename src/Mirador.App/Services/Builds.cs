@@ -4,24 +4,15 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.App.Services;
 
-/// <summary>One build of a profile's branch: its lines so far and how it ended.</summary>
+/// <summary>One build of a profile's branch: its newest line and how it ended.</summary>
 public sealed class BuildRun
 {
-    private readonly List<string> lines = [];
+    private volatile string lastLine = "";
 
     internal CancellationTokenSource Cancel { get; } = new();
 
-    /// <summary>The build's lines so far (the last <see cref="Builds.ShownLines"/>).</summary>
-    public IReadOnlyList<string> Lines
-    {
-        get
-        {
-            lock (lines)
-            {
-                return [.. lines];
-            }
-        }
-    }
+    /// <summary>The newest line, or empty before the first; the log file has them all.</summary>
+    public string LastLine => lastLine;
 
     /// <summary>How it ended; null while it runs.</summary>
     public BuildOutcome? Outcome { get; internal set; }
@@ -29,28 +20,16 @@ public sealed class BuildRun
     /// <summary>Whether it was cancelled.</summary>
     public bool Cancelled { get; internal set; }
 
-    internal void Add(string line)
-    {
-        lock (lines)
-        {
-            lines.Add(line);
-            if (lines.Count > Builds.ShownLines)
-            {
-                lines.RemoveRange(0, lines.Count - Builds.ShownLines);
-            }
-        }
-    }
+    internal void Add(string line) => lastLine = line;
 }
 
 /// <summary>
 /// The branch builds of this Mirador, kept here rather than in the Profiles page so that a
 /// build goes on while the owner looks at another page. <see cref="Changed"/> is raised on a background thread.
 /// </summary>
-public sealed class Builds(MonadoBuilder builder)
+/// <param name="afterBuilt">Run with the profile's id after a build that worked has been told: the approval of a new build.</param>
+public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt = null)
 {
-    /// <summary>How many of a build's last lines the page shows; the log file has them all.</summary>
-    public const int ShownLines = 400;
-
     private readonly Dictionary<string, BuildRun> runs = [];
 
     /// <summary>How long a build's new lines wait to be told, so that a burst of them is one change, not hundreds.</summary>
@@ -133,6 +112,11 @@ public sealed class Builds(MonadoBuilder builder)
             }
 
             Changed?.Invoke(profile.Id);
+            if (run.Outcome is { Ok: true } && afterBuilt is not null)
+            {
+                await afterBuilt(profile.Id);
+                Changed?.Invoke(profile.Id);
+            }
         });
     }
 

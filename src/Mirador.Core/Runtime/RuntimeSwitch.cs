@@ -27,8 +27,8 @@ public static class RuntimeSwitch
             if (approvedProfileId is null)
             {
                 return hadApproval
-                    ? "This build changed since it was approved: approve it again on the Profiles page, then set it as the runtime."
-                    : "Approve this build on the Profiles page first: every OpenXR program loads the runtime, so it can't be in a folder you can change.";
+                    ? "This build changed since it was approved. Set it again to approve it."
+                    : "This build isn't approved. Set it again to approve it.";
             }
 
             var approved = await helper.SendAsync(new HelperRequest(HelperCommand.SetRuntimeApproved, Build: approvedProfileId), CancellationToken.None).ConfigureAwait(false);

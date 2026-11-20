@@ -44,9 +44,27 @@ public static partial class Program
                 AllowElevatedCommand.CurrentUser(),
                 AllowElevatedCommand.UnsignedLighthouseFiles,
                 AppLog.Write);
-            if (allowed != 0 || parsed.ApproveBuild is null)
+            if (allowed != 0 || (parsed.ApproveBuild is null && parsed.ApproveVariables is null))
             {
                 return allowed;
+            }
+        }
+
+        // The elevated step of approving a profile's changed variables alone: its approved copy stays as it is.
+        if (parsed.ApproveVariables is { } approveVariables)
+        {
+            AppLog.Open(AppPaths.Default);
+            try
+            {
+                var owner = AllowElevatedCommand.CurrentUser()?.Value ?? throw new InvalidOperationException("Windows didn't say who you are.");
+                Mirador.Ipc.ApprovedBuilds.ApproveVariables(
+                    owner, approveVariables.ProfileId, AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approveVariables.Variables);
+                return 0;
+            }
+            catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException)
+            {
+                AppLog.Write("Approving the variables failed", e);
+                return 1;
             }
         }
 

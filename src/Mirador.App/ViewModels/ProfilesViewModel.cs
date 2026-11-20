@@ -48,7 +48,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
         this.host = host;
         Build = new BuildViewModel(host, App.Current.Ui);
         Verify = new VerifyViewModel(host, App.Current.Ui);
-        Verify.Changed += () => RefreshApproval();
+        Verify.Changed += RefreshApproval;
         MiradorMonado = new MiradorMonadoViewModel(host);
         Headsets.Add(new HeadsetItem(null, "None"));
         foreach (var module in host.Modules.Values)
@@ -192,8 +192,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
         get
         {
             var text = MonadoSource == MiradorSource
-                ? "Gives Monado the GPU's realtime priority (with hardware-accelerated GPU scheduling on). Games still run as you. Windows asks once, when you save. Programs running as you could use it to get administrator rights."
-                : "Only turn this on if you trust this Monado branch: it gets full control of your PC while it runs. Approving copies the build where only administrators can change it; each new build runs as you until you approve it again. Monado as administrator also needs the elevation fix, which upstream doesn't have yet.";
+                ? "Gives Monado realtime GPU priority."
+                : "Only for a branch you trust: it gets full control of your PC.";
             return CanRunAsAdministrator ? text : $"{text} Needs an administrator account.";
         }
     }
@@ -211,15 +211,14 @@ public sealed partial class ProfilesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Whether the approval card shows: the saved profile builds a branch or uses a build folder, or runs the bundled
-    /// Monado with extra variables.
+    /// Whether the approval card shows: the saved profile has something to approve (a branch's or build folder's build,
+    /// or the bundled Monado's extra variables) and runs as administrator, or is approved.
     /// </summary>
     [ObservableProperty]
     public partial bool CanApprove { get; set; }
 
-    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check, and Approve is off.</summary>
+    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check.</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApproveCommand))]
     public partial bool IsApproved { get; set; }
 
     /// <summary>The approval's state: approved, a newer build waiting, or none.</summary>
@@ -235,7 +234,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSwitch), nameof(CanDelete), nameof(PickerDescription))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(RevertCommand), nameof(ApproveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(RevertCommand))]
     public partial bool IsDirty { get; set; }
 
     [ObservableProperty]
@@ -256,7 +255,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// <summary>The Windows tools card's description: what the picked headset's module does around Monado.</summary>
     public string HeadsetDescription => Headset?.WindowsTools is { Length: > 0 } tools
         ? tools
-        : "Mirador's steps for a headset around Monado. With None, Monado runs on its own.";
+        : "";
 
     public bool MonadoFromFolder => MonadoSource == FolderSource;
 
@@ -320,8 +319,12 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Detach();
     }
 
-    // A build started or ended: Delete follows it.
-    private void OnBuildsChanged(string profileId) => App.Current.Ui.TryEnqueue(() => OnPropertyChanged(nameof(CanDelete)));
+    // A build started, ended or was approved: Delete and the approval card follow it.
+    private void OnBuildsChanged(string profileId) => App.Current.Ui.TryEnqueue(() =>
+    {
+        OnPropertyChanged(nameof(CanDelete));
+        RefreshApproval();
+    });
 
     /// <summary>A name no profile has yet: <paramref name="wanted"/>, else with 2, 3, … after it.</summary>
     public string FreeName(string wanted)
@@ -473,17 +476,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
             {
                 if (ElevatedChoice.KeepsSwitchWhenDeclined(editing))
                 {
-                    problem = "Saved, but not approved: Windows' administrator prompt was cancelled. The profile runs as you until you approve it.";
+                    problem = "Saved. Not approved: the prompt was cancelled, so it runs as you.";
                 }
                 else
                 {
                     profile = profile with { RunAsAdministrator = false };
-                    problem = "Saved to run as you: Windows' administrator prompt was cancelled.";
+                    problem = "Saved to run as you: the prompt was cancelled.";
                 }
             }
             else if (refusal is not null)
             {
-                problem = $"Saved, but not approved: {refusal}";
+                problem = $"Saved. Not approved: {refusal}";
             }
         }
         else if (profile.RunAsAdministrator && ElevatedChoice.ApprovalProblem(profile) is { } blocked)
@@ -503,8 +506,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
             {
                 profile = profile with { RunAsAdministrator = false };
                 problem = code == ElevatedRuntime.PromptCancelled
-                    ? "Saved to run as you: Windows' administrator prompt was cancelled."
-                    : "Saved to run as you: Mirador couldn't record the consent for Monado to run as administrator. The reason is in mirador.log.";
+                    ? "Saved to run as you: the prompt was cancelled."
+                    : "Saved to run as you: Monado couldn't be allowed to run as administrator. mirador.log says why.";
             }
         }
 
@@ -693,71 +696,28 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnRunAsAdministratorChanged(bool value) => Changed();
 
-    /// <summary>
-    /// "Approve": one UAC prompt copies the saved profile's build where only administrators can change it. Greyed out
-    /// until the profile is saved: the build approved is the saved profile's.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanApproveNow))]
-    private async Task ApproveAsync()
-    {
-        if (editing is null)
-        {
-            return;
-        }
-
-        ApprovalStatus = "Approving…";
-        var problem = await host.ApproveBuildAsync(editing);
-        RefreshApproval(problem);
-    }
-
-    private bool CanApproveNow() => editing is not null && !IsDirty && !IsApproved;
-
     /// <summary>Whether <paramref name="profile"/> has something to approve: a branch's or build folder's build, or the bundled Monado's extra variables.</summary>
     private static bool Approvable(Profile profile) =>
         profile.Monado.Kind is SourceKind.Branch or SourceKind.Folder
         || (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count > 0);
 
-    /// <summary>What an approved variable that names a file means, in the approval card's text.</summary>
-    private const string FileRightsNote =
-        "A variable that names a file runs that file with full rights; keep such files where only administrators can change them.";
-
-    private void RefreshApproval(string? problem = null)
+    private void RefreshApproval()
     {
-        CanApprove = editing is not null && Approvable(editing);
-        IsApproved = CanApprove && host.FullyApproved(editing!);
-        if (!CanApprove || editing is null)
+        var approvable = editing is not null && Approvable(editing);
+        IsApproved = approvable && host.FullyApproved(editing!);
+        CanApprove = approvable && (editing!.RunAsAdministrator || IsApproved);
+        if (!CanApprove)
         {
             return;
         }
 
-        string state;
-        if (ElevatedChoice.ApprovalProblem(editing) is { } blocked)
-        {
-            state = blocked;
-        }
-        else if (editing.Monado.Kind == SourceKind.Mirador)
-        {
-            state = IsApproved
-                ? "Approved: these variables run with Monado as administrator, with full rights. " + FileRightsNote
-                : host.HasApproval(editing)
-                    ? "Not approved: the variables changed."
-                    : "Approve these variables to run them with Monado as administrator. Approved variables run with full rights. " + FileRightsNote;
-        }
-        else
-        {
-            var uses = editing.RunAsAdministrator ? "run as administrator and be the OpenXR runtime" : "be the OpenXR runtime";
-            state = IsApproved
-                ? editing.RunAsAdministrator
-                    ? "Approved: this build runs as administrator and can be the OpenXR runtime."
-                    : "Approved: this build can be the OpenXR runtime. Monado runs from the approved copy, as you."
-                : host.ApprovedBuildCurrent(editing)
-                    ? "Not approved: the variables changed."
-                    : host.HasApproval(editing)
-                        ? $"This build changed since it was approved: approve it again to let it {uses}."
-                        : $"Approve this build to let it {uses}: Mirador copies it where only administrators can change it. Its variables are approved with it and run with full rights. {FileRightsNote}";
-        }
-
-        ApprovalStatus = problem is null ? state : $"{problem} {state}";
+        ApprovalStatus = ElevatedChoice.ApprovalProblem(editing!) is { } blocked
+            ? blocked
+            : IsApproved
+                ? "Approved."
+                : editing!.RunAsAdministrator
+                    ? "Not approved yet. Windows asks at the next Start."
+                    : "Not approved.";
     }
 
     partial void OnMonadoOptionsChanged(string value) => Changed();
@@ -860,7 +820,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
 
         IsDirty = false;
-        ApproveCommand.NotifyCanExecuteChanged();
         Verify.Show(p);
         Verify.Unsaved = false;
         RefreshApproval();

@@ -170,7 +170,7 @@ public sealed class HelperHandlerApprovalTests : IDisposable
     public void The_helper_refuses_variables_that_differ_from_the_approval()
     {
         ApprovedBuilds.Approve(Finn.Value, "p1", ApprovedBuilds.BundledCommit, "", App, store, Approved);
-        const string Changed = "This profile's variables changed since they were approved. Approve them again on the Profiles page.";
+        const string Changed = "This profile's variables changed since they were approved. Start again to approve them.";
 
         Assert.Equal(Changed, Check(StartWith("p1", [new("PIMAX_P3C_LOG", "info"), new("XRT_LOG", "info")]), store, out _));
         Assert.Equal(Changed, Check(StartWith("p1", [new("XRT_LOG", "info"), new("PIMAX_P3C_LOG", "debug")]), store, out _));

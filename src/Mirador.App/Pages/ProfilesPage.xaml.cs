@@ -17,10 +17,6 @@ public sealed partial class ProfilesPage : Page
         ViewModel = new ProfilesViewModel(App.Current.Host);
         InitializeComponent();
         ViewModel.Build.PropertyChanged += OnBuildChanged;
-        if (ViewModel.Build.IsBuilding)
-        {
-            BuildExpander.IsExpanded = true;
-        }
     }
 
     public ProfilesViewModel ViewModel { get; }
@@ -37,70 +33,13 @@ public sealed partial class ProfilesPage : Page
         }
     }
 
-    /// <summary>
-    /// The build log shows its newest lines as they come (the box keeps the last few hundred, oldest first), so that a
-    /// running build looks like one, and a finished one shows how it ended.
-    /// </summary>
-    private void OnBuildLogChanged(object sender, TextChangedEventArgs e) => ShowBuildLogEnd();
-
-    /// <summary>Opened, the log shows its end.</summary>
-    private void OnBuildLogExpanded(object? sender, EventArgs e) => ShowBuildLogEnd();
-
-    /// <summary>A build that starts opens the card, so its log can be followed.</summary>
+    /// <summary>A build that ends closes its card; only the arrow opens it.</summary>
     private void OnBuildChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(BuildViewModel.IsBuilding) && ViewModel.Build.IsBuilding)
+        if (e.PropertyName == nameof(BuildViewModel.IsBuilding) && !ViewModel.Build.IsBuilding)
         {
-            BuildExpander.IsExpanded = true;
+            BuildExpander.IsExpanded = false;
         }
-    }
-
-    /// <summary>The box's own scroller, found once, when the box is first laid out (the card opened).</summary>
-    private void OnBuildLogLoaded(object sender, RoutedEventArgs e)
-    {
-        buildLogViewer ??= FindChild<ScrollViewer>(BuildLog);
-        ShowBuildLogEnd();
-    }
-
-    private ScrollViewer? buildLogViewer;
-    private bool buildLogEndQueued;
-
-    /// <summary>
-    /// Puts the caret, and the view, at the end of the log. Text comes in bursts; one scroll after the layout that
-    /// measures the newest text is enough, so a burst queues it once.
-    /// </summary>
-    private void ShowBuildLogEnd()
-    {
-        BuildLog.SelectionStart = BuildLog.Text.Length;
-        if (buildLogEndQueued)
-        {
-            return;
-        }
-
-        buildLogEndQueued = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-        {
-            buildLogEndQueued = false;
-            if (buildLogViewer is { } viewer)
-            {
-                viewer.UpdateLayout();
-                viewer.ChangeView(null, viewer.ScrollableHeight, null, disableAnimation: true);
-            }
-        });
-    }
-
-    private static T? FindChild<T>(DependencyObject parent)
-        where T : DependencyObject
-    {
-        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
-            if ((child as T ?? FindChild<T>(child)) is { } found)
-            {
-                return found;
-            }
-        }
-
-        return null;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

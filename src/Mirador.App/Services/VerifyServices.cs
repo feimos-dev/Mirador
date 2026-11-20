@@ -137,7 +137,7 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
         {
             if (!profile.RunAsAdministrator || !host.ApprovedBuildCurrent(profile))
             {
-                return new ElevatedVerify(null, "Turn on Run as administrator and approve this build to check it as administrator.");
+                return new ElevatedVerify(null, "Skipped: Run as administrator is off, or this build isn't approved.");
             }
 
             build = profile.Id;
@@ -146,7 +146,7 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
         {
             if (!profile.RunAsAdministrator)
             {
-                return new ElevatedVerify(null, "Turn on Run as administrator for this profile and save it to check it as administrator.");
+                return new ElevatedVerify(null, "Skipped: Run as administrator is off.");
             }
 
             build = "";

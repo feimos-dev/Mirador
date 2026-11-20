@@ -86,6 +86,21 @@ public class AppArgsTests
     }
 
     [Fact]
+    public void Approve_variables_parses_the_profile_and_its_variables()
+    {
+        var args = AppArgs.Parse(["--allow-elevated-monado", "--approve-variables", "p1", "PIMAX_P3C_LOG=info", "EMPTY=", "--start"]);
+
+        Assert.True(args.AllowElevatedMonado);
+        Assert.True(args.Start);
+        Assert.Null(args.ApproveBuild);
+        var (profileId, variables) = args.ApproveVariables!.Value;
+        Assert.Equal("p1", profileId);
+        Assert.Equal([new("PIMAX_P3C_LOG", "info"), new KeyValuePair<string, string>("EMPTY", "")], variables);
+        Assert.Empty(AppArgs.Parse(["--approve-variables", "p1"]).ApproveVariables!.Value.Variables);
+        Assert.Null(AppArgs.Parse(["--approve-variables"]).ApproveVariables);
+    }
+
+    [Fact]
     public void A_bundled_approval_is_only_of_miradors_own_monado()
     {
         Assert.Equal(("bundled", ""), AppArgs.ApprovalTarget("bundled", "bundled"));

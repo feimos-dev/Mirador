@@ -38,7 +38,7 @@ public sealed partial class BuildViewModel : ObservableObject
     [ObservableProperty]
     public partial string BuildLabel { get; set; } = "Build";
 
-    /// <summary>The running or last build's lines.</summary>
+    /// <summary>The running or last build's newest line.</summary>
     [ObservableProperty]
     public partial string Log { get; set; } = "";
 
@@ -68,7 +68,7 @@ public sealed partial class BuildViewModel : ObservableObject
     {
         if (host.Verifying)
         {
-            Status = "Verify build for Windows is running: build when it is done.";
+            Status = "Verify is running. Build when it's done.";
             return;
         }
 
@@ -115,13 +115,13 @@ public sealed partial class BuildViewModel : ObservableObject
 
         var run = host.Builds.RunOf(profile.Id);
         IsBuilding = run is { Outcome: null, Cancelled: false };
-        Log = run is null ? "" : string.Join(Environment.NewLine, run.Lines);
+        Log = run?.LastLine ?? "";
         var installDir = host.Locator.BranchInstallDir(profile.Id);
         var info = BuildInfo.Load(installDir);
         BuildLabel = info is null ? "Build" : "Pull and rebuild";
         if (IsBuilding)
         {
-            Status = "Building. This takes longer the first time.";
+            Status = "Building…";
             return;
         }
 

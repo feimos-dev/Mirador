@@ -87,7 +87,7 @@ public class RuntimeSwitchTests
 
         var problem = await RuntimeSwitch.SetAsync(Install(bundled: false), helper, Runtime);
 
-        Assert.StartsWith("Approve this build on the Profiles page first", problem);
+        Assert.StartsWith("This build isn't approved.", problem);
         Assert.DoesNotContain("Run as administrator", problem);
         Assert.Empty(helper.Sent);
     }
