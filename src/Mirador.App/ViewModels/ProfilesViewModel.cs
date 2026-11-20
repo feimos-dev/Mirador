@@ -708,7 +708,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
             ? blocked
             : IsApproved
                 ? "Approved."
-                : editing!.RunAsAdministrator
+                : host.ApprovesAtStart(editing!)
                     ? "Not approved yet. Windows asks at the next Start."
                     : "Not approved.";
     }

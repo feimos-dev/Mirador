@@ -879,13 +879,34 @@ public sealed class AppHost : IAsyncDisposable
     /// <param name="alsoAllow">Record the user's consent for Monado as administrator behind the same prompt.</param>
     public async Task<string?> ApproveBuildAsync(Profile profile, bool alsoAllow = false)
     {
+        await approvalGate.WaitAsync();
+        try
+        {
+            return await ApproveNowAsync(profile, alsoAllow);
+        }
+        finally
+        {
+            approvalGate.Release();
+        }
+    }
+
+    /// <summary>One approval prompt at a time: a second waits for the first, then finds the profile approved.</summary>
+    private readonly SemaphoreSlim approvalGate = new(1, 1);
+
+    /// <summary>Whether an approval's prompt is open (or about to be).</summary>
+    public bool Approving => approvalGate.CurrentCount == 0;
+
+    private async Task<string?> ApproveNowAsync(Profile profile, bool alsoAllow)
+    {
         if (ApprovalTarget(profile, out var commit, out var folder) is { } problem)
         {
             return problem;
         }
 
-        // The build is the approved one and only the variables changed: they are approved alone, and the copy stays.
-        var variablesOnly = folder != AppArgs.Bundled && ApprovedBuildCurrent(profile);
+        // The build is the approved one and only the variables changed: they are approved alone, and the copy stays. A
+        // copy that changed since is made again instead.
+        var variablesOnly = folder != AppArgs.Bundled && ApprovedBuildCurrent(profile)
+            && Approval(profile) is { } record && ApprovedBuilds.Verify(record, AppDir) is null;
         if (folder != AppArgs.Bundled && !variablesOnly
             && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
         {
@@ -950,8 +971,9 @@ public sealed class AppHost : IAsyncDisposable
                 AppLog.Write($"Approving the new build: {problem}");
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
+            // On the build's background thread: nothing above it would see this.
             AppLog.Write("Approving the new build failed", e);
         }
     }
@@ -964,14 +986,31 @@ public sealed class AppHost : IAsyncDisposable
     /// </summary>
     public async Task<string?> ApproveIfNeededAsync(Profile profile)
     {
-        if (!profile.RunAsAdministrator || FullyApproved(profile) || ApprovalTarget(profile, out _, out _) is not null
-            || !IsInstalledCopy(askHelper: false) || !ElevatedMonadoAllowed())
+        if (!WouldApprove(profile))
         {
             return null;
         }
 
-        return await ApproveBuildAsync(profile);
+        await approvalGate.WaitAsync();
+        try
+        {
+            // Another prompt may have approved it meanwhile.
+            return WouldApprove(profile) ? await ApproveNowAsync(profile, alsoAllow: false) : null;
+        }
+        finally
+        {
+            approvalGate.Release();
+        }
     }
+
+    /// <summary>Whether <see cref="ApproveIfNeededAsync"/> would ask Windows for <paramref name="profile"/>.</summary>
+    public bool WouldApprove(Profile profile) =>
+        profile.RunAsAdministrator && !FullyApproved(profile) && ApprovalTarget(profile, out _, out _) is null
+        && IsInstalledCopy(askHelper: false) && ElevatedMonadoAllowed();
+
+    /// <summary>Whether a prompt would be shown for <paramref name="profile"/> at a Start, were it not approved.</summary>
+    public bool ApprovesAtStart(Profile profile) =>
+        profile.RunAsAdministrator && IsInstalledCopy(askHelper: false) && ElevatedMonadoAllowed();
 
     /// <summary>
     /// Why <paramref name="profile"/> can't be approved now, before any prompt: its variables can't run as administrator

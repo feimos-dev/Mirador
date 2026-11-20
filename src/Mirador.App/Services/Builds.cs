@@ -20,6 +20,12 @@ public sealed class BuildRun
     /// <summary>Whether it was cancelled.</summary>
     public bool Cancelled { get; internal set; }
 
+    /// <summary>Whether the build is over but its approval isn't: another build of the profile waits for it.</summary>
+    public bool Approving { get; internal set; }
+
+    /// <summary>Whether it is building, or its approval is open.</summary>
+    internal bool Busy => this is { Outcome: null, Cancelled: false } or { Approving: true };
+
     internal void Add(string line) => lastLine = line;
 }
 
@@ -54,7 +60,7 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
         {
             lock (runs)
             {
-                return runs.Values.Any(r => r is { Outcome: null, Cancelled: false });
+                return runs.Values.Any(r => r.Busy);
             }
         }
     }
@@ -68,7 +74,7 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
         BuildRun run;
         lock (runs)
         {
-            if (runs.GetValueOrDefault(profile.Id) is { Outcome: null, Cancelled: false })
+            if (runs.GetValueOrDefault(profile.Id) is { Busy: true })
             {
                 return;
             }
@@ -111,10 +117,20 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
                 run.Outcome = new BuildOutcome(false, e.Message, null, null, builder.LastLog(profile.Id) ?? "");
             }
 
+            // Busy until the approval is done: a new build mustn't write the folder its approval copies.
+            run.Approving = run.Outcome is { Ok: true } && afterBuilt is not null;
             Changed?.Invoke(profile.Id);
-            if (run.Outcome is { Ok: true } && afterBuilt is not null)
+            if (run.Approving)
             {
-                await afterBuilt(profile.Id);
+                try
+                {
+                    await afterBuilt!(profile.Id);
+                }
+                finally
+                {
+                    run.Approving = false;
+                }
+
                 Changed?.Invoke(profile.Id);
             }
         });

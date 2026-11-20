@@ -516,12 +516,13 @@ public sealed partial class HomeViewModel : ObservableObject
         CanSetRuntime = false;
         try
         {
-            var profile = SelectedSet().Selected;
+            // The profile whose build this is: the running one's while Monado runs.
+            var profile = host.Session.CurrentProfile?.Profile ?? SelectedSet().Selected;
 
             // A branch or build folder becomes the runtime only as its approved copy: one prompt approves it first.
             if (!install.IsBundled && !host.ApprovedBuildCurrent(profile) && await host.ApproveBuildAsync(profile) is { } refused)
             {
-                RuntimeProblem = refused;
+                RuntimeProblem = refused == AppHost.ApprovalCancelled ? "The prompt was cancelled. The runtime is unchanged." : refused;
                 return;
             }
 

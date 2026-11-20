@@ -203,14 +203,22 @@ public partial class App : Application
     public async Task<StartOutcome> StartAsync(StartReason reason)
     {
         // A profile that runs as administrator but changed since its approval asks Windows once, here; declined, it runs as you.
+        // A second Start while that prompt is open waits for no second prompt.
+        if (Host.Approving)
+        {
+            return new StartOutcome(false, "Answer Windows' prompt first.");
+        }
+
         try
         {
-            if (Host.Session.State == SessionState.Stopped && await Host.ApproveIfNeededAsync(Host.Profiles.Load().Selected) is { } problem)
+            // Off the UI thread: telling whether the build is the approved one hashes it.
+            if (Host.Session.State == SessionState.Stopped
+                && await Task.Run(() => Host.ApproveIfNeededAsync(Host.Profiles.Load().Selected)) is { } problem)
             {
                 AppLog.Write($"Approving before the Start: {problem}");
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
             AppLog.Write("Approving before the Start failed", e);
         }
