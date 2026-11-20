@@ -15,6 +15,7 @@ public static class MonadoEnvironment
     /// <c>""</c>, not "unset", and <c>XDG_RUNTIME_DIR=</c> would move Monado's pipe). The result is a new dictionary;
     /// <paramref name="inherited"/> is not changed. Pass an empty <paramref name="inherited"/> to list only what
     /// Mirador sets.
+    /// <see cref="ClearedEnvironment"/>'s names are never inherited.
     /// </summary>
     public static IReadOnlyDictionary<string, string> Build(
         IReadOnlyDictionary<string, string> inherited,
@@ -28,6 +29,11 @@ public static class MonadoEnvironment
         foreach (var (name, value) in inherited)
         {
             Set(env, name, value);
+        }
+
+        foreach (var name in ClearedEnvironment.Names)
+        {
+            env.Remove(name);
         }
 
         MonadoSettingsEnvironment.Write(

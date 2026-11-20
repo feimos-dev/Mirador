@@ -19,15 +19,12 @@ public static class DirectModeEnvironment
     ];
 
     /// <summary>
-    /// Variables a shell may have left set that would change the layer or Monado's security, taken out of the
-    /// environment Monado inherits from the user (the elevated environment inherits nothing): the layer switched off,
-    /// any user's processes let in, another direct-mode route, and the layer's test switches.
+    /// Variables a shell may have left set that would change the layer, taken out of the environment Monado inherits
+    /// from the user (the elevated environment inherits nothing): the layer switched off, and its test switches.
     /// </summary>
     public static IReadOnlyList<string> Cleared { get; } =
     [
         "DISABLE_MIRADOR_DIRECT_MODE",
-        "IPC_RELAXED_CONNECTION_SECURITY",
-        "XRT_COMPOSITOR_FORCE_NVAPI_DIRECT",
         "MIRADOR_DIRECT_MODE_TEST_NO_EDID",
         "MIRADOR_DIRECT_MODE_IGNORE_HOLDERS",
     ];

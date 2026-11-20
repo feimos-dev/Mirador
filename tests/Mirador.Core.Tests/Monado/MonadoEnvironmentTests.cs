@@ -25,6 +25,22 @@ public class MonadoEnvironmentTests
     }
 
     [Fact]
+    public void Monados_security_and_direct_route_switches_are_never_inherited()
+    {
+        var inherited = new Dictionary<string, string>(Inherited())
+        {
+            ["ipc_relaxed_connection_security"] = "1",
+            ["XRT_COMPOSITOR_FORCE_NVAPI_DIRECT"] = "1",
+        };
+
+        var env = MonadoEnvironment.Build(inherited, new MonadoSettings(), Custom(), []);
+
+        Assert.False(env.ContainsKey("IPC_RELAXED_CONNECTION_SECURITY"));
+        Assert.False(env.ContainsKey("XRT_COMPOSITOR_FORCE_NVAPI_DIRECT"));
+        Assert.Equal(@"C:\WINDOWS", env["SystemRoot"]);
+    }
+
+    [Fact]
     public void Default_settings_map_to_monado_variables()
     {
         var env = MonadoEnvironment.Build(Inherited(), new MonadoSettings(), Custom(), []);

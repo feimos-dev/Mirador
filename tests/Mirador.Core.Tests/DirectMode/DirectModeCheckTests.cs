@@ -150,17 +150,16 @@ public sealed class DirectModeCheckTests : IDisposable
         // As start-monado.ps1 did: an empty value removes the variable from what Monado inherits.
         Assert.Equal(
             [
-                "DISABLE_MIRADOR_DIRECT_MODE", "IPC_RELAXED_CONNECTION_SECURITY", "XRT_COMPOSITOR_FORCE_NVAPI_DIRECT",
-                "MIRADOR_DIRECT_MODE_TEST_NO_EDID", "MIRADOR_DIRECT_MODE_IGNORE_HOLDERS",
+                "DISABLE_MIRADOR_DIRECT_MODE", "MIRADOR_DIRECT_MODE_TEST_NO_EDID", "MIRADOR_DIRECT_MODE_IGNORE_HOLDERS",
             ],
             DirectModeEnvironment.Cleared);
-        var inherited = new Dictionary<string, string> { ["IPC_RELAXED_CONNECTION_SECURITY"] = "1", ["PATH"] = @"C:\Windows" };
+        var inherited = new Dictionary<string, string> { ["DISABLE_MIRADOR_DIRECT_MODE"] = "1", ["PATH"] = @"C:\Windows" };
         Touch("bundled", DirectModeLayer.ManifestName);
         Touch("bundled", DirectModeLayer.DllName);
         Touch("bundled", DirectModeLayer.CheckExeName);
         var env = Mirador.Core.Monado.MonadoEnvironment.Build(inherited, new Mirador.Core.Monado.MonadoSettings(), Profile(), DirectModeLayer.Environment(dir.File("bundled")));
 
-        Assert.False(env.ContainsKey("IPC_RELAXED_CONNECTION_SECURITY"));
+        Assert.False(env.ContainsKey("DISABLE_MIRADOR_DIRECT_MODE"));
         Assert.Equal("1", env["MIRADOR_DIRECT_MODE"]);
         Assert.Equal(@"C:\Windows", env["PATH"]);
     }
