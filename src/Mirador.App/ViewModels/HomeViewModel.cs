@@ -9,6 +9,7 @@ using Mirador.Core.BaseStations;
 using Mirador.Core.Diagnostics;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
@@ -44,6 +45,9 @@ public sealed partial class HomeViewModel : ObservableObject
     // Monado's devices as last read through libmonado (or the line saying why there is no libmonado), shown between
     // the session's lines and the module's.
     private IReadOnlyList<StatusLine> deviceLines = [];
+
+    /// <summary>The devices libmonado last listed: their hands and batteries for the controllers card.</summary>
+    private IReadOnlyList<MonadoDevice> monadoDevices = [];
 
     // The selected profile as it was last read (LoadProfiles) or picked here, so that the base stations' frequent
     // changes don't read profiles.json each time; null while the profiles couldn't be read.
@@ -310,7 +314,7 @@ public sealed partial class HomeViewModel : ObservableObject
             devicePolling!.Cancel();
             devicePolling.Dispose();
             devicePolling = null;
-            ShowDeviceLines([]);
+            ShowDeviceLines([], []);
         }
     }
 
@@ -354,12 +358,14 @@ public sealed partial class HomeViewModel : ObservableObject
         try
         {
             IReadOnlyList<StatusLine> lines;
+            IReadOnlyList<MonadoDevice> devices = [];
             if (host.Session.Monado is { } monado)
             {
                 // A closed connection gives no devices; a read that fails says why.
                 try
                 {
-                    lines = DeviceStatus.Lines(await Task.Run(() => monado.Devices(), CancellationToken.None));
+                    devices = await Task.Run(() => monado.Devices(), CancellationToken.None);
+                    lines = DeviceStatus.Lines(devices);
                 }
                 catch (MiradorException e)
                 {
@@ -381,7 +387,7 @@ public sealed partial class HomeViewModel : ObservableObject
 
             if (!ct.IsCancellationRequested)
             {
-                ShowDeviceLines(lines);
+                ShowDeviceLines(lines, devices);
             }
         }
         finally
@@ -390,11 +396,12 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    private void ShowDeviceLines(IReadOnlyList<StatusLine> lines)
+    private void ShowDeviceLines(IReadOnlyList<StatusLine> lines, IReadOnlyList<MonadoDevice> devices)
     {
-        if (!lines.SequenceEqual(deviceLines))
+        if (!lines.SequenceEqual(deviceLines) || !devices.SequenceEqual(monadoDevices))
         {
             deviceLines = lines;
+            monadoDevices = devices;
             RefreshStatus();
         }
     }
@@ -510,6 +517,14 @@ public sealed partial class HomeViewModel : ObservableObject
         try
         {
             var profile = SelectedSet().Selected;
+
+            // A branch or build folder becomes the runtime only as its approved copy: one prompt approves it first.
+            if (!install.IsBundled && !host.ApprovedBuildCurrent(profile) && await host.ApproveBuildAsync(profile) is { } refused)
+            {
+                RuntimeProblem = refused;
+                return;
+            }
+
             RuntimeProblem = await RuntimeSwitch.SetAsync(
                 install, host.Helper, host.Runtime, host.ApprovedBuildCurrent(profile) ? profile.Id : null, host.HasApproval(profile));
         }
@@ -736,9 +751,9 @@ public sealed partial class HomeViewModel : ObservableObject
             }
         }
 
-        var devices = host.Session.Devices;
-        ShowDevices = devices is not null;
-        var items = (devices ?? []).Select(DeviceItem.From).ToList();
+        var tracked = host.Session.Devices;
+        var items = DeviceStatus.Controllers(tracked, monadoDevices).Select(DeviceItem.From).ToList();
+        ShowDevices = tracked is not null || items.Count > 0;
         if (!items.SequenceEqual(Devices))
         {
             Devices.Clear();

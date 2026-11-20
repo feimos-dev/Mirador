@@ -79,7 +79,7 @@
                 </ItemsControl>
             </Border>
 
-            <!-- The controllers and trackers Monado found, while it runs with the Lighthouse receiver. -->
+            <!-- The controllers and trackers Monado found: their hand and battery, else their serial. -->
             <Border Style="{StaticResource HomeCard}" Visibility="{x:Bind ViewModel.ShowDevices, Mode=OneWay}">
                 <StackPanel Padding="0,4" Spacing="8">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Controllers and trackers" />
@@ -106,7 +106,7 @@
                                         <TextBlock
                                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                             Style="{StaticResource CaptionTextBlockStyle}"
-                                            Text="{x:Bind Serial}"
+                                            Text="{x:Bind Detail}"
                                             TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Grid>
