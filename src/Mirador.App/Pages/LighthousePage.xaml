@@ -187,7 +187,7 @@
                 Message="{x:Bind ViewModel.RoomSetupMessage, Mode=OneWay}"
                 Severity="{x:Bind ViewModel.RoomSetupSeverity, Mode=OneWay}"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-            <toolkit:SettingsCard Description="Lay a controller on the floor, then Measure floor" Header="Floor">
+            <toolkit:SettingsCard Description="Lay all connected controllers on the floor first." Header="Floor">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <ProgressRing
                         Width="20"
@@ -196,12 +196,10 @@
                     <Button Command="{x:Bind ViewModel.MeasureFloorCommand}" Content="Measure floor" />
                 </StackPanel>
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Look straight ahead where forward should be, then Set forward" Header="Forward">
+            <toolkit:SettingsCard Description="Look straight ahead where forward should be." Header="Forward">
                 <Button Command="{x:Bind ViewModel.SetForwardCommand}" Content="Set forward" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard
-                Description="Writes Mirador's room setup of this space into SteamVR's, so SteamVR keeps it too. Mirador then clears its own copy, so the two never both apply."
-                Header="Export to SteamVR">
+            <toolkit:SettingsCard Header="Export to SteamVR">
                 <Button
                     Click="OnExportToSteamVr"
                     Content="Export"
@@ -228,9 +226,7 @@
             <toolkit:SettingsCard Header="Power off when Mirador quits">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.PowerOffAtMiradorQuit, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard
-                Description="Monado puts the controllers and trackers it tracks into standby when it stops normally, as SteamVR does when it exits. Not when it crashes or Windows ends it (signing out, Mirador ended from Task Manager). Takes effect from the next Start."
-                Header="Turn off controllers and trackers when Monado stops">
+            <toolkit:SettingsCard Header="Turn off controllers and trackers when Monado stops">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.ControllersOffAtMonadoStop, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard
@@ -245,11 +241,7 @@
                 Message="{x:Bind ViewModel.SteamVrButtonStartProblem, Mode=OneWay}"
                 Severity="Error"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-            <toolkit:SettingsCard Description="Constant: Scan base station state at all times. When Relevant: Scan base station state only when interacting with them from Mirador" Header="Station state tracking rate">
-                <!-- Below 700 wide the ComboBox goes under the text (the toolkit's default is 476), so the long description keeps its width. -->
-                <toolkit:SettingsCard.Resources>
-                    <x:Double x:Key="SettingsCardWrapThreshold">700</x:Double>
-                </toolkit:SettingsCard.Resources>
+            <toolkit:SettingsCard Description="When Relevant: only while Mirador uses them." Header="Station state tracking rate">
                 <ComboBox MinWidth="200" SelectedIndex="{x:Bind ViewModel.StationState, Mode=TwoWay}">
                     <ComboBoxItem Content="Constant" />
                     <ComboBoxItem Content="When Relevant" />

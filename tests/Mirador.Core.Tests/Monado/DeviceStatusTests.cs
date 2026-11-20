@@ -1,3 +1,4 @@
+using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.Monado.Libmonado;
@@ -6,31 +7,27 @@ namespace Mirador.Core.Tests.Monado;
 
 public class DeviceStatusTests
 {
-    private static MonadoDevice Device(int index, string? role, string name, bool battery = false, bool charging = false, float charge = 0) =>
-        new(index, role, name, null, 0, battery, charging, charge);
+    private static MonadoDevice Device(
+        int index, string? role, string name, string? serial = null, bool battery = false, bool charging = false, float charge = 0) =>
+        new(index, role, name, serial, 0, battery, charging, charge);
 
     [Fact]
-    public void Lines_list_devices_by_role_with_battery()
+    public void Lines_list_only_the_headset_and_eye_tracker()
     {
         var lines = DeviceStatus.Lines([
             Device(3, "right", "Index Controller R", battery: true, charge: 0.5f),
             Device(0, "head", "Pimax Dream Air"),
             Device(4, "hand-tracking-unobstructed-right", "Right hand tracker"),
             Device(1, "eyes", "Eye tracker"),
-            Device(2, "left", "Index Controller L", battery: true, charging: true, charge: 0.874f),
-            Device(5, "gamepad", "Xbox controller", battery: true, charge: 1f),
-            Device(6, "hand-tracking-unobstructed-left", "Left hand tracker"),
+            Device(2, "left", "Index Controller L"),
+            Device(5, "gamepad", "Xbox controller"),
+            Device(6, null, "Tracker"),
         ]);
 
         Assert.Equal(
             [
                 new StatusLine("device-0", "Headset", StatusLevel.Ok, "Pimax Dream Air"),
                 new StatusLine("device-1", "Eye tracker", StatusLevel.Ok, "Eye tracker"),
-                new StatusLine("device-2", "Left controller", StatusLevel.Ok, "Index Controller L, 87% (charging)"),
-                new StatusLine("device-3", "Right controller", StatusLevel.Ok, "Index Controller R, 50%"),
-                new StatusLine("device-5", "Gamepad", StatusLevel.Ok, "Xbox controller, 100%"),
-                new StatusLine("device-6", "Left hand", StatusLevel.Ok, "Left hand tracker"),
-                new StatusLine("device-4", "Right hand", StatusLevel.Ok, "Right hand tracker"),
             ],
             lines);
     }
@@ -38,39 +35,97 @@ public class DeviceStatusTests
     [Fact]
     public void A_device_in_two_roles_is_listed_once()
     {
-        var lines = DeviceStatus.Lines([Device(2, "gamepad", "Index Controller L"), Device(2, "left", "Index Controller L")]);
+        var lines = DeviceStatus.Lines([Device(0, "eyes", "Headset"), Device(0, "head", "Headset")]);
 
-        Assert.Equal([new StatusLine("device-2", "Left controller", StatusLevel.Ok, "Index Controller L")], lines);
-    }
-
-    [Fact]
-    public void Devices_without_a_role_come_last()
-    {
-        var lines = DeviceStatus.Lines([
-            Device(2, null, "Tracker B"),
-            Device(1, null, "Tracker A"),
-            Device(0, "head", "Headset"),
-        ]);
-
-        Assert.Equal(["device-0", "device-1", "device-2"], lines.Select(l => l.Key));
-        Assert.Equal(["Headset", "Device", "Device"], lines.Select(l => l.Label));
-        Assert.Equal(["Headset", "Tracker A", "Tracker B"], lines.Select(l => l.Text));
+        Assert.Equal([new StatusLine("device-0", "Headset", StatusLevel.Ok, "Headset")], lines);
     }
 
     [Fact]
     public void No_devices_give_no_lines() => Assert.Empty(DeviceStatus.Lines([]));
 
     [Fact]
-    public void The_serial_follows_the_name()
+    public void The_serial_and_battery_follow_the_name()
     {
         var lines = DeviceStatus.Lines([
-            new MonadoDevice(0, "head", "Pimax Dream Air", "XR5DA-P501", 0, false, false, 0),
-            new MonadoDevice(1, "left", "Index Controller L", "LHR-1A2B3C4D", 0, true, false, 0.8f),
-            new MonadoDevice(2, "right", "Index Controller R", "", 0, true, true, 0.5f),
+            Device(0, "head", "Pimax Dream Air", "XR5DA-P501"),
+            Device(1, "eyes", "Eye tracker", "", battery: true, charging: true, charge: 0.874f),
+        ]);
+
+        Assert.Equal(["Pimax Dream Air, serial XR5DA-P501", "Eye tracker, 87% (charging)"], lines.Select(l => l.Text));
+    }
+
+    [Fact]
+    public void Controllers_take_hand_and_battery_from_the_device_of_the_same_serial()
+    {
+        var controllers = DeviceStatus.Controllers(
+            [new TrackedDevice(TrackedKind.Controller, "LHR-AAAA"), new TrackedDevice(TrackedKind.Controller, "LHR-BBBB")],
+            [
+                Device(0, "head", "Headset", "LHR-HEAD"),
+                Device(2, "right", "Index Controller", "LHR-BBBB", battery: true, charge: 0.5f),
+                Device(1, "left", "Index Controller", "lhr-aaaa", battery: true, charging: true, charge: 0.874f),
+            ]);
+
+        Assert.Equal(
+            [
+                new ControllerInfo(TrackedKind.Controller, Hand.Left, "LHR-AAAA", 87, true),
+                new ControllerInfo(TrackedKind.Controller, Hand.Right, "LHR-BBBB", 50),
+            ],
+            controllers);
+    }
+
+    [Fact]
+    public void A_controller_libmonado_doesnt_list_keeps_its_serial_alone()
+    {
+        var controllers = DeviceStatus.Controllers([new TrackedDevice(TrackedKind.Tracker, "LHR-CCCC")], []);
+
+        Assert.Equal([new ControllerInfo(TrackedKind.Tracker, null, "LHR-CCCC")], controllers);
+    }
+
+    [Fact]
+    public void An_empty_serial_matches_nothing()
+    {
+        var controllers = DeviceStatus.Controllers(
+            [new TrackedDevice(TrackedKind.Controller, "")], [Device(1, "left", "Index Controller", "")]);
+
+        Assert.Equal(
+            [new ControllerInfo(TrackedKind.Controller, null, ""), new ControllerInfo(TrackedKind.Controller, Hand.Left, null)],
+            controllers);
+    }
+
+    [Fact]
+    public void Controllers_the_log_didnt_name_are_listed_without_hand_tracking_duplicates()
+    {
+        var controllers = DeviceStatus.Controllers(null, [
+            Device(0, "head", "Headset"),
+            Device(1, "eyes", "Eye tracker"),
+            Device(2, "gamepad", "Touch Controller (L)"),
+            Device(2, "left", "Touch Controller (L)"),
+            Device(3, "hand-tracking-unobstructed-left", "Left hand"),
+            Device(4, null, "Vive Tracker", "LHR-DDDD"),
         ]);
 
         Assert.Equal(
-            ["Pimax Dream Air, serial XR5DA-P501", "Index Controller L, serial LHR-1A2B3C4D, 80%", "Index Controller R, 50% (charging)"],
-            lines.Select(l => l.Text));
+            [
+                new ControllerInfo(TrackedKind.Controller, Hand.Left, null),
+                new ControllerInfo(TrackedKind.Tracker, null, "LHR-DDDD"),
+            ],
+            controllers);
     }
+
+    [Theory]
+    [InlineData("Index Controller L", Hand.Left)]
+    [InlineData("Index Controller R", Hand.Right)]
+    [InlineData("Touch Controller (R)", Hand.Right)]
+    [InlineData("Left Hand Controller", Hand.Left)]
+    [InlineData("WMR right controller", Hand.Right)]
+    [InlineData("Vive Tracker", null)]
+    [InlineData("L", null)]
+    [InlineData("Left and right", null)]
+    [InlineData(null, null)]
+    public void The_hand_comes_from_the_name_without_a_role(string? name, Hand? hand) =>
+        Assert.Equal(hand, DeviceStatus.HandOf([], name));
+
+    [Fact]
+    public void The_role_wins_over_the_name() =>
+        Assert.Equal(Hand.Right, DeviceStatus.HandOf(["gamepad", "right"], "Index Controller L"));
 }

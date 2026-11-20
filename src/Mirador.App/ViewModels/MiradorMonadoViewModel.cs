@@ -119,8 +119,8 @@ public sealed partial class MiradorMonadoViewModel(AppHost host) : ObservableObj
         InstallLabel = versions.Current is null ? "Install" : "Update Monado";
         var installed = versions.Current is null
             ? "Not installed yet."
-            : $"Installed: {Date(versions.Current)}{(versions.Previous is { } p ? $" (kept for Roll back: {Date(p)})" : "")}.";
-        var latest = newest is null ? "" : newest == versions.Current ? " It is the newest." : $" Newest: {Date(newest)}.";
+            : $"Installed: {Date(versions.Current)}.";
+        var latest = newest is null ? "" : newest == versions.Current ? " Up to date." : $" Newest: {Date(newest)}.";
         Status = problem is null ? installed + latest : $"{problem} {installed}";
     }
 

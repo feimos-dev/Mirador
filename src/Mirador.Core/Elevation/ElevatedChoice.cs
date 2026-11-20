@@ -12,10 +12,10 @@ public static class ElevatedChoice
 {
     public const string NotInstalledCopy = "Runs as you: this copy of Mirador isn't the installed one.";
     public const string BuildFolder = "Runs as you: this profile uses a build folder or a branch built here.";
-    public const string ExtraVariables = "Runs as you: this profile's extra environment variables aren't approved. Approve them on the Profiles page.";
+    public const string ExtraVariables = "Runs as you: the variables aren't approved. Press Start to approve them.";
 
     /// <summary>Home's line when the profile's variables differ from the ones approved (added, removed or changed).</summary>
-    public const string VariablesChanged = "Runs as you: the variables changed since they were approved. Approve them again on the Profiles page.";
+    public const string VariablesChanged = "Runs as you: the variables changed. Press Start to approve them.";
 
     /// <summary>The approval step's refusal when the variables wouldn't fit in the helper's request.</summary>
     public const string VariablesTooLong = "These variables are too long to run as administrator. Shorten them, or run this profile as you.";
@@ -23,7 +23,7 @@ public static class ElevatedChoice
     /// <summary>Why a profile runs as the user when <paramref name="name"/>, one of its variables, may not be set for Monado as administrator.</summary>
     public static string RefusedVariable(string name) => $"Runs as you: {name} can't be set for Monado as administrator.";
     public const string NoElevatedTable = "Runs as you: Mirador has no administrator settings for this headset yet.";
-    public const string NotApproved = "Runs as you: the new build runs as you until you approve it on the Profiles page.";
+    public const string NotApproved = "Runs as you: this build isn't approved. Press Start to approve it.";
 
     /// <summary>
     /// Whether the user's consent for Monado as administrator is still needed: while a profile has "Run as administrator"

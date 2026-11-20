@@ -63,7 +63,8 @@ public sealed class AppHost : IAsyncDisposable
         Builds = new Builds(new MonadoBuilder(
             new CommandRunner(), Locator, Tools,
             new BuildChecks(new CommandRunner(), Environment.SystemDirectory, TimeProvider.System), TimeProvider.System,
-            (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)));
+            (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)),
+            NewBuildApproval);
         BuildToolsSetup = new BuildToolsSetup(
             new CommandRunner(), ToolsHttp, new UacLauncher(), paths.ToolsDir,
             BuildToolsCheck.ReadPin(Path.Combine(appDir, "tools", "vcpkg-commit.txt")) ?? "",
@@ -707,6 +708,19 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
+    /// <summary>Whether minimizing the window hides it in the tray (off when settings.json can't be read).</summary>
+    public bool MinimizeToTray()
+    {
+        try
+        {
+            return Settings.Load().MinimizeToTray;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>What went wrong while Mirador started that the user should read on Home: settings reset, files it couldn't read.</summary>
     public IReadOnlyList<string> StartupNotices => notices;
 
@@ -857,20 +871,45 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Runs <c>Mirador.exe --approve-build</c> through one UAC prompt for <paramref name="profile"/>'s build as it is now
-    /// and its variables; for a profile of the bundled Monado, its variables only. Variables that can't run as
+    /// Approves <paramref name="profile"/> through one UAC prompt: its build as it is now and its variables
+    /// (<c>--approve-build</c>), or its variables alone when its approved copy is that build and intact
+    /// (<c>--approve-variables</c>); for a profile of the bundled Monado, its variables only. Variables that can't run as
     /// administrator are refused before any prompt (<see cref="ElevatedChoice.ApprovalProblem"/>). Null when it is
     /// approved, else why not.
     /// </summary>
     /// <param name="alsoAllow">Record the user's consent for Monado as administrator behind the same prompt.</param>
     public async Task<string?> ApproveBuildAsync(Profile profile, bool alsoAllow = false)
     {
+        await approvalGate.WaitAsync();
+        try
+        {
+            return await ApproveNowAsync(profile, alsoAllow);
+        }
+        finally
+        {
+            approvalGate.Release();
+        }
+    }
+
+    /// <summary>One approval prompt at a time: a second waits for the first, then finds the profile approved.</summary>
+    private readonly SemaphoreSlim approvalGate = new(1, 1);
+
+    /// <summary>Whether an approval's prompt is open (or about to be).</summary>
+    public bool Approving => approvalGate.CurrentCount == 0;
+
+    private async Task<string?> ApproveNowAsync(Profile profile, bool alsoAllow)
+    {
         if (ApprovalTarget(profile, out var commit, out var folder) is { } problem)
         {
             return problem;
         }
 
-        if (folder != AppArgs.Bundled && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
+        // The build is the approved one and only the variables changed: they are approved alone, and the copy stays. A
+        // copy that changed since is made again instead.
+        var variablesOnly = folder != AppArgs.Bundled && await Task.Run(() => ApprovedBuildCurrent(profile)
+            && Approval(profile) is { } record && ApprovedBuilds.Verify(record, AppDir) is null);
+        if (folder != AppArgs.Bundled && !variablesOnly
+            && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
         {
             return "Stop Monado first: it runs from this profile's approved copy, which the approval replaces.";
         }
@@ -885,7 +924,7 @@ public sealed class AppHost : IAsyncDisposable
             info.ArgumentList.Add(AllowElevatedCommand.Flag);
         }
 
-        foreach (var argument in new[] { AppArgs.ApproveBuildFlag, profile.Id, commit, folder })
+        foreach (var argument in variablesOnly ? [AppArgs.ApproveVariablesFlag, profile.Id] : new[] { AppArgs.ApproveBuildFlag, profile.Id, commit, folder })
         {
             info.ArgumentList.Add(argument);
         }
@@ -921,6 +960,73 @@ public sealed class AppHost : IAsyncDisposable
             return $"The approval couldn't be started ({e.Message.TrimEnd('.')}).";
         }
     }
+
+    /// <summary>
+    /// A branch was built: the approval of the saved profile when it runs as administrator and isn't approved now, or
+    /// null when there is nothing to approve.
+    /// </summary>
+    private Func<Task>? NewBuildApproval(string profileId)
+    {
+        try
+        {
+            if (Profiles.Load().Profiles.FirstOrDefault(p => p.Id == profileId) is not { } profile || !WouldApprove(profile))
+            {
+                return null;
+            }
+
+            return async () =>
+            {
+                try
+                {
+                    if (await ApproveIfNeededAsync(profile) is { } problem)
+                    {
+                        AppLog.Write($"Approving the new build: {problem}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    // On the build's background thread: nothing above it would see this.
+                    AppLog.Write("Approving the new build failed", e);
+                }
+            };
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Approving the new build failed", e);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Approves <paramref name="profile"/> as it is now (one UAC prompt) when "Run as administrator" is on and it isn't
+    /// approved: a new build, changed variables. Nothing is asked when it is approved, when it can't be (Home says why it
+    /// runs as you), or when this copy or the user's consent couldn't run it as administrator anyway. Null when nothing
+    /// went wrong.
+    /// </summary>
+    public async Task<string?> ApproveIfNeededAsync(Profile profile)
+    {
+        if (!WouldApprove(profile))
+        {
+            return null;
+        }
+
+        await approvalGate.WaitAsync();
+        try
+        {
+            // Another prompt may have approved it meanwhile.
+            return WouldApprove(profile) ? await ApproveNowAsync(profile, alsoAllow: false) : null;
+        }
+        finally
+        {
+            approvalGate.Release();
+        }
+    }
+
+    /// <summary>Whether <see cref="ApproveIfNeededAsync"/> would ask Windows for <paramref name="profile"/>.</summary>
+    public bool WouldApprove(Profile profile) =>
+        profile.RunAsAdministrator && !FullyApproved(profile) && ApprovalTarget(profile, out _, out _) is null
+        && IsInstalledCopy(askHelper: false) && ElevatedMonadoAllowed();
+
 
     /// <summary>
     /// Why <paramref name="profile"/> can't be approved now, before any prompt: its variables can't run as administrator

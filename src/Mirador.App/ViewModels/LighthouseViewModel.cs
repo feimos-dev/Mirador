@@ -192,7 +192,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
     /// <summary>The switch's description: what it does, or why it can't.</summary>
     public string SteamVrButtonStartDescription => host.SteamVrSettings is null
         ? "Steam isn't installed."
-        : "SteamVR then doesn't start when a controller or tracker is switched on. Mirador changes SteamVR's own setting, and puts it back when you turn this off.";
+        : "";
 
     /// <summary>Why the switch couldn't be changed, or null.</summary>
     [ObservableProperty]
@@ -520,7 +520,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
     [ObservableProperty]
     public partial InfoBarSeverity RoomSetupSeverity { get; set; }
 
-    /// <summary>"Lay a controller on the floor, then Measure floor": the lower grip is the floor.</summary>
+    /// <summary>"Measure floor", with the controllers on the floor: the lowest grip is the floor.</summary>
     [RelayCommand(CanExecute = nameof(CanMeasure))]
     private Task MeasureFloor() => RunRoomStepAsync(RoomStep.Floor);
 

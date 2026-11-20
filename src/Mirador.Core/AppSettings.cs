@@ -4,6 +4,7 @@ namespace Mirador.Core;
 
 /// <summary>Mirador's own settings, in <c>settings.json</c>.</summary>
 /// <param name="CloseToTray">Closing the window keeps Mirador in the tray (otherwise it quits).</param>
+/// <param name="MinimizeToTray">Minimizing the window hides it in the tray instead of the taskbar.</param>
 /// <param name="CheckForUpdates">Ask GitHub for a newer release at most once a day.</param>
 /// <param name="LastUpdateCheck">When it last asked.</param>
 /// <param name="BaseStationsOnAtStart">Power the selected base stations on when a session starts.</param>
@@ -42,7 +43,8 @@ public sealed record AppSettings(
     bool ControllersOffAtStop = false,
     bool StartMiradorForGames = true,
     bool KeepSteamVrFromButtonStart = false,
-    bool? SteamVrButtonStartBefore = null);
+    bool? SteamVrButtonStartBefore = null,
+    bool MinimizeToTray = false);
 
 /// <summary>How often Mirador follows the base stations' states ("Station state tracking rate" on the Lighthouse page).</summary>
 public enum StationStateMode

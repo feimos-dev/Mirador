@@ -4,24 +4,15 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.App.Services;
 
-/// <summary>One build of a profile's branch: its lines so far and how it ended.</summary>
+/// <summary>One build of a profile's branch: its newest line and how it ended.</summary>
 public sealed class BuildRun
 {
-    private readonly List<string> lines = [];
+    private volatile string lastLine = "";
 
     internal CancellationTokenSource Cancel { get; } = new();
 
-    /// <summary>The build's lines so far (the last <see cref="Builds.ShownLines"/>).</summary>
-    public IReadOnlyList<string> Lines
-    {
-        get
-        {
-            lock (lines)
-            {
-                return [.. lines];
-            }
-        }
-    }
+    /// <summary>The newest line, or empty before the first; the log file has them all.</summary>
+    public string LastLine => lastLine;
 
     /// <summary>How it ended; null while it runs.</summary>
     public BuildOutcome? Outcome { get; internal set; }
@@ -29,28 +20,31 @@ public sealed class BuildRun
     /// <summary>Whether it was cancelled.</summary>
     public bool Cancelled { get; internal set; }
 
-    internal void Add(string line)
+    private volatile bool approving;
+
+    /// <summary>Whether the build is over but its approval isn't: another build of the profile waits for it.</summary>
+    public bool Approving
     {
-        lock (lines)
-        {
-            lines.Add(line);
-            if (lines.Count > Builds.ShownLines)
-            {
-                lines.RemoveRange(0, lines.Count - Builds.ShownLines);
-            }
-        }
+        get => approving;
+        internal set => approving = value;
     }
+
+    /// <summary>Whether it is building, or its approval is open.</summary>
+    internal bool Busy => this is { Outcome: null, Cancelled: false } or { Approving: true };
+
+    internal void Add(string line) => lastLine = line;
 }
 
 /// <summary>
 /// The branch builds of this Mirador, kept here rather than in the Profiles page so that a
 /// build goes on while the owner looks at another page. <see cref="Changed"/> is raised on a background thread.
 /// </summary>
-public sealed class Builds(MonadoBuilder builder)
+/// <param name="afterBuilt">
+/// Asked with the profile's id after a build that worked: the new build's approval, run once the build's end is told, or
+/// null when there is none.
+/// </param>
+public sealed class Builds(MonadoBuilder builder, Func<string, Func<Task>?>? afterBuilt = null)
 {
-    /// <summary>How many of a build's last lines the page shows; the log file has them all.</summary>
-    public const int ShownLines = 400;
-
     private readonly Dictionary<string, BuildRun> runs = [];
 
     /// <summary>How long a build's new lines wait to be told, so that a burst of them is one change, not hundreds.</summary>
@@ -75,7 +69,7 @@ public sealed class Builds(MonadoBuilder builder)
         {
             lock (runs)
             {
-                return runs.Values.Any(r => r is { Outcome: null, Cancelled: false });
+                return runs.Values.Any(r => r.Busy);
             }
         }
     }
@@ -89,7 +83,7 @@ public sealed class Builds(MonadoBuilder builder)
         BuildRun run;
         lock (runs)
         {
-            if (runs.GetValueOrDefault(profile.Id) is { Outcome: null, Cancelled: false })
+            if (runs.GetValueOrDefault(profile.Id) is { Busy: true })
             {
                 return;
             }
@@ -109,9 +103,10 @@ public sealed class Builds(MonadoBuilder builder)
 
         _ = Task.Run(async () =>
         {
+            BuildOutcome? outcome = null;
             try
             {
-                run.Outcome = await builder.BuildAsync(profile, line =>
+                outcome = await builder.BuildAsync(profile, line =>
                 {
                     run.Add(line);
                     if (Interlocked.Exchange(ref linesPending, 1) == 0)
@@ -129,10 +124,28 @@ public sealed class Builds(MonadoBuilder builder)
                 // Whatever went wrong, the build has ended: the page must not stay on "Building…".
                 AppLog.Write("A branch build failed", e);
                 run.Add(e.Message);
-                run.Outcome = new BuildOutcome(false, e.Message, null, null, builder.LastLog(profile.Id) ?? "");
+                outcome = new BuildOutcome(false, e.Message, null, null, builder.LastLog(profile.Id) ?? "");
             }
 
+            // Busy until the approval is done, from before the outcome shows: a new build mustn't write the folder its
+            // approval copies.
+            var approval = outcome is { Ok: true } ? afterBuilt?.Invoke(profile.Id) : null;
+            run.Approving = approval is not null;
+            run.Outcome = outcome;
             Changed?.Invoke(profile.Id);
+            if (approval is not null)
+            {
+                try
+                {
+                    await approval();
+                }
+                finally
+                {
+                    run.Approving = false;
+                }
+
+                Changed?.Invoke(profile.Id);
+            }
         });
     }
 

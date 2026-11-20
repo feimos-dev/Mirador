@@ -207,7 +207,7 @@ public sealed class RoomSetupRunTests : IDisposable
 
         Assert.Equal(
             new RoomStepOutcome(
-                "Neither controller was tracked. Turn one on, lay it on the floor and measure again. Monado didn't start again: The headset isn't plugged in.",
+                "No controller was tracked. Turn them on, lay them on the floor and measure again. Monado didn't start again: The headset isn't plugged in.",
                 RoomStepLevel.Error),
             await Step(RoomStep.Floor));
         Assert.Equal(1, monado.Starts);
@@ -314,7 +314,7 @@ public sealed class RoomSetupRunTests : IDisposable
         monado.Client.Stopped = false;
         runner.Answer = _ => ([NoHands], 0);
         Assert.Equal(
-            new RoomStepOutcome("Neither controller was tracked. Turn one on, lay it on the floor and measure again.", RoomStepLevel.Error),
+            new RoomStepOutcome("No controller was tracked. Turn them on, lay them on the floor and measure again.", RoomStepLevel.Error),
             await Step(RoomStep.Floor));
         Assert.Equal(0, monado.Starts);
     }

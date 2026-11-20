@@ -140,10 +140,10 @@ public sealed class RoomMeasuring(ICommandRunner runner, string xrCheck)
         if (step == RoomStep.Floor)
         {
             floorY = RoomSetupMath.FloorY(poses.Left, poses.Right)
-                ?? throw new MiradorException("Neither controller was tracked. Turn one on, lay it on the floor and measure again.");
+                ?? throw new MiradorException("No controller was tracked. Turn them on, lay them on the floor and measure again.");
             if (poses.Head.Y - (floorY + RoomSetupMath.ControllerRestHeightM) < FloorBelowHeadM)
             {
-                throw new MiradorException("The controller wasn't well below the headset. Lay it on the floor, then Measure floor.");
+                throw new MiradorException("The controllers weren't well below the headset. Lay them all on the floor and measure again.");
             }
         }
         else if (!RoomSetupMath.LooksAhead(poses.Head))

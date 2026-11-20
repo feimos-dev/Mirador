@@ -35,7 +35,7 @@ public sealed partial class MonadoFolderViewModel : ObservableObject
 
     /// <summary>The section's description: what is copied and when.</summary>
     public string Description =>
-        $"Mirador keeps a copy of {MonadoFolderBackups.DefaultMonadoDir} whenever it changed, at each Start and when Mirador starts: Monado's settings and what its drivers keep there, calibrations included. Restore and Import keep the folder as it is first, and work while Monado is stopped.";
+        $"Copies of {MonadoFolderBackups.DefaultMonadoDir}.";
 
     /// <summary>Whether the list says there are no copies yet.</summary>
     [ObservableProperty]

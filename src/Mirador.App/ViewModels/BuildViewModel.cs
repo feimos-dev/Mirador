@@ -38,9 +38,14 @@ public sealed partial class BuildViewModel : ObservableObject
     [ObservableProperty]
     public partial string BuildLabel { get; set; } = "Build";
 
-    /// <summary>The running or last build's lines.</summary>
+    /// <summary>The running or last build's newest line.</summary>
     [ObservableProperty]
     public partial string Log { get; set; } = "";
+
+    /// <summary>Whether the new build's approval prompt is open: Build waits for it.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    public partial bool IsApproving { get; set; }
 
     /// <summary>Whether the profile has unsaved changes: it is built as saved, so Build waits for Save.</summary>
     [ObservableProperty]
@@ -68,7 +73,7 @@ public sealed partial class BuildViewModel : ObservableObject
     {
         if (host.Verifying)
         {
-            Status = "Verify build for Windows is running: build when it is done.";
+            Status = "Verify is running. Build when it's done.";
             return;
         }
 
@@ -78,7 +83,7 @@ public sealed partial class BuildViewModel : ObservableObject
         }
     }
 
-    private bool CanBuild() => profile is not null && !IsBuilding && !Unsaved && !MonadoRuns;
+    private bool CanBuild() => profile is not null && !IsBuilding && !IsApproving && !Unsaved && !MonadoRuns;
 
     [RelayCommand(CanExecute = nameof(IsBuilding))]
     private void Cancel()
@@ -115,13 +120,14 @@ public sealed partial class BuildViewModel : ObservableObject
 
         var run = host.Builds.RunOf(profile.Id);
         IsBuilding = run is { Outcome: null, Cancelled: false };
-        Log = run is null ? "" : string.Join(Environment.NewLine, run.Lines);
+        IsApproving = run is { Approving: true };
+        Log = run?.LastLine ?? "";
         var installDir = host.Locator.BranchInstallDir(profile.Id);
         var info = BuildInfo.Load(installDir);
         BuildLabel = info is null ? "Build" : "Pull and rebuild";
-        if (IsBuilding)
+        if (IsBuilding || IsApproving)
         {
-            Status = "Building. This takes longer the first time.";
+            Status = IsBuilding ? "Building…" : "Approving…";
             return;
         }
 

@@ -55,6 +55,7 @@ public sealed partial class MainWindow : Window
         deviceChanges.Changed += App.Current.Host.NotifyDevicesChanged;
         endSession = new EndSession(handle, App.Current.Host);
         AppWindow.Closing += OnClosing;
+        AppWindow.Changed += OnWindowChanged;
         Activated += OnActivated;
         NavView.SelectedItem = NavView.MenuItems[0];
         App.Current.Host.ProfilesChanged += ShowHeadsetPages;
@@ -345,6 +346,16 @@ public sealed partial class MainWindow : Window
         else
         {
             _ = App.Current.QuitAsync();
+        }
+    }
+
+    /// <summary>Minimized, the window goes to the tray when App settings say so.</summary>
+    private void OnWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidPresenterChange && sender.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized }
+            && App.Current.Host.MinimizeToTray())
+        {
+            sender.Hide();
         }
     }
 

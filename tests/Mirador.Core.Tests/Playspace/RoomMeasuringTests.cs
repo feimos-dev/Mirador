@@ -138,7 +138,7 @@ public class RoomMeasuringTests
         var poses = XrPoses.Parse(["""XR-POSES {"head":{"p":[0,1.6,0],"q":[0,0,0,1]},"left":{"p":[0.2,1.1,-0.3],"q":[0,0,0,1]},"right":null}"""])!;
 
         var e = Assert.Throws<MiradorException>(() => RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Floor, poses, null, Now));
-        Assert.Equal("The controller wasn't well below the headset. Lay it on the floor, then Measure floor.", e.Message);
+        Assert.Equal("The controllers weren't well below the headset. Lay them all on the floor and measure again.", e.Message);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class RoomMeasuringTests
         var poses = XrPoses.Parse(["""XR-POSES {"head":{"p":[0,1.6,0],"q":[0,0,0,1]},"left":null,"right":null}"""])!;
 
         var e = Assert.Throws<MiradorException>(() => RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Floor, poses, null, Now));
-        Assert.Equal("Neither controller was tracked. Turn one on, lay it on the floor and measure again.", e.Message);
+        Assert.Equal("No controller was tracked. Turn them on, lay them on the floor and measure again.", e.Message);
     }
 
     [Fact]

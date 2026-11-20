@@ -202,6 +202,26 @@ public partial class App : Application
     /// <summary>Starts Monado for the window or the tray, keeping what went wrong for Home and the tray.</summary>
     public async Task<StartOutcome> StartAsync(StartReason reason)
     {
+        // A profile that runs as administrator but changed since its approval asks Windows once, here; declined, it runs as you.
+        if (Host.Approving)
+        {
+            return new StartOutcome(false, "Answer Windows' prompt first.");
+        }
+
+        try
+        {
+            // Off the UI thread: telling whether the build is the approved one hashes it.
+            if (Host.Session.State == SessionState.Stopped
+                && await Task.Run(() => Host.ApproveIfNeededAsync(Host.Profiles.Load().Selected)) is { } problem)
+            {
+                AppLog.Write($"Approving before the Start: {problem}");
+            }
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Approving before the Start failed", e);
+        }
+
         var outcome = await Host.Session.StartAsync(reason, CancellationToken.None);
         Ui.TryEnqueue(() => Report(outcome, reason));
         return outcome;

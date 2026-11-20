@@ -29,9 +29,7 @@
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
 
             <TextBlock Style="{StaticResource FirstSectionHeader}" Text="Tracking" />
-            <toolkit:SettingsCard
-                Description="How long Monado looks for base stations, controllers and trackers when it starts. Devices switched on later need a restart of Monado."
-                Header="Lighthouse wait time">
+            <toolkit:SettingsCard Header="Lighthouse wait time">
                 <toolkit:SettingsCard.Resources>
                     <x:Double x:Key="SettingsCardWrapThreshold">600</x:Double>
                 </toolkit:SettingsCard.Resources>
@@ -49,9 +47,7 @@
             </toolkit:SettingsCard>
 
             <TextBlock Style="{StaticResource SectionHeader}" Text="Rendering" />
-            <toolkit:SettingsCard
-                Description="The resolution apps are asked to render at. Higher is sharper and costs GPU time."
-                Header="Render scale">
+            <toolkit:SettingsCard Header="Render scale">
                 <toolkit:SettingsCard.Resources>
                     <x:Double x:Key="SettingsCardWrapThreshold">600</x:Double>
                 </toolkit:SettingsCard.Resources>
@@ -67,9 +63,7 @@
                         Value="{x:Bind ViewModel.RenderScale, Mode=TwoWay}" />
                 </StackPanel>
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard
-                Description="Time kept for Monado's own work in each frame. Raise it if the Display line on Home shows missed frames."
-                Header="Compositor budget">
+            <toolkit:SettingsCard Description="Raise it if Home shows missed frames." Header="Compositor budget">
                 <toolkit:SettingsCard.Resources>
                     <x:Double x:Key="SettingsCardWrapThreshold">600</x:Double>
                 </toolkit:SettingsCard.Resources>
@@ -87,10 +81,10 @@
             </toolkit:SettingsCard>
 
             <TextBlock Style="{StaticResource SectionHeader}" Text="Session" />
-            <toolkit:SettingsCard Description="Ends Monado when no app uses it any more." Header="Stop when the last app closes">
+            <toolkit:SettingsCard Header="Stop Monado once all apps are closed">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StopWhenLastAppCloses, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Puts every setting on this page back as it came with Mirador." Header="Reset to defaults">
+            <toolkit:SettingsCard Header="Reset to defaults">
                 <Button Click="OnReset" Content="Reset" />
             </toolkit:SettingsCard>
         </StackPanel>

@@ -23,7 +23,7 @@ public sealed partial class EyeTrackingViewModel : ObservableObject
 
     /// <summary>The variant card's description: where the variant came from, and why it matters.</summary>
     public string VariantDescription =>
-        $"{VariantSource.TrimEnd('.')}. The eye tracker's geometry differs between variants; Mirador uploads the one for yours at every Start.";
+        VariantSource;
 
     public IReadOnlyList<VariantItem> Variants { get; } = [.. EyeBlobVariants.All.Select(v => new VariantItem(v))];
 
@@ -80,7 +80,7 @@ public sealed partial class EyeTrackingViewModel : ObservableObject
         }
 
         VariantSource = decision.NeedsOwner
-            ? "Not known yet: pick yours, or start Pimax Play once and Mirador reads it."
+            ? "Pick yours, or start Pimax Play once."
             : state.BlobSource == BlobChoice.FromPimax ? "Read from Pimax Play" : "Chosen by you";
     }
 
