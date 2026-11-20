@@ -64,7 +64,7 @@ public sealed class AppHost : IAsyncDisposable
             new CommandRunner(), Locator, Tools,
             new BuildChecks(new CommandRunner(), Environment.SystemDirectory, TimeProvider.System), TimeProvider.System,
             (line, ct) => BuildToolsSetup!.PrepareAsync(line, ct)),
-            ApproveNewBuildAsync);
+            NewBuildApproval);
         BuildToolsSetup = new BuildToolsSetup(
             new CommandRunner(), ToolsHttp, new UacLauncher(), paths.ToolsDir,
             BuildToolsCheck.ReadPin(Path.Combine(appDir, "tools", "vcpkg-commit.txt")) ?? "",
@@ -906,8 +906,8 @@ public sealed class AppHost : IAsyncDisposable
 
         // The build is the approved one and only the variables changed: they are approved alone, and the copy stays. A
         // copy that changed since is made again instead.
-        var variablesOnly = folder != AppArgs.Bundled && ApprovedBuildCurrent(profile)
-            && Approval(profile) is { } record && ApprovedBuilds.Verify(record, AppDir) is null;
+        var variablesOnly = folder != AppArgs.Bundled && await Task.Run(() => ApprovedBuildCurrent(profile)
+            && Approval(profile) is { } record && ApprovedBuilds.Verify(record, AppDir) is null);
         if (folder != AppArgs.Bundled && !variablesOnly
             && Session.State != SessionState.Stopped && Session.CurrentProfile?.Profile.Id == profile.Id)
         {
@@ -961,21 +961,39 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
-    /// <summary>A branch was built: the saved profile, when it runs as administrator, is approved again right away.</summary>
-    private async Task ApproveNewBuildAsync(string profileId)
+    /// <summary>
+    /// A branch was built: the approval of the saved profile when it runs as administrator and isn't approved now, or
+    /// null when there is nothing to approve.
+    /// </summary>
+    private Func<Task>? NewBuildApproval(string profileId)
     {
         try
         {
-            if (Profiles.Load().Profiles.FirstOrDefault(p => p.Id == profileId) is { } profile
-                && await ApproveIfNeededAsync(profile) is { } problem)
+            if (Profiles.Load().Profiles.FirstOrDefault(p => p.Id == profileId) is not { } profile || !WouldApprove(profile))
             {
-                AppLog.Write($"Approving the new build: {problem}");
+                return null;
             }
+
+            return async () =>
+            {
+                try
+                {
+                    if (await ApproveIfNeededAsync(profile) is { } problem)
+                    {
+                        AppLog.Write($"Approving the new build: {problem}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    // On the build's background thread: nothing above it would see this.
+                    AppLog.Write("Approving the new build failed", e);
+                }
+            };
         }
         catch (Exception e)
         {
-            // On the build's background thread: nothing above it would see this.
             AppLog.Write("Approving the new build failed", e);
+            return null;
         }
     }
 
@@ -1009,9 +1027,6 @@ public sealed class AppHost : IAsyncDisposable
         profile.RunAsAdministrator && !FullyApproved(profile) && ApprovalTarget(profile, out _, out _) is null
         && IsInstalledCopy(askHelper: false) && ElevatedMonadoAllowed();
 
-    /// <summary>Whether a prompt would be shown for <paramref name="profile"/> at a Start, were it not approved.</summary>
-    public bool ApprovesAtStart(Profile profile) =>
-        profile.RunAsAdministrator && IsInstalledCopy(askHelper: false) && ElevatedMonadoAllowed();
 
     /// <summary>
     /// Why <paramref name="profile"/> can't be approved now, before any prompt: its variables can't run as administrator

@@ -39,8 +39,11 @@ public sealed class BuildRun
 /// The branch builds of this Mirador, kept here rather than in the Profiles page so that a
 /// build goes on while the owner looks at another page. <see cref="Changed"/> is raised on a background thread.
 /// </summary>
-/// <param name="afterBuilt">Run with the profile's id after a build that worked has been told: the approval of a new build.</param>
-public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt = null)
+/// <param name="afterBuilt">
+/// Asked with the profile's id after a build that worked: the new build's approval, run once the build's end is told, or
+/// null when there is none.
+/// </param>
+public sealed class Builds(MonadoBuilder builder, Func<string, Func<Task>?>? afterBuilt = null)
 {
     private readonly Dictionary<string, BuildRun> runs = [];
 
@@ -126,14 +129,15 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
 
             // Busy until the approval is done, from before the outcome shows: a new build mustn't write the folder its
             // approval copies.
-            run.Approving = outcome is { Ok: true } && afterBuilt is not null;
+            var approval = outcome is { Ok: true } ? afterBuilt?.Invoke(profile.Id) : null;
+            run.Approving = approval is not null;
             run.Outcome = outcome;
             Changed?.Invoke(profile.Id);
-            if (run.Approving)
+            if (approval is not null)
             {
                 try
                 {
-                    await afterBuilt!(profile.Id);
+                    await approval();
                 }
                 finally
                 {

@@ -73,7 +73,7 @@ public static class DeviceStatus
         foreach (var device in tracked ?? [])
         {
             var match = byIndex.FirstOrDefault(d => !used.Contains(d.Device.Index) && !string.IsNullOrWhiteSpace(device.Serial)
-                && string.Equals(d.Device.Serial?.Trim(), device.Serial, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(d.Device.Serial?.Trim(), device.Serial.Trim(), StringComparison.OrdinalIgnoreCase));
             if (match.Device is { } found)
             {
                 used.Add(found.Index);

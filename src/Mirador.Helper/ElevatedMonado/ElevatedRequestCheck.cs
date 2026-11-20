@@ -14,10 +14,10 @@ public static class ElevatedRequestCheck
     public const string NotTheUser = "Only the signed-in user may start Monado as administrator.";
 
     /// <summary>The refusal when a Start's variables aren't exactly the ones the caller approved for the profile.</summary>
-    public const string VariablesChanged = "This profile's variables changed since they were approved. Start again to approve them.";
+    public const string VariablesChanged = "This profile's variables changed since they were approved. Press Start to approve them.";
 
     /// <summary>The refusal when the caller has no approval of the profile's variables for the Monado the Start runs.</summary>
-    public const string VariablesNotApproved = "This profile's variables aren't approved to run as administrator. Start again to approve them.";
+    public const string VariablesNotApproved = "This profile's variables aren't approved to run as administrator. Press Start to approve them.";
 
     /// <summary>
     /// Whether the profile's variables of <paramref name="start"/> may run, and if not why. Never from the request's word:

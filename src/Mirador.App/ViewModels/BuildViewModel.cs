@@ -42,12 +42,12 @@ public sealed partial class BuildViewModel : ObservableObject
     [ObservableProperty]
     public partial string Log { get; set; } = "";
 
-    /// <summary>Whether the profile has unsaved changes: it is built as saved, so Build waits for Save.</summary>
     /// <summary>Whether the new build's approval prompt is open: Build waits for it.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     public partial bool IsApproving { get; set; }
 
+    /// <summary>Whether the profile has unsaved changes: it is built as saved, so Build waits for Save.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     public partial bool Unsaved { get; set; }

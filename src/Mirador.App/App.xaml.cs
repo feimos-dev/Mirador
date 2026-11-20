@@ -203,7 +203,6 @@ public partial class App : Application
     public async Task<StartOutcome> StartAsync(StartReason reason)
     {
         // A profile that runs as administrator but changed since its approval asks Windows once, here; declined, it runs as you.
-        // A Start while a prompt is open is refused.
         if (Host.Approving)
         {
             return new StartOutcome(false, "Answer Windows' prompt first.");

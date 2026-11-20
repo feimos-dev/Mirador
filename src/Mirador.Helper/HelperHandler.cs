@@ -85,7 +85,7 @@ public sealed class HelperHandler
 {
     private const string BundledMissing = "The bundled Monado isn't installed yet. Install it on the Profiles page.";
     private const string NoMiradorsMonado = "This helper can't install the bundled Monado.";
-    private const string NotApproved = "This profile's build isn't approved. Start again to approve it.";
+    private const string NotApproved = "This profile's build isn't approved. Press Start to approve it.";
     private const string NoCaller = "Mirador's helper service couldn't tell who asked, so it changed nothing.";
     private const string NotInstalledMirador = "Only the installed Mirador may change which version of the bundled Monado is current.";
     private const string NoConsent = "Mirador's helper service has no way to reach the consent for Monado as administrator.";

@@ -46,6 +46,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     {
         this.host = host;
         Build = new BuildViewModel(host, App.Current.Ui);
+        Build.PropertyChanged += OnBuildStateChanged;
         Verify = new VerifyViewModel(host, App.Current.Ui);
         Verify.Changed += RefreshApproval;
         MiradorMonado = new MiradorMonadoViewModel(host);
@@ -312,12 +313,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Detach();
     }
 
-    // A build started, ended or was approved: Delete and the approval card follow it.
-    private void OnBuildsChanged(string profileId) => App.Current.Ui.TryEnqueue(() =>
+    // A build started or ended: Delete follows it.
+    private void OnBuildsChanged(string profileId) => App.Current.Ui.TryEnqueue(() => OnPropertyChanged(nameof(CanDelete)));
+
+    // The profile's build ended or its approval did: the approval card follows it.
+    private void OnBuildStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        OnPropertyChanged(nameof(CanDelete));
-        RefreshApproval();
-    });
+        if (e.PropertyName is nameof(BuildViewModel.IsBuilding) or nameof(BuildViewModel.IsApproving))
+        {
+            RefreshApproval();
+        }
+    }
 
     /// <summary>A name no profile has yet: <paramref name="wanted"/>, else with 2, 3, … after it.</summary>
     public string FreeName(string wanted)
@@ -708,7 +714,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
             ? blocked
             : IsApproved
                 ? "Approved."
-                : host.ApprovesAtStart(editing!)
+                : host.WouldApprove(editing!)
                     ? "Not approved yet. Windows asks at the next Start."
                     : "Not approved.";
     }
