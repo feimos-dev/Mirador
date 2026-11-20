@@ -9,7 +9,7 @@ namespace Mirador.Core.Tests.OpenVr;
 
 public sealed class OpenCompositeInstallTests : IDisposable
 {
-    private const string Url = "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe";
+    private const string Url = "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Windows-Installer.exe";
     private const string Source = "OpenLamina 2026.11.20, commit 75342495640501953fc2c17f73eeb4d124e8528e\n";
     private static readonly byte[] Setup = [0x4D, 0x5A, 1, 2, 3, 4];
 
@@ -19,7 +19,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
 
     public OpenCompositeInstallTests()
     {
-        // The installer puts the release in its folder, as OpenLamina-Setup.exe /VERYSILENT does.
+        // The installer puts the release in its folder, as OpenLamina-Windows-Installer.exe /VERYSILENT does.
         runner.Effect = (spec, _) =>
         {
             Directory.CreateDirectory(Path.Combine(Folder, "bin"));
@@ -54,7 +54,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
         Assert.Equal(InstallOutcome.Installed, await RunAsync(Rel()));
 
         var run = Assert.Single(runner.Commands);
-        Assert.Equal(Path.Combine(Downloads, "OpenLamina-Setup-2026.11.20.exe"), run.FileName);
+        Assert.Equal(Path.Combine(Downloads, "OpenLamina-Windows-Installer-2026.11.20.exe"), run.FileName);
         Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCLOSEAPPLICATIONS"], run.Arguments);
         Assert.True(Install.IsInstalled);
         Assert.Equal("2026.11.20", Install.Source?.Version);
@@ -73,8 +73,8 @@ public sealed class OpenCompositeInstallTests : IDisposable
     }
 
     [Theory]
-    [InlineData("http://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe")]
-    [InlineData("https://example.com/OpenLamina-Setup.exe")]
+    [InlineData("http://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Windows-Installer.exe")]
+    [InlineData("https://example.com/OpenLamina-Windows-Installer.exe")]
     [InlineData(null)]
     public async Task An_installer_not_on_github_is_never_fetched(string? url)
     {
