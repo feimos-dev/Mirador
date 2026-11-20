@@ -170,16 +170,15 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         CheckResult = null;
         try
         {
-            // Through the session: a Start waits for the check, and recovery restarts Pimax if Mirador goes away meanwhile.
-            var (check, pimaxProblem) = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (save, ct) => module.CheckDisplayAsync(host.Context, profile, save, ct), CancellationToken.None);
+            // Through the session: a Start waits for the check.
+            var check = await host.Session.RunWhileStoppedAsync(
+                PimaxModule.ModuleId, (_, ct) => module.CheckDisplayAsync(host.Context, profile, ct), CancellationToken.None);
             CheckPassed = check.Pass;
-            var verdict = check.Pass
+            CheckResult = check.Pass
                 ? (check.Message == "Direct mode works." ? check.Message : $"Direct mode works: {Sentence(check.Message)}")
                 : check.Finished
                     ? $"Direct mode doesn't work: {Sentence(check.Message)}{(check.WhatToDo is null ? "" : " What to do: " + Sentence(check.WhatToDo))}"
                     : Sentence(check.Message);
-            CheckResult = pimaxProblem is null ? verdict : $"{verdict} {pimaxProblem}";
         }
         catch (MiradorException e)
         {
@@ -212,7 +211,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         try
         {
             var problem = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
+                PimaxModule.ModuleId, (_, ct) => module.FixDirectModeAsync(host.Context, ct), CancellationToken.None);
             problem ??= await Task.Run(() => HeadsetMonitor.HeadsetOnDesktop(HeadsetMonitor.List()))
                 ? "Direct mode was turned on, but the headset still shows as a monitor. Unplug and plug in the headset's DisplayPort cable, then try again."
                 : null;

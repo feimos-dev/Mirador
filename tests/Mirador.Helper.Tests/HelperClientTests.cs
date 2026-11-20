@@ -82,13 +82,13 @@ public class HelperClientTests
             {
                 var request = await LineCodec.ReadAsync<HelperRequest>(server, token);
                 received = request!.Command.ToString();
-                await LineCodec.WriteAsync(server, new HelperReply(true, WasRunning: false, Value: "v"), token);
+                await LineCodec.WriteAsync(server, new HelperReply(true, Value: "v"), token);
                 await Task.Delay(200, token);
             },
-            async () => reply = await new HelperClient(name).SendAsync(HelperCommand.StartPimax, CancellationToken.None));
+            async () => reply = await new HelperClient(name).SendAsync(HelperCommand.StopPimax, CancellationToken.None));
 
-        Assert.Equal("StartPimax", received);
-        Assert.Equal(new HelperReply(true, WasRunning: false, Value: "v"), reply);
+        Assert.Equal("StopPimax", received);
+        Assert.Equal(new HelperReply(true, Value: "v"), reply);
     }
 
     [Fact]

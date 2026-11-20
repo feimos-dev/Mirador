@@ -78,7 +78,7 @@ const
   MiradorKey = 'SOFTWARE\Mirador';
   QuitMirador = 'Mirador is running. Quit it from its tray icon (Quit), then press Retry.';
 
-{ Mirador holds its own files and, while Monado runs, Pimax's software is stopped: it must be quit, not pulled away. }
+{ Mirador holds its own files while it runs: it must be quit, not pulled away. }
 function MiradorQuit: Boolean;
 begin
   while CheckForMutexes('Local\Mirador') do

@@ -20,13 +20,6 @@ public interface IServiceControl
     /// <summary>Stops the service and waits until it has stopped; throws a plain message when it doesn't in time.</summary>
     void Stop(string name, TimeSpan timeout);
 
-    /// <summary>
-    /// Makes sure the service runs: starts it when it is stopped, and first waits (at most <paramref name="timeout"/>)
-    /// for one that is still stopping; one that runs or is starting already is left as it is. Throws a plain message
-    /// when it can't.
-    /// </summary>
-    void Start(string name, TimeSpan timeout);
-
     /// <summary>The service's <c>ImagePath</c> (variables expanded), or null when it isn't installed.</summary>
     string? ImagePath(string name);
 
@@ -211,7 +204,6 @@ public sealed class HelperHandler
         {
             HelperCommand.SetRuntimeBundled => SetRuntimeBundled(),
             HelperCommand.StopPimax => StopPimax(),
-            HelperCommand.StartPimax => StartPimax(),
             HelperCommand.GetPimaxEyeBlob => GetPimaxEyeBlob(),
             HelperCommand.RevokeElevatedMonado => RevokeElevatedMonado(caller),
             HelperCommand.StartMonadoElevated => StartMonadoElevated(request.Start, caller),
@@ -424,13 +416,12 @@ public sealed class HelperHandler
 
     /// <summary>
     /// Stops Pimax's service, then ends its processes, whether or not the service stopped. A failure of either step is
-    /// in the reply (the first one if both fail) together with <c>WasRunning</c>.
+    /// in the reply (the first one if both fail).
     /// </summary>
     private HelperReply StopPimax()
     {
-        var wasRunning = services.Exists(PimaxNames.Service) && services.IsRunning(PimaxNames.Service);
         string? error = null;
-        if (wasRunning)
+        if (services.Exists(PimaxNames.Service) && services.IsRunning(PimaxNames.Service))
         {
             try
             {
@@ -451,21 +442,7 @@ public sealed class HelperHandler
             error ??= Shorten(e.Message);
         }
 
-        return new HelperReply(error is null, error, wasRunning);
-    }
-
-    /// <summary>
-    /// Starts Pimax's service unless it runs. One that is still stopping (a stop that timed out) is waited for, then
-    /// started: left alone, it would finish stopping and stay stopped.
-    /// </summary>
-    private HelperReply StartPimax()
-    {
-        if (services.Exists(PimaxNames.Service))
-        {
-            services.Start(PimaxNames.Service, StopTimeout);
-        }
-
-        return new HelperReply(true);
+        return new HelperReply(error is null, error);
     }
 
     /// <summary>

@@ -85,7 +85,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
     private void AssertNothingHappened()
     {
         Assert.Empty(services.Stopped);
-        Assert.Empty(services.Started);
         Assert.Empty(processes.Killed);
         Assert.Equal(0, registry.Writes);
     }
@@ -103,7 +102,7 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
     {
         var reply = await new HelperClient(pipeName).SendAsync(HelperCommand.StopPimax, CancellationToken.None);
 
-        Assert.Equal(new HelperReply(true, WasRunning: true), reply);
+        Assert.Equal(new HelperReply(true), reply);
         Assert.Equal(["PiServiceLauncher"], services.Stopped);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
     }
@@ -115,7 +114,7 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
 
         var reply = await new HelperClient(pipeName).SendAsync(HelperCommand.StopPimax, CancellationToken.None);
 
-        Assert.Equal(new HelperReply(false, "Pimax's service won't stop.", WasRunning: true), reply);
+        Assert.Equal(new HelperReply(false, "Pimax's service won't stop."), reply);
     }
 
     [ElevatedFact]

@@ -25,9 +25,6 @@ public enum HelperCommand
     /// </summary>
     StopPimax,
 
-    /// <summary>Starts Pimax's service again unless it runs; one that is still stopping is given 20 s to stop first.</summary>
-    StartPimax,
-
     /// <summary>Reads which eye geometry file Pimax's eye tracking runtime was started with.</summary>
     GetPimaxEyeBlob,
 
@@ -173,7 +170,6 @@ public enum HelperRefusal
 /// <summary>The helper's answer. <see cref="Error"/> is a message meant for the user when <see cref="Ok"/> is false.</summary>
 /// <param name="Ok">Whether the command was carried out.</param>
 /// <param name="Error">Why it was not, in plain words.</param>
-/// <param name="WasRunning">For <see cref="HelperCommand.StopPimax"/>: whether Pimax's service was running.</param>
 /// <param name="Value">For <see cref="HelperCommand.Ping"/> the version, for <see cref="HelperCommand.GetPimaxEyeBlob"/> the
 /// variant (or null), for <see cref="HelperCommand.StartMonadoElevated"/> the service's process id, for
 /// <see cref="HelperCommand.WaitMonadoElevated"/> the exit code once Monado has ended (null while it runs), for
@@ -183,7 +179,6 @@ public enum HelperRefusal
 public sealed record HelperReply(
     [property: JsonRequired] bool Ok,
     string? Error = null,
-    bool? WasRunning = null,
     string? Value = null,
     HelperRefusal? Refusal = null)
 {

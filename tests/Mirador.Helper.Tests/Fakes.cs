@@ -16,7 +16,6 @@ internal sealed class FakeServiceControl : IServiceControl
     public ManualResetEventSlim StopEntered { get; } = new();
     public List<string> Stopped { get; } = [];
     public List<TimeSpan> StopTimeouts { get; } = [];
-    public List<string> Started { get; } = [];
 
     /// <summary>Pimax's service's <c>ImagePath</c>; its folder is where Pimax's eye runtime may run from.</summary>
     public string? PimaxImagePath { get; set; } = $"\"{Path.Combine(HelperHandlerTests.PimaxRuntime, "PiServiceLauncher.exe")}\"";
@@ -44,20 +43,6 @@ internal sealed class FakeServiceControl : IServiceControl
         Stopped.Add(name);
         StopTimeouts.Add(timeout);
         Running = false;
-    }
-
-    public List<TimeSpan> StartTimeouts { get; } = [];
-
-    /// <summary>Like the real one: a service that runs already is left alone; one still stopping is waited for, then started.</summary>
-    public void Start(string name, TimeSpan timeout)
-    {
-        StartTimeouts.Add(timeout);
-        if (!Running)
-        {
-            Stopping = false;
-            Started.Add(name);
-            Running = true;
-        }
     }
 }
 
