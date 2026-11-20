@@ -2,7 +2,7 @@ using System.Management;
 using System.Runtime.InteropServices;
 using Mirador.Core;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.DirectMode;
 
 /// <summary>
 /// The NVIDIA driver's version. Direct mode goes through NVIDIA's private interface, whose ids can

@@ -47,10 +47,10 @@ public sealed record UserFolders(string UserProfile, string AppData, string Loca
 /// helper builds it from scratch: Windows' machine-wide variables (from the helper's own SYSTEM environment), the
 /// caller's own folders and temp, a <c>PATH</c> of System32, Windows and the server folder only, <c>STEAMVR_PATH</c>,
 /// <c>IPC_RELAXED_CONNECTION_SECURITY</c> (only when needed: <see cref="ElevatedStart.ElevationFix"/>), the
-/// range-checked settings, the module's fixed table, and last the profile's variables the user approved (checked against
-/// the helper's own record before, <see cref="ElevatedRequestCheck.ApprovedVariables"/>). Nothing from the request
-/// becomes a path, and no name <see cref="ElevatedVariables.IsRefused"/> (the search path, the user's folders, the
-/// Vulkan loader's paths and layers, <c>XR_*</c>) comes from the profile.
+/// range-checked settings, the direct-mode layer's and the module's fixed tables, and last the profile's variables the
+/// user approved (checked against the helper's own record before, <see cref="ElevatedRequestCheck.ApprovedVariables"/>).
+/// Nothing from the request becomes a path, and no name <see cref="ElevatedVariables.IsRefused"/> (the search path, the
+/// user's folders, the Vulkan loader's paths and layers, <c>XR_*</c>) comes from the profile.
 /// </summary>
 public static class ElevatedEnvironment
 {
@@ -59,7 +59,7 @@ public static class ElevatedEnvironment
 
     /// <param name="administratorProtection">Whether Windows' Administrator protection is on (<see cref="AdministratorProtection.IsOn"/>).</param>
     /// <param name="approvedVariables">The profile's approved variables, set last in their order, so they win (a name given twice keeps the last value).</param>
-    /// <exception cref="ArgumentException">A setting is out of range, the module name is unknown, or a variable's name is refused.</exception>
+    /// <exception cref="ArgumentException">A setting is out of range, the module or direct-mode name is unknown, or a variable's name is refused.</exception>
     public static IReadOnlyDictionary<string, string> Build(
         ElevatedStart start, UserFolders folders, string serverDir, string steamVrPath, bool administratorProtection = false,
         IReadOnlyList<KeyValuePair<string, string>>? approvedVariables = null)
@@ -75,6 +75,7 @@ public static class ElevatedEnvironment
         }
 
         var moduleFixed = ModuleFixed(start.Module);
+        var directModeFixed = DirectModeFixed(start.DirectMode);
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Windows' own machine-wide variables, from the helper's (SYSTEM) environment, never from the caller.
@@ -116,7 +117,7 @@ public static class ElevatedEnvironment
             (name, value) => Set(env, name, value),
             start.LighthouseWaitMs, start.RenderScalePercent, start.CompositorMinTimeMs, start.ExitOnDisconnect, start.StandbyOnExit);
 
-        foreach (var (name, value) in moduleFixed)
+        foreach (var (name, value) in directModeFixed.Concat(moduleFixed))
         {
             Set(env, name, value);
         }
@@ -124,9 +125,9 @@ public static class ElevatedEnvironment
         // Verify's run: no headset and no display, fixed values only.
         if (start.Headless)
         {
-            if (start.Module.Length > 0)
+            if (start.Module.Length > 0 || start.DirectMode.Length > 0)
             {
-                throw new ArgumentException("A headless Monado runs without a headset module.", nameof(start));
+                throw new ArgumentException("A headless Monado runs without a headset module or direct-mode layer.", nameof(start));
             }
 
             foreach (var (name, value) in HeadlessEnvironment.Variables)
@@ -147,8 +148,15 @@ public static class ElevatedEnvironment
     private static IReadOnlyList<KeyValuePair<string, string>> ModuleFixed(string module) => module switch
     {
         "" => [],
-        PimaxEnvironment.ModuleId => DreamAirEnvironment.FixedEnvironment,
+        PimaxEnvironment.ModuleId => PimaxEnvironment.DreamAirVariables,
         _ => throw new ArgumentException($"Unknown headset module \"{module}\".", nameof(module)),
+    };
+
+    private static IReadOnlyList<KeyValuePair<string, string>> DirectModeFixed(string directMode) => directMode switch
+    {
+        "" => [],
+        DirectModeEnvironment.Nvidia => DirectModeEnvironment.Variables,
+        _ => throw new ArgumentException($"Unknown direct-mode layer \"{directMode}\".", nameof(directMode)),
     };
 
     private static string? Machine(string name)

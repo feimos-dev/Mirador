@@ -47,7 +47,7 @@
             <toolkit:SettingsCard
                 Description="Checks direct mode. About 20 s, with Monado stopped."
                 Header="Display check"
-                Visibility="{x:Bind ViewModel.IsDreamAir, Mode=OneWay}">
+                Visibility="{x:Bind ViewModel.UsesDirectMode, Mode=OneWay}">
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <ProgressRing
                         Width="20"

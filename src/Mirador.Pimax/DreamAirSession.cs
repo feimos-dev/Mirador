@@ -7,9 +7,8 @@ using Mirador.Ipc;
 namespace Mirador.Pimax;
 
 /// <summary>
-/// A Dream Air session while Monado runs: the fixed environment, the
-/// status lines (the display from the layer's output, the eye geometry upload, and Monado's missing driver), and a
-/// watch for programs that would take the headset or the receiver back.
+/// A Dream Air session while Monado runs: the fixed environment, the status lines (the eye geometry upload, and Monado's
+/// missing driver), and a watch for programs that would take the headset or the receiver back.
 /// </summary>
 public sealed class DreamAirSession : ModuleSession, IDisposable
 {
@@ -38,13 +37,12 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     /// <param name="warnings">Warnings from getting ready, raised at the first look (Mirador listens only once it has the session).</param>
     public DreamAirSession(
         ModuleContext ctx, IReadOnlyList<EnvVar> environment, GeometryResult? upload,
-        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true,
-        bool layerUsed = true)
+        IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true)
     {
         this.ctx = ctx;
         pending = warnings is { Count: > 0 } ? [.. warnings] : null;
         Environment = environment;
-        parser = new DreamAirLogParser(upload, headset, headsetThere, ctx.Time, layerUsed);
+        parser = new DreamAirLogParser(upload, headset, headsetThere);
         timer = ctx.Time.CreateTimer(_ => Poll(), null, PollInterval, Timeout.InfiniteTimeSpan);
     }
 
@@ -61,7 +59,7 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
             RaiseStatusChanged();
         }
 
-        // Monado found no driver for the headset: it idles, so it stops now, not after the display's wait.
+        // Monado found no driver for the headset: it idles, so it stops now.
         StopIfFailed();
     }
 
@@ -135,10 +133,6 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         {
             RaiseWarning(warning);
         }
-
-        // The layer's display never came up: Monado idles for ever otherwise.
-        parser.Tick();
-        StopIfFailed();
     }
 
     /// <summary>Asks Mirador once to stop Monado when the parser says it can't work.</summary>

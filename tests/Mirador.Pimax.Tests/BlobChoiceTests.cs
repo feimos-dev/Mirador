@@ -66,11 +66,11 @@ public class BlobChoiceTests
     [Fact]
     public void A_different_serial_clears_the_remembered_variant()
     {
-        var before = new DreamAirState(LastGoodDriver: "621.01", BlobVariant: "K11_RAWH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-1");
+        var before = new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-1");
 
         var after = BlobChoice.AfterUpload(before, "XR5DA-2");
 
-        Assert.Equal(new DreamAirState(LastGoodDriver: "621.01", BlobTrackerSerial: "XR5DA-2"), after);
+        Assert.Equal(new DreamAirState(BlobTrackerSerial: "XR5DA-2"), after);
         Assert.True(BlobChoice.Cleared(before, after));
     }
 }

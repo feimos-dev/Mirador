@@ -1,8 +1,9 @@
 using System.Text;
+using Mirador.Core;
 using Mirador.Core.Monado;
 using Mirador.Core.Native;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.DirectMode;
 
 /// <summary>What the layer's display check found.</summary>
 /// <param name="Pass">Whether direct mode works (the check ended with exit code 0).</param>
@@ -65,7 +66,7 @@ public static class DisplayCheck
                 throw;
             }
         }
-        catch (Core.MiradorException e)
+        catch (MiradorException e)
         {
             return Result(false, e.Message, null, lines) with { Finished = false };
         }

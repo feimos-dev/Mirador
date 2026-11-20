@@ -7,7 +7,7 @@ public class DreamAirStateTests
     {
         using var dir = new TempDir();
         var store = new DreamAirStateStore(Path.Combine(dir.Path, "dreamair.json"));
-        var state = new DreamAirState("621.01", "K11_RAWH", "pimax", "XR5DA-1");
+        var state = new DreamAirState("K11_RAWH", "pimax", "XR5DA-1");
 
         store.Save(state);
 
@@ -22,7 +22,7 @@ public class DreamAirStateTests
         var path = Path.Combine(dir.Path, "dreamair.json");
         File.WriteAllText(path, """{ "lastGoodDriver": "621.01", "blobVariant": "K11_RAWH", "lastCheck": { "when": "2026-11-04T19:03:00+00:00", "medianDeg": 0.89, "worstDotDeg": 1.15, "dots": 9 } }""");
 
-        Assert.Equal(new DreamAirState("621.01", "K11_RAWH"), new DreamAirStateStore(path).Load());
+        Assert.Equal(new DreamAirState("K11_RAWH"), new DreamAirStateStore(path).Load());
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class DreamAirStateTests
         var path = Path.Combine(dir.Path, "dreamair.json");
         File.WriteAllText(path, """{ "lastGoodDriver": "621.01", "blobVariant": "..\\evil", "blobSource": "owner" }""");
 
-        Assert.Equal(new DreamAirState("621.01"), new DreamAirStateStore(path).Load());
+        Assert.Equal(new DreamAirState(), new DreamAirStateStore(path).Load());
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public class DreamAirStateTests
         var store = new DreamAirStateStore(Path.Combine(dir.Path, "dreamair.json"));
         store.Save(new DreamAirState(BlobVariant: "K10_RAYH"));
 
-        store.Update(s => s with { LastGoodDriver = "621.01" });
+        store.Update(s => s with { BlobTrackerSerial = "XR5DA-1" });
 
-        Assert.Equal(new DreamAirState("621.01", "K10_RAYH"), store.Load());
+        Assert.Equal(new DreamAirState("K10_RAYH", BlobTrackerSerial: "XR5DA-1"), store.Load());
     }
 }

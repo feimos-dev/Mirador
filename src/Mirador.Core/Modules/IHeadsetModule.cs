@@ -18,15 +18,16 @@ public interface IHeadsetModule
     /// <summary>Whether Monado tracks this headset through SteamVR's Lighthouse driver, which can't share the receiver with SteamVR.</summary>
     bool UsesSteamVrLighthouse { get; }
 
-    /// <summary>
-    /// Whether this headset's display goes through NVIDIA direct mode (Mirador.md §4.11 item 52): the session then turns
-    /// the direct-mode layer on for Monado, and the display check is offered.
-    /// </summary>
-    bool UsesNvidiaDirectMode => false;
+    /// <summary>The direct-mode layer a profile with this headset uses unless it picks another.</summary>
+    DirectModeKind DefaultDirectMode => DirectModeKind.None;
+
+    /// <summary>Frees the headset's display for a direct-mode check, such as by stopping the headset's own software.</summary>
+    Task FreeDisplayAsync(ModuleContext ctx, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
     /// The table the helper writes for this module when Monado runs as administrator (<c>ElevatedStart.Module</c>), for
-    /// the headset as it is now; null when the helper has none for it, and Monado then runs as the user.
+    /// the headset as it is now; <c>""</c> when it has no variables of its own; null when the helper has none for it, and
+    /// Monado then runs as the user.
     /// </summary>
     string? ElevatedModuleId => Id;
 

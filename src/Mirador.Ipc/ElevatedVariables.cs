@@ -51,7 +51,7 @@ public static partial class ElevatedVariables
         .. ClearedEnvironment.Names,
         .. DirectModeEnvironment.Cleared,
         .. DirectModeEnvironment.Variables.Select(v => v.Key),
-        .. DreamAirEnvironment.ModuleVariables.Select(v => v.Key),
+        .. PimaxEnvironment.DreamAirVariables.Select(v => v.Key),
         .. SettingsNames(),
         .. HeadlessEnvironment.Variables.Select(v => v.Key),
     ];

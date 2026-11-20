@@ -1,8 +1,9 @@
-using Mirador.Core.DirectMode;
+using Mirador.Core;
+using Mirador.DirectMode;
 using Mirador.Core.Profiles;
 using Mirador.Ipc;
 
-namespace Mirador.Core.Tests.DirectMode;
+namespace Mirador.DirectMode.Tests;
 
 public sealed class DirectModeCheckTests : IDisposable
 {

@@ -35,15 +35,16 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
     /// Gathers the usual entries: the newest <c>monado.log</c>, <c>mirador.log</c>, the newest Verify run's
     /// <c>verify.log</c> when there is one, <c>profile.json</c> (the selected
     /// profile), <c>monado-settings.json</c>, <c>environment.txt</c> (what Mirador set at the last Start, one
-    /// <c>NAME=value</c> a line), <c>versions.txt</c>, then the module's.
+    /// <c>NAME=value</c> a line), <c>versions.txt</c>, then the direct-mode layer's and the module's.
     /// </summary>
     /// <param name="lastEnvironment">The session's <c>LastMiradorEnvironment</c>; null before the first Start.</param>
     /// <param name="versions">Mirador's, Windows' and the profile's Monado's versions, one a line.</param>
     /// <param name="openVr">The OpenVR paths file and OpenLamina's log, added as <c>openvrpaths.vrpath</c> and
     /// under the log's own name, <c>openlamina.log</c> (Mirador.md §4.6 item 23); null leaves them out.</param>
+    /// <param name="directMode">The profile's direct-mode layer; null for none.</param>
     public static DiagnosticsZip Collect(
         AppPaths paths, Profile profile, IReadOnlyDictionary<string, string>? lastEnvironment, string versions, IHeadsetModule? module, ModuleContext ctx,
-        OpenVrFiles? openVr = null)
+        OpenVrFiles? openVr = null, IDirectMode? directMode = null)
     {
         var zip = new DiagnosticsZip();
         if (NewestMonadoLog(paths.LogsDir) is { } monadoLog)
@@ -79,6 +80,7 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
             zip.AddFile(logName, openVr.LogFile);
         }
 
+        directMode?.AddDiagnostics(ctx, zip);
         module?.AddDiagnostics(ctx, profile, zip);
         return zip;
     }

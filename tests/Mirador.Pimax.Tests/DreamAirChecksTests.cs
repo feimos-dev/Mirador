@@ -30,11 +30,10 @@ public class DreamAirChecksTests
 
     private readonly FakeUsb usb = new(DreamAirIds.Board, DreamAirIds.EyeTracker, DreamAirIds.Receiver, new UsbId(0x046D, 0xC52B));
 
-    private Func<string?> nvidia = () => "32.0.16.2101";
     private Func<string?> steamVr = () => SteamVrDir;
 
     private IReadOnlyList<CheckResult> Run(string variant = "K11_RAWH") =>
-        new DreamAirChecks(registry, usb, files.Contains, nvidia, steamVr).Run(variant);
+        new DreamAirChecks(registry, usb, files.Contains, steamVr).Run(variant);
 
     private CheckResult Check(string label, string variant = "K11_RAWH") => Assert.Single(Run(variant), r => r.Label == label);
 
@@ -44,7 +43,6 @@ public class DreamAirChecksTests
         Assert.Equal(
             new CheckResult[]
             {
-                new("NVIDIA GPU", StatusLevel.Ok, "Driver 621.01"),
                 new("Pimax Play", StatusLevel.Ok, "2.0.4.329"),
                 new("Eye geometry", StatusLevel.Ok, "config K11_RAWH"),
                 new("SteamVR", StatusLevel.Ok, "Lighthouse driver found"),
@@ -54,25 +52,15 @@ public class DreamAirChecksTests
     }
 
     [Fact]
-    public void No_nvidia_gpu_is_an_error()
-    {
-        nvidia = () => null;
-
-        Assert.Equal(
-            new CheckResult("NVIDIA GPU", StatusLevel.Error, "No NVIDIA GPU found.", "A Pimax headset's direct mode needs an NVIDIA GPU."),
-            Check("NVIDIA GPU"));
-    }
-
-    [Fact]
     public void A_crystal_light_is_checked_without_eye_geometry_steamvr_or_pimax_play()
     {
         usb.Ids.Clear();
         usb.Ids.Add(PimaxModels.CrystalLight.Board);
         var noPimaxPlay = new FakeRegistry();
 
-        var results = new DreamAirChecks(noPimaxPlay, usb, files.Contains, nvidia, steamVr).Run("K11_RAWH", PimaxModels.CrystalLight);
+        var results = new DreamAirChecks(noPimaxPlay, usb, files.Contains, steamVr).Run("K11_RAWH", PimaxModels.CrystalLight);
 
-        Assert.Equal(["NVIDIA GPU", "Pimax Play", "Headset"], results.Select(r => r.Label));
+        Assert.Equal(["Pimax Play", "Headset"], results.Select(r => r.Label));
         Assert.All(results, r => Assert.Equal(StatusLevel.Ok, r.Level));
     }
 
@@ -82,41 +70,23 @@ public class DreamAirChecksTests
         usb.Ids.Clear();
         usb.Ids.Add(PimaxModels.DreamAirSe.Board);
 
-        var results = new DreamAirChecks(registry, usb, files.Contains, nvidia, steamVr).Run("K11_RAWH", PimaxModels.DreamAirSe);
+        var results = new DreamAirChecks(registry, usb, files.Contains, steamVr).Run("K11_RAWH", PimaxModels.DreamAirSe);
 
-        Assert.Equal(["NVIDIA GPU", "Pimax Play", "SteamVR", "Headset"], results.Select(r => r.Label));
+        Assert.Equal(["Pimax Play", "SteamVR", "Headset"], results.Select(r => r.Label));
         Assert.Equal("Not connected: Lighthouse receiver.", Assert.Single(results, r => r.Label == "Headset").Text);
-    }
-
-    [Fact]
-    public void A_driver_version_mirador_cant_read_is_shown_as_windows_gives_it()
-    {
-        nvidia = () => "32.0.beta";
-
-        Assert.Equal(new CheckResult("NVIDIA GPU", StatusLevel.Ok, "Driver 32.0.beta"), Check("NVIDIA GPU"));
-    }
-
-    [Fact]
-    public void Windows_failing_to_list_the_gpus_is_an_error_with_its_message()
-    {
-        nvidia = () => throw new MiradorException("Windows didn't list the graphics cards within 5 seconds. Try again.");
-
-        Assert.Equal(
-            new CheckResult("NVIDIA GPU", StatusLevel.Error, "Windows didn't list the graphics cards within 5 seconds. Try again."),
-            Check("NVIDIA GPU"));
     }
 
     [Fact]
     public void Pimax_play_not_installed_is_an_error_for_it_and_the_eye_geometry()
     {
-        var results = new DreamAirChecks(new FakeRegistry(), usb, files.Contains, nvidia, steamVr).Run("K11_RAWH");
+        var results = new DreamAirChecks(new FakeRegistry(), usb, files.Contains, steamVr).Run("K11_RAWH");
 
         Assert.Equal(
             new CheckResult("Pimax Play", StatusLevel.Error, "Pimax Play isn't installed.", "Install Pimax Play: Mirador uses its eye tracking runtime."),
-            results[1]);
+            results[0]);
         Assert.Equal(
             new CheckResult("Eye geometry", StatusLevel.Error, "config_XR5PIMAXDA_K11_RAWH.bin comes with Pimax Play, which isn't installed.", "Install Pimax Play: Mirador uses its eye tracking runtime."),
-            results[2]);
+            results[1]);
     }
 
     [Fact]
@@ -134,9 +104,9 @@ public class DreamAirChecksTests
     {
         var registry = new FakeRegistry().Set(ServiceKey, "ImagePath", $"\"{Path.Combine(Runtime, "PiServiceLauncher.exe")}\"");
 
-        var results = new DreamAirChecks(registry, usb, files.Contains, nvidia, steamVr).Run("K11_RAWH");
+        var results = new DreamAirChecks(registry, usb, files.Contains, steamVr).Run("K11_RAWH");
 
-        Assert.Equal(new CheckResult("Pimax Play", StatusLevel.Ok, "Installed"), results[1]);
+        Assert.Equal(new CheckResult("Pimax Play", StatusLevel.Ok, "Installed"), results[0]);
     }
 
     [Fact]

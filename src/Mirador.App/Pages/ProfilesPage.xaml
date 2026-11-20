@@ -230,13 +230,18 @@
                         Text="{x:Bind ViewModel.MonadoOptions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </toolkit:SettingsCard>
 
-                <!-- What Mirador does on Windows for the headset: one choice turns all of it on, the layer included. -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Windows tools" />
                 <toolkit:SettingsCard Header="Headset Type">
                     <ComboBox
                         MinWidth="200"
                         ItemsSource="{x:Bind ViewModel.Headsets}"
                         SelectedItem="{x:Bind ViewModel.Headset, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard Header="Direct-mode layer">
+                    <ComboBox
+                        MinWidth="200"
+                        ItemsSource="{x:Bind ViewModel.DirectModes}"
+                        SelectedItem="{x:Bind ViewModel.DirectMode, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
                 </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Lighthouse" />

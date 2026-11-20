@@ -9,6 +9,9 @@
     <Project Path="src/Mirador.Core/Mirador.Core.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
+    <Project Path="src/Mirador.DirectMode/Mirador.DirectMode.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
     <Project Path="src/Mirador.Pimax/Mirador.Pimax.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
@@ -21,6 +24,9 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Mirador.Core.Tests/Mirador.Core.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="tests/Mirador.DirectMode.Tests/Mirador.DirectMode.Tests.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
     <Project Path="tests/Mirador.Pimax.Tests/Mirador.Pimax.Tests.csproj">

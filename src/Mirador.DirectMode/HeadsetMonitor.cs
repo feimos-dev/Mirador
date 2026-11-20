@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.DirectMode;
 
 /// <summary>A monitor Windows knows: its device interface path and whether its adapter is part of the desktop.</summary>
 public sealed record MonitorEntry(string DeviceId, bool OnDesktop);

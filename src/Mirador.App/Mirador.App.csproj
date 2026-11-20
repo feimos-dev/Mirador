@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mirador.Core\Mirador.Core.csproj" />
+    <ProjectReference Include="..\Mirador.DirectMode\Mirador.DirectMode.csproj" />
     <ProjectReference Include="..\Mirador.Pimax\Mirador.Pimax.csproj" />
     <ProjectReference Include="..\Mirador.Ipc\Mirador.Ipc.csproj" />
   </ItemGroup>

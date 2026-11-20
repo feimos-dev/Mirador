@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.Build;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
@@ -15,6 +14,12 @@ namespace Mirador.App.ViewModels;
 
 /// <summary>A headset choice in the profile editor's Windows tools; a null id is "None".</summary>
 public sealed record HeadsetItem(string? Id, string Name)
+{
+    public override string ToString() => Name;
+}
+
+/// <summary>A direct-mode layer choice in the profile editor's Windows tools.</summary>
+public sealed record DirectModeItem(DirectModeKind Kind, string Name)
 {
     public override string ToString() => Name;
 }
@@ -54,6 +59,12 @@ public sealed partial class ProfilesViewModel : ObservableObject
         foreach (var module in host.Modules.Values)
         {
             Headsets.Insert(Headsets.Count - 1, new HeadsetItem(module.Id, module.DisplayName));
+        }
+
+        DirectModes.Add(new DirectModeItem(DirectModeKind.None, "None"));
+        foreach (var layer in host.DirectModes.Values)
+        {
+            DirectModes.Add(new DirectModeItem(layer.Kind, layer.DisplayName));
         }
 
         Extra.CollectionChanged += (_, e) =>
@@ -105,6 +116,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public ObservableCollection<HeadsetItem> Headsets { get; } = [];
 
+    public ObservableCollection<DirectModeItem> DirectModes { get; } = [];
+
     public ObservableCollection<EnvRow> Extra { get; } = [];
 
     public ObservableCollection<string> Problems { get; } = [];
@@ -118,6 +131,9 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     [ObservableProperty]
     public partial HeadsetItem? Headset { get; set; }
+
+    [ObservableProperty]
+    public partial DirectModeItem? DirectMode { get; set; }
 
     /// <summary>
     /// The "Monado" drop-down (Mirador.md §4.11 item 55): 0 Mirador's Monado, 1 build upstream main, 2 build from a
@@ -562,7 +578,23 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnNameChanged(string value) => Changed();
 
-    partial void OnHeadsetChanged(HeadsetItem? value) => Changed();
+    /// <summary>A new headset type brings its own direct-mode layer, which the user can change after.</summary>
+    partial void OnHeadsetChanged(HeadsetItem? value)
+    {
+        if (!loading)
+        {
+            DirectMode = ItemFor(DefaultDirectMode(value));
+        }
+
+        Changed();
+    }
+
+    partial void OnDirectModeChanged(DirectModeItem? value) => Changed();
+
+    private DirectModeKind DefaultDirectMode(HeadsetItem? headset) =>
+        headset?.Id is { } id && host.Modules.TryGetValue(id, out var module) ? module.DefaultDirectMode : DirectModeKind.None;
+
+    private DirectModeItem ItemFor(DirectModeKind kind) => DirectModes.FirstOrDefault(d => d.Kind == kind) ?? DirectModes[0];
 
     partial void OnMonadoSourceChanged(int value)
     {
@@ -794,6 +826,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
         {
             Name = p?.Name ?? "";
             Headset = Headsets.FirstOrDefault(h => h.Id == p?.ModuleId) ?? Headsets[^1];
+            DirectMode = ItemFor(p?.DirectMode ?? DefaultDirectMode(Headset));
             MonadoSource = p?.Monado switch
             {
                 { Kind: SourceKind.Folder } => FolderSource,
@@ -838,6 +871,9 @@ public sealed partial class ProfilesViewModel : ObservableObject
     private Profile Edited()
     {
         var options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
+
+        // Left unset while it is the headset type's default, so that it follows the type as a new profile's does.
+        var directMode = DirectMode?.Kind ?? DirectModeKind.None;
         return new Profile(
             editing?.Id ?? "",
             Name.Trim(),
@@ -846,7 +882,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
             [.. Extra.Select(r => new EnvVar(r.Name.Trim(), r.Value))],
             options,
             lighthouse,
-            RunAsAdministrator && CanRunAsAdministrator);
+            RunAsAdministrator && CanRunAsAdministrator,
+            editing?.DirectMode is null && directMode == DefaultDirectMode(Headset) ? null : directMode);
     }
 
     /// <summary>

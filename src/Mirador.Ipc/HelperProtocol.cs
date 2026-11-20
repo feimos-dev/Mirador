@@ -129,6 +129,7 @@ public enum HelperCommand
 /// The profile's own environment variables, in its order; null or empty for none. The helper runs them only when they
 /// are exactly what the caller approved for <see cref="ProfileId"/> and none is refused (<see cref="ElevatedVariables"/>).
 /// </param>
+/// <param name="DirectMode">The direct-mode layer's table: <c>""</c> for none, or <c>"nvidia"</c>.</param>
 public sealed record ElevatedStart(
     [property: JsonRequired] int LighthouseWaitMs,
     [property: JsonRequired] int RenderScalePercent,
@@ -140,7 +141,8 @@ public sealed record ElevatedStart(
     bool ElevationFix = false,
     bool StandbyOnExit = false,
     string ProfileId = "",
-    IReadOnlyList<KeyValuePair<string, string>>? Variables = null);
+    IReadOnlyList<KeyValuePair<string, string>>? Variables = null,
+    string DirectMode = "");
 
 /// <summary>
 /// A request: a command, the typed <see cref="Start"/> only with <see cref="HelperCommand.StartMonadoElevated"/>, and

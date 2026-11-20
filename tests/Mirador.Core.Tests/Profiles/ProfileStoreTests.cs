@@ -139,6 +139,24 @@ public class ProfileStoreTests
     }
 
     [Fact]
+    public void The_direct_mode_layer_round_trips_and_a_file_without_it_takes_the_headsets_default()
+    {
+        using var dir = new TempDir();
+        var path = dir.File("profiles.json");
+        File.WriteAllText(path, """{"profiles":[{"id":"a","name":"A","moduleId":"pimax","monado":{"kind":"Mirador"}}],"selectedId":"a"}""");
+        var store = new ProfileStore(path);
+
+        var old = Assert.Single(store.Load().Profiles);
+        Assert.Null(old.DirectMode);
+
+        foreach (var kind in new[] { DirectModeKind.Nvidia, DirectModeKind.None })
+        {
+            store.Save(new ProfileSet([old with { DirectMode = kind }], "a"));
+            Assert.Equal(kind, Assert.Single(store.Load().Profiles).DirectMode);
+        }
+    }
+
+    [Fact]
     public void A_file_with_nothing_left_out_leaves_no_bad_copy()
     {
         using var dir = new TempDir();

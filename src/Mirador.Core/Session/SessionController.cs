@@ -1,4 +1,3 @@
-using Mirador.Core.DirectMode;
 using System.Globalization;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
@@ -142,13 +141,15 @@ public sealed class SessionController(SessionDeps deps)
 
     /// <summary>
     /// The status lines: <c>monado</c>; while there is a session also <c>apps</c>, <c>tracking</c> (when the profile
-    /// uses the Lighthouse receiver), <c>standin</c> (when games can't start Monado from the build), then the module's.
+    /// uses the Lighthouse receiver), <c>standin</c> (when games can't start Monado from the build), then the direct-mode
+    /// layer's and the module's.
     /// </summary>
     public IReadOnlyList<StatusLine> Status
     {
         get
         {
             List<StatusLine> lines;
+            ModuleSession? layer = null;
             ModuleSession? session = null;
             lock (gate)
             {
@@ -166,15 +167,14 @@ public sealed class SessionController(SessionDeps deps)
                         lines.Add(standIn);
                     }
 
+                    layer = run.Layer;
                     session = run.Session;
                 }
             }
 
-            // The module's own lines are read outside the lock: that is the module's code.
-            if (session is not null)
-            {
-                lines.AddRange(session.Status);
-            }
+            // The layer's and the module's own lines are read outside the lock: that is their code.
+            lines.AddRange(layer?.Status ?? []);
+            lines.AddRange(session?.Status ?? []);
 
             return lines;
         }
@@ -498,7 +498,7 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>
-    /// Runs a headset module's own work while Monado is stopped, such as the Dream Air's display check, the way recovery
+    /// Runs work on the headset while Monado is stopped, such as the direct-mode layer's display check, the way recovery
     /// runs: a Start (from any caller) waits until it is done, and what the work saves through its first argument goes
     /// into <c>session.json</c> at once (an empty set deletes the file), so that recovery undoes the work's steps if
     /// Mirador goes away meanwhile. A session left behind earlier is undone first. Works run one after another.
@@ -742,6 +742,13 @@ public sealed class SessionController(SessionDeps deps)
             return Fail($"This profile uses a headset Mirador doesn't know ({moduleId}).");
         }
 
+        var directModeKind = profile.DirectModeWith(module);
+        IDirectMode? directMode = null;
+        if (directModeKind != DirectModeKind.None && (directMode = deps.DirectModes?.GetValueOrDefault(directModeKind)) is null)
+        {
+            return Fail($"This profile uses a direct-mode layer Mirador doesn't know ({directModeKind}).");
+        }
+
         var install = deps.Locator.Locate(profile);
         if (run.GameStandIn is { } gameStandIn && !StandIn.BelongsTo(gameStandIn, install))
         {
@@ -770,6 +777,13 @@ public sealed class SessionController(SessionDeps deps)
         if (usesLighthouse && LighthouseConflicts.Find(running) is { Count: > 0 } conflicts)
         {
             return Fail(LighthouseConflicts.Message(conflicts));
+        }
+
+        // The layer's refusals come before any step: the module's would stop the headset's own software first.
+        if (directMode is not null
+            && (await directMode.CheckAsync(deps.Context, ct).ConfigureAwait(false)).FirstOrDefault(c => c.Level == StatusLevel.Error) is { } failed)
+        {
+            return Fail(failed.Fix is null ? failed.Text : $"{failed.Text} {failed.Fix}");
         }
 
         // A headset that isn't plugged in skips the hook, whatever started the session; the steps below go on as before.
@@ -801,7 +815,15 @@ public sealed class SessionController(SessionDeps deps)
                 recovery.Close();
             }
 
-            Attach(run, session);
+            Attach(run, session, layer: false);
+            ShowProgress(run, null);
+            ct.ThrowIfCancellationRequested();
+        }
+
+        if (directMode is not null)
+        {
+            var layer = await directMode.BeforeStartAsync(deps.Context, new Reporter(text => ShowProgress(run, text)), ct).ConfigureAwait(false);
+            Attach(run, layer, layer: true);
             ShowProgress(run, null);
             ct.ThrowIfCancellationRequested();
         }
@@ -809,13 +831,7 @@ public sealed class SessionController(SessionDeps deps)
         sessionFile.Write(profile.Id, module?.Id, run.Session?.RecoveryData ?? Nothing);
         run.WroteSessionFile = true;
 
-        var moduleEnvironment = run.Session?.Environment ?? [];
-        if (module?.UsesNvidiaDirectMode == true)
-        {
-            // The layer, turned on by the core for a headset that uses NVIDIA direct mode (Mirador.md §4.11 item 52);
-            // the module's own variables come after it.
-            moduleEnvironment = [.. DirectModeLayer.Environment(deps.BundledLayerDir ?? ""), .. moduleEnvironment];
-        }
+        IReadOnlyList<EnvVar> moduleEnvironment = [.. run.Layer?.Environment ?? [], .. run.Session?.Environment ?? []];
 
         var controllersOff = deps.ControllersOffAtStop?.Invoke() == true;
         var environment = MonadoEnvironment.Build(deps.InheritedEnvironment, run.Settings, profile, moduleEnvironment, controllersOff);
@@ -842,7 +858,7 @@ public sealed class SessionController(SessionDeps deps)
         // helper runs it as administrator or it runs as the user.
         var serviceExe = install.Approved is { } approved ? Path.Combine(approved.ServerDir, "monado-service.exe") : install.ServiceExe;
         BackUpMonadoFolder();
-        var launcher = ChooseLauncher(install, profile, module, run.Settings);
+        var launcher = ChooseLauncher(install, profile, module, directModeKind, run.Settings);
         var process = launcher.Start(new ProcessSpec(serviceExe, "", Path.GetDirectoryName(serviceExe)!, environment));
         run.Process = process;
         Listen(run, process);
@@ -1144,6 +1160,21 @@ public sealed class SessionController(SessionDeps deps)
 
         run.Log?.Dispose();
 
+        if (run.Layer is { } layer)
+        {
+            using var limit = new CancellationTokenSource(EndLimit, deps.Context.Time);
+            try
+            {
+                await layer.EndAsync(limit.Token).WaitAsync(limit.Token).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                RaiseWarning(new SessionWarning("direct-mode", e is MiradorException ? e.Message : $"The direct-mode layer didn't end cleanly ({Trimmed(e.Message)})."));
+            }
+
+            Detach(run, layer);
+        }
+
         var keepSessionFile = false;
         if (run.Session is { } session)
         {
@@ -1170,9 +1201,7 @@ public sealed class SessionController(SessionDeps deps)
                         : $"Mirador couldn't put things back for the {run.Module!.DisplayName} ({Trimmed(e.Message)}). It tries again the next time Mirador starts."));
             }
 
-            session.StatusChanged -= run.OnModuleStatus;
-            session.Warning -= run.OnModuleWarning;
-            session.StopRequested -= run.OnModuleStopRequested;
+            Detach(run, session);
         }
 
         if (run.WroteSessionFile && !keepSessionFile)
@@ -1220,21 +1249,35 @@ public sealed class SessionController(SessionDeps deps)
         }
     }
 
-    /// <summary>Follows the module session's status and warnings until <see cref="EndRunAsync"/>.</summary>
-    private void Attach(Run run, ModuleSession session)
+    /// <summary>Follows the module's or the direct-mode layer's session, its status and warnings, until <see cref="EndRunAsync"/>.</summary>
+    private void Attach(Run run, ModuleSession session, bool layer)
     {
-        run.OnModuleStatus = RaiseStatusChanged;
-        run.OnModuleWarning = RaiseWarning;
+        run.OnModuleStatus ??= RaiseStatusChanged;
+        run.OnModuleWarning ??= RaiseWarning;
+        run.OnModuleStopRequested ??= reason => RequestStopAsync(run, reason);
         session.StatusChanged += run.OnModuleStatus;
         session.Warning += run.OnModuleWarning;
-        run.OnModuleStopRequested = reason => RequestStopAsync(run, reason);
         session.StopRequested += run.OnModuleStopRequested;
         lock (gate)
         {
-            run.Session = session;
+            if (layer)
+            {
+                run.Layer = session;
+            }
+            else
+            {
+                run.Session = session;
+            }
         }
 
         RaiseStatusChanged();
+    }
+
+    private static void Detach(Run run, ModuleSession session)
+    {
+        session.StatusChanged -= run.OnModuleStatus;
+        session.Warning -= run.OnModuleWarning;
+        session.StopRequested -= run.OnModuleStopRequested;
     }
 
     private void ShowProgress(Run run, string? text)
@@ -1289,13 +1332,16 @@ public sealed class SessionController(SessionDeps deps)
             RaiseStatusChanged();
         }
 
-        try
+        foreach (var session in new[] { run.Layer, run.Session })
         {
-            run.Session?.OnServiceLine(line);
-        }
-        catch (Exception e)
-        {
-            (failures ??= []).Add(e);
+            try
+            {
+                session?.OnServiceLine(line);
+            }
+            catch (Exception e)
+            {
+                (failures ??= []).Add(e);
+            }
         }
 
         if (failures is not null)
@@ -1424,7 +1470,8 @@ public sealed class SessionController(SessionDeps deps)
     /// since the consent (<see cref="HelperProcessLauncher"/>).
     /// Whatever the choice, the rest of the session is the same.
     /// </summary>
-    private IProcessLauncher ChooseLauncher(MonadoInstall install, Profile profile, IHeadsetModule? module, MonadoSettings settings)
+    private IProcessLauncher ChooseLauncher(
+        MonadoInstall install, Profile profile, IHeadsetModule? module, DirectModeKind directMode, MonadoSettings settings)
     {
         // install is in Mirador's admin-only folder exactly when the profile runs Mirador's (or the bundled) Monado
         // (MonadoLocator). A branch or build folder runs elevated only as its approved copy, which the helper checks.
@@ -1452,7 +1499,8 @@ public sealed class SessionController(SessionDeps deps)
             ElevationFix: deps.ElevationFixVerified?.Invoke(profile, install) == true,
             StandbyOnExit: deps.ControllersOffAtStop?.Invoke() == true,
             ProfileId: profile.Id,
-            Variables: profile.ExtraEnvironment.Count > 0 ? Elevation.ElevatedChoice.Variables(profile) : null);
+            Variables: profile.ExtraEnvironment.Count > 0 ? Elevation.ElevatedChoice.Variables(profile) : null,
+            DirectMode: directMode == DirectModeKind.Nvidia ? DirectModeEnvironment.Nvidia : "");
         return deps.ElevatedLauncher!(start);
     }
 
@@ -1702,6 +1750,9 @@ public sealed class SessionController(SessionDeps deps)
         public StatusLine? StandIn { get; set; }
 
         public ModuleSession? Session { get; set; }
+
+        /// <summary>The direct-mode layer's session, when the profile uses one.</summary>
+        public ModuleSession? Layer { get; set; }
 
         // Set while starting and read when the session ends, which comes after.
         public MonadoSettings Settings { get; set; } = new();

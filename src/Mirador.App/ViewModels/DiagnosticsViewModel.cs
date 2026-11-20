@@ -6,17 +6,16 @@ using Microsoft.UI.Dispatching;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.Build;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Diagnostics;
+using Mirador.Core.Modules;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
-using Mirador.Pimax;
 
 namespace Mirador.App.ViewModels;
 
 /// <summary>
-/// Diagnostics: Monado's and Mirador's logs as they grow, the versions, the display check for a Dream Air, and the
+/// Diagnostics: Monado's and Mirador's logs as they grow, the versions, the display check for a direct-mode layer, and the
 /// zip to send with a problem. The page is kept while Mirador runs, so a check under way survives leaving it.
 /// </summary>
 public sealed partial class DiagnosticsViewModel : ObservableObject
@@ -56,7 +55,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     public partial bool CanCheckDisplay { get; set; }
 
     [ObservableProperty]
-    public partial bool IsDreamAir { get; set; }
+    public partial bool UsesDirectMode { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCheckResult))]
@@ -161,7 +160,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRunCheck))]
     private async Task CheckDisplayAsync()
     {
-        if (Profile() is not { } profile || host.Modules.GetValueOrDefault(PimaxModule.ModuleId) is not PimaxModule module)
+        if (Profile() is not { } profile)
         {
             return;
         }
@@ -170,15 +169,9 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         CheckResult = null;
         try
         {
-            // Through the session: a Start waits for the check.
-            var check = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (_, ct) => module.CheckDisplayAsync(host.Context, profile, ct), CancellationToken.None);
-            CheckPassed = check.Pass;
-            CheckResult = check.Pass
-                ? (check.Message == "Direct mode works." ? check.Message : $"Direct mode works: {Sentence(check.Message)}")
-                : check.Finished
-                    ? $"Direct mode doesn't work: {Sentence(check.Message)}{(check.WhatToDo is null ? "" : " What to do: " + Sentence(check.WhatToDo))}"
-                    : Sentence(check.Message);
+            var check = await host.WithDisplayFreeAsync(profile, (directMode, ct) => directMode.CheckDisplayAsync(host.Context, ct));
+            CheckPassed = check.Level == StatusLevel.Ok;
+            CheckResult = check.Text;
         }
         catch (MiradorException e)
         {
@@ -195,13 +188,13 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     private bool CanRunCheck() => CanCheckDisplay && !IsBusy;
 
     /// <summary>
-    /// "Fix direct mode": Pimax's software is stopped and the display check turns direct mode on, while Monado is
-    /// stopped. Then the monitors are looked at again: the headset must be gone from the desktop.
+    /// "Fix direct mode": the headset's module frees its display and the direct-mode layer turns direct mode on, while
+    /// Monado is stopped.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanRunCheck))]
     private async Task FixDirectModeAsync()
     {
-        if (host.Modules.GetValueOrDefault(PimaxModule.ModuleId) is not PimaxModule module)
+        if (Profile() is not { } profile)
         {
             return;
         }
@@ -210,11 +203,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         CheckResult = null;
         try
         {
-            var problem = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (_, ct) => module.FixDirectModeAsync(host.Context, ct), CancellationToken.None);
-            problem ??= await Task.Run(() => HeadsetMonitor.HeadsetOnDesktop(HeadsetMonitor.List()))
-                ? "Direct mode was turned on, but the headset still shows as a monitor. Unplug and plug in the headset's DisplayPort cable, then try again."
-                : null;
+            var problem = await host.WithDisplayFreeAsync(profile, (directMode, ct) => directMode.FixAsync(host.Context, ct));
             CheckPassed = problem is null;
             CheckResult = problem is null ? "Direct mode is on for the headset." : Sentence(problem);
             host.NotifyDevicesChanged(); // Home looks at its checks again
@@ -249,11 +238,11 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         Message = null;
         try
         {
-            var module = profile.ModuleId is { } id ? host.Modules.GetValueOrDefault(id) : null;
+            var (module, directMode) = host.PartsOf(profile);
             var versions = AppInfo.Versions(profile, host.AppDir);
             var environment = host.Session.LastMiradorEnvironment;
             var openVr = new OpenVrFiles(OpenVrPaths.DefaultFile, OpenCompositeInstall.LogFile);
-            await Task.Run(() => DiagnosticsZip.Collect(host.Paths, profile, environment, versions, module, host.Context, openVr).Save(path));
+            await Task.Run(() => DiagnosticsZip.Collect(host.Paths, profile, environment, versions, module, host.Context, openVr, directMode).Save(path));
             Saved = $"Saved {path}.";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -309,9 +298,8 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     private void Refresh()
     {
         var profile = Profile();
-        // The display check is the Pimax module's: it stops Pimax's software around it.
-        IsDreamAir = profile?.ModuleId == PimaxModule.ModuleId;
-        CanCheckDisplay = IsDreamAir && host.Session.State == SessionState.Stopped;
+        UsesDirectMode = profile is not null && host.PartsOf(profile).DirectMode is not null;
+        CanCheckDisplay = UsesDirectMode && host.Session.State == SessionState.Stopped;
         Versions = profile is null ? $"Mirador {AppInfo.Version}" : AppInfo.Versions(profile, host.AppDir).TrimEnd();
         RefreshVerify();
     }

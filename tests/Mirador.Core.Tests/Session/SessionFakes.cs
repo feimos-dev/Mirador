@@ -1,4 +1,3 @@
-using Mirador.Core.DirectMode;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Time.Testing;
 using Mirador.Core.Modules;
@@ -447,6 +446,52 @@ internal sealed class FakeModuleSession(
     public void RequestStop(string reason) => RaiseStopRequested(reason);
 }
 
+/// <summary>A direct-mode layer that writes down its steps; its session sets <c>FAKE_LAYER=1</c> and shows a display line.</summary>
+internal sealed class FakeDirectMode(Steps steps) : IDirectMode
+{
+    public DirectModeKind Kind => DirectModeKind.Nvidia;
+
+    public string DisplayName => "Fake layer";
+
+    /// <summary>What CheckAsync finds.</summary>
+    public List<CheckResult> Checks { get; } = [];
+
+    /// <summary>When set, BeforeStart throws it.</summary>
+    public Exception? Refusal { get; set; }
+
+    public Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, CancellationToken ct)
+    {
+        steps.Add("layer-checks");
+        return Task.FromResult<IReadOnlyList<CheckResult>>([.. Checks]);
+    }
+
+    public Task<ModuleSession> BeforeStartAsync(ModuleContext ctx, IProgress<string> progress, CancellationToken ct)
+    {
+        steps.Add("layer-before-start");
+        return Refusal is null ? Task.FromResult<ModuleSession>(new FakeLayerSession()) : Task.FromException<ModuleSession>(Refusal);
+    }
+
+    public Task<CheckResult> CheckDisplayAsync(ModuleContext ctx, CancellationToken ct) =>
+        Task.FromResult(new CheckResult("Display check", StatusLevel.Ok, "Direct mode works."));
+
+    public Task<string?> FixAsync(ModuleContext ctx, CancellationToken ct) => Task.FromResult<string?>(null);
+
+    public void AddDiagnostics(ModuleContext ctx, IDiagnosticsSink sink)
+    {
+    }
+
+    private sealed class FakeLayerSession : ModuleSession
+    {
+        public override IReadOnlyList<EnvVar> Environment { get; } = [new("FAKE_LAYER", "1")];
+
+        public override IReadOnlyDictionary<string, string> RecoveryData { get; } = new Dictionary<string, string>();
+
+        public override IReadOnlyList<StatusLine> Status => [new("display", "Display", StatusLevel.Info, "Waiting for the display")];
+
+        public override Task EndAsync(CancellationToken ct) => Task.CompletedTask;
+    }
+}
+
 internal sealed class FakeModule(Steps steps) : IHeadsetModule
 {
     private int beforeStartCalls;
@@ -457,7 +502,7 @@ internal sealed class FakeModule(Steps steps) : IHeadsetModule
 
     public bool UsesSteamVrLighthouse { get; set; }
 
-    public bool UsesNvidiaDirectMode { get; set; }
+    public DirectModeKind DefaultDirectMode { get; set; }
 
     public string? ElevatedModuleId { get; set; } = "fake";
 
@@ -657,11 +702,6 @@ internal sealed class Harness : IAsyncDisposable
         BundledServer = Touch(bundledRoot, version, "bin", "monado-service.exe");
         MiradorMonado.Write(bundledRoot, new MiradorMonadoVersions(version, null));
 
-        BundledLayer = Path.Combine(Root, "Mirador App", "layer");
-        Touch(BundledLayer, DirectModeLayer.ManifestName);
-        Touch(BundledLayer, DirectModeLayer.DllName);
-        Touch(BundledLayer, DirectModeLayer.CheckExeName);
-
         StandInExe = Path.Combine(Root, "Mirador App", "standin", "mirador-standin.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(StandInExe)!);
         File.WriteAllBytes(StandInExe, [0x4D, 0x5A, 1, 2, 3]);
@@ -669,6 +709,7 @@ internal sealed class Harness : IAsyncDisposable
         Timers = new TimerWatch(Time);
         Processes = new FakeProcessList(Steps);
         Module = new FakeModule(Steps);
+        DirectMode = new FakeDirectMode(Steps);
         Launcher = new FakeLauncher(Steps, Paths.SessionFile);
         Pipe = new FakePipe(Steps);
         Libmonado = new FakeLibmonado(Steps);
@@ -698,7 +739,7 @@ internal sealed class Harness : IAsyncDisposable
                     return Launcher;
                 },
                 ElevatedInstalledCopy: installedCopy is { } installed ? () => installed : null,
-                BundledLayerDir: BundledLayer,
+                DirectModes: new Dictionary<DirectModeKind, IDirectMode> { [DirectMode.Kind] = DirectMode },
                 ElevationFixVerified: elevationFix,
                 VariablesApproved: variablesApproved,
                 ControllersOffAtStop: () => controllersOffAtStop,
@@ -750,8 +791,6 @@ internal sealed class Harness : IAsyncDisposable
 
     public string StandInExe { get; }
 
-    /// <summary>The direct-mode layer that "comes with Mirador" here.</summary>
-    public string BundledLayer { get; }
 
     public Steps Steps { get; } = new();
 
@@ -763,6 +802,8 @@ internal sealed class Harness : IAsyncDisposable
     public FakeProcessList Processes { get; }
 
     public FakeModule Module { get; }
+
+    public FakeDirectMode DirectMode { get; }
 
     public FakeLauncher Launcher { get; }
 

@@ -3,7 +3,6 @@ using Microsoft.Win32;
 using Mirador.Core;
 using Mirador.Core.BaseStations;
 using Mirador.Core.Build;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
@@ -15,6 +14,7 @@ using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
+using Mirador.DirectMode;
 using Mirador.Pimax;
 using Mirador.Ipc;
 
@@ -84,17 +84,20 @@ public sealed class AppHost : IAsyncDisposable
 
         var dreamAir = new PimaxModule(new PimaxDeps(
             new WindowsRegistryReader(),
-            ConsoleProcess.Start,
             new GeometryUploader(ConsoleProcess.Start, Usb, Processes, paths, TimeProvider.System),
             DreamAirState,
-            Path.Combine(appDir, "layer"),
-            NvidiaDriver.CurrentWindowsVersion,
             DreamAirChecks.FindSteamVr,
             state => BlobChoice.Resolve(state, null).Variant,
-            () => Usb.Present(),
+            () => Usb.Present()));
+        Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
+        var nvidia = new NvidiaDirectMode(new NvidiaDirectModeDeps(
+            Path.Combine(appDir, "layer"),
+            ConsoleProcess.Start,
+            new DirectModeStateStore(paths.DirectModeFile),
+            NvidiaDriver.CurrentWindowsVersion,
             HeadsetMonitor.List,
             () => Session!.State != SessionState.Stopped));
-        Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
+        DirectModes = new Dictionary<DirectModeKind, IDirectMode> { [nvidia.Kind] = nvidia };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
         OpenVr = new OpenVrGames(new OpenVrPaths(OpenVrPaths.DefaultFile, OpenComposite.Folder), OpenComposite);
         OpenVrWatch = new FolderWatch(
@@ -131,7 +134,7 @@ public sealed class AppHost : IAsyncDisposable
                 SteamVrChecked = OnSteamVrChecked,
             },
             ElevatedInstalledCopy: () => IsInstalledCopy(askHelper: true),
-            BundledLayerDir: Path.Combine(appDir, "layer"),
+            DirectModes: DirectModes,
             ElevationFixVerified: ElevationFixVerified,
             ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
             FolderBackups: FolderBackups,
@@ -478,6 +481,43 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     public IReadOnlyDictionary<string, IHeadsetModule> Modules { get; }
+
+    /// <summary>The direct-mode layers, by kind.</summary>
+    public IReadOnlyDictionary<DirectModeKind, IDirectMode> DirectModes { get; }
+
+    /// <summary>The headset module and the direct-mode layer <paramref name="profile"/> uses; null for none.</summary>
+    public (IHeadsetModule? Module, IDirectMode? DirectMode) PartsOf(Profile profile)
+    {
+        var module = profile.ModuleId is { } id ? Modules.GetValueOrDefault(id) : null;
+        return (module, DirectModes.GetValueOrDefault(profile.DirectModeWith(module)));
+    }
+
+    /// <summary>
+    /// Runs a direct-mode check or fix for <paramref name="profile"/> while Monado is stopped (a Start waits for it),
+    /// once the profile's headset module has freed the headset's display.
+    /// </summary>
+    /// <exception cref="MiradorException">Monado isn't stopped, the profile uses no direct-mode layer, or the display couldn't be freed.</exception>
+    public Task<T> WithDisplayFreeAsync<T>(Profile profile, Func<IDirectMode, CancellationToken, Task<T>> work)
+    {
+        var (module, directMode) = PartsOf(profile);
+        if (directMode is null)
+        {
+            throw new MiradorException("This profile uses no direct-mode layer.");
+        }
+
+        return Session.RunWhileStoppedAsync(
+            module?.Id ?? "",
+            async (_, ct) =>
+            {
+                if (module is not null)
+                {
+                    await module.FreeDisplayAsync(Context, ct).ConfigureAwait(false);
+                }
+
+                return await work(directMode, ct).ConfigureAwait(false);
+            },
+            CancellationToken.None);
+    }
 
     public SessionController Session { get; }
 

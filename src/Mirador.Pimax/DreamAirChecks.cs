@@ -1,22 +1,20 @@
 using Mirador.Core;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Modules;
 using Mirador.Ipc;
 
 namespace Mirador.Pimax;
 
 /// <summary>
-/// What the Dream Air needs on this PC, checked before each Start and for the first-run checks and Home: an NVIDIA
-/// GPU, Pimax Play's eye tracking runtime and eye geometry, SteamVR's Lighthouse driver and the headset itself. Each
+/// What the Dream Air needs on this PC, checked before each Start and for the first-run checks and Home: Pimax Play's
+/// eye tracking runtime and eye geometry, SteamVR's Lighthouse driver and the headset itself. Each
 /// run looks again, so a moved or missing file after an update is found (Mirador.md §4.4 item 12).
 /// </summary>
 /// <param name="reg">The registry, to find Pimax Play.</param>
 /// <param name="usb">The USB devices, to find the headset's parts.</param>
 /// <param name="fileExists">Whether a file is there.</param>
-/// <param name="nvidiaWindowsVersion">The NVIDIA driver's Windows version, or null without an NVIDIA GPU (<see cref="NvidiaDriver.CurrentWindowsVersion"/>).</param>
 /// <param name="steamVrDir">SteamVR's folder, or null when it isn't installed (<see cref="FindSteamVr"/>).</param>
 public sealed class DreamAirChecks(
-    IRegistryReader reg, IUsbDevices usb, Func<string, bool> fileExists, Func<string?> nvidiaWindowsVersion, Func<string?> steamVrDir)
+    IRegistryReader reg, IUsbDevices usb, Func<string, bool> fileExists, Func<string?> steamVrDir)
 {
     private const string InstallPimax = "Install Pimax Play: Mirador uses its eye tracking runtime.";
     private const string RepairPimax = "Repair or update Pimax Play.";
@@ -30,9 +28,9 @@ public sealed class DreamAirChecks(
     ];
 
     /// <summary>
-    /// Runs every check, in this order: NVIDIA GPU, Pimax Play, Eye geometry, SteamVR, Headset. A missing headset is a
-    /// warning; everything else that fails is an error, which stops a Start. Never throws for a check that fails. Blocks
-    /// while Windows lists the graphics cards and USB devices (up to 5 s each), so call it off the UI thread.
+    /// Runs every check, in this order: Pimax Play, Eye geometry, SteamVR, Headset. A missing headset is a warning;
+    /// everything else that fails is an error, which stops a Start. Never throws for a check that fails. Blocks while
+    /// Windows lists the USB devices (up to 5 s), so call it off the UI thread.
     /// </summary>
     /// <param name="blobVariant">The eye geometry variant to look for, one of <see cref="EyeBlobVariants.All"/>; any other is an error.</param>
     public IReadOnlyList<CheckResult> Run(string blobVariant) => Run(blobVariant, PimaxModels.DreamAir);
@@ -41,7 +39,7 @@ public sealed class DreamAirChecks(
     public IReadOnlyList<CheckResult> Run(string blobVariant, PimaxModel model)
     {
         var pimax = PimaxInstall.Locate(reg);
-        List<CheckResult> results = [Nvidia(), PimaxPlay(pimax, model.EyeSteps)];
+        List<CheckResult> results = [PimaxPlay(pimax, model.EyeSteps)];
         if (model.EyeSteps)
         {
             results.Add(EyeGeometry(pimax, blobVariant));
@@ -92,21 +90,6 @@ public sealed class DreamAirChecks(
             {
                 return null;
             }
-        }
-    }
-
-    private CheckResult Nvidia()
-    {
-        const string Label = "NVIDIA GPU";
-        try
-        {
-            return nvidiaWindowsVersion() is { } windows
-                ? new(Label, StatusLevel.Ok, $"Driver {NvidiaDriver.FromWindowsVersion(windows) ?? windows}")
-                : new(Label, StatusLevel.Error, "No NVIDIA GPU found.", "A Pimax headset's direct mode needs an NVIDIA GPU.");
-        }
-        catch (MiradorException e)
-        {
-            return new(Label, StatusLevel.Error, e.Message);
         }
     }
 

@@ -164,34 +164,47 @@ public class SessionControllerTests
     }
 
     [Fact]
-    public async Task A_direct_mode_headset_gets_the_layer_turned_on_by_the_session()
+    public async Task A_direct_mode_headset_gets_its_layer_from_the_session()
     {
         await using var h = new Harness();
-        h.Module.UsesNvidiaDirectMode = true;
+        h.Module.DefaultDirectMode = DirectModeKind.Nvidia;
 
         var outcome = await h.StartRunningAsync();
 
         Assert.True(outcome.Ok, outcome.Message);
         var env = h.Launcher.Spec.Environment;
-        Assert.Equal("1", env["MIRADOR_DIRECT_MODE"]);
-        Assert.Equal("VK_LAYER_MIRADOR_direct_mode", env["VK_LOADER_LAYERS_ALLOW"]);
+        Assert.Equal("1", env["FAKE_LAYER"]);
         Assert.Equal("1", env["FAKE_HEADSET"]);
-        Assert.False(env.ContainsKey("VK_ADD_IMPLICIT_LAYER_PATH"));
+        Assert.Equal(
+            ["layer-checks", "before-start", "layer-before-start"],
+            h.Steps.All.Where(s => s is "layer-checks" or "before-start" or "layer-before-start"));
+        Assert.Equal(["monado", "apps", "display", "fake"], h.Controller.Status.Select(l => l.Key));
     }
 
     [Fact]
-    public async Task A_layer_folder_left_in_a_profile_is_ignored_for_the_layer_that_comes_with_mirador()
+    public async Task A_profile_without_a_headset_type_can_use_a_direct_mode_layer()
     {
         await using var h = new Harness();
-        h.Module.UsesNvidiaDirectMode = true;
-        h.UseProfile(Harness.DreamAir with { ModuleOptions = new Dictionary<string, string> { ["layerFolder"] = @"C:\gone\layer-build" } });
+        h.UseProfile(Harness.DreamAir with { ModuleId = null, DirectMode = DirectModeKind.Nvidia });
 
         var outcome = await h.StartRunningAsync();
 
         Assert.True(outcome.Ok, outcome.Message);
-        var env = h.Launcher.Spec.Environment;
-        Assert.Equal("1", env["MIRADOR_DIRECT_MODE"]);
-        Assert.False(env.ContainsKey("VK_ADD_IMPLICIT_LAYER_PATH"));
+        Assert.Equal("1", h.Launcher.Spec.Environment["FAKE_LAYER"]);
+    }
+
+    [Fact]
+    public async Task A_profile_can_turn_its_headsets_layer_off()
+    {
+        await using var h = new Harness();
+        h.Module.DefaultDirectMode = DirectModeKind.Nvidia;
+        h.UseProfile(Harness.DreamAir with { DirectMode = DirectModeKind.None });
+
+        var outcome = await h.StartRunningAsync();
+
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.False(h.Launcher.Spec.Environment.ContainsKey("FAKE_LAYER"));
+        Assert.DoesNotContain("layer-checks", h.Steps.All);
     }
 
     [Fact]
@@ -201,20 +214,34 @@ public class SessionControllerTests
 
         await h.StartRunningAsync();
 
-        Assert.False(h.Launcher.Spec.Environment.ContainsKey("MIRADOR_DIRECT_MODE"));
+        Assert.False(h.Launcher.Spec.Environment.ContainsKey("FAKE_LAYER"));
     }
 
     [Fact]
-    public async Task A_missing_layer_fails_the_start_before_monado_launches()
+    public async Task A_layer_check_error_refuses_before_the_headsets_steps()
     {
         await using var h = new Harness();
-        h.Module.UsesNvidiaDirectMode = true;
-        Directory.Delete(h.BundledLayer, recursive: true);
+        h.Module.DefaultDirectMode = DirectModeKind.Nvidia;
+        h.DirectMode.Checks.Add(new CheckResult("NVIDIA GPU", StatusLevel.Error, "No NVIDIA GPU found.", "Set the profile's direct-mode layer to None."));
 
         var outcome = await Start(h).WaitAsync(Harness.Limit);
 
-        Assert.False(outcome.Ok);
-        Assert.Contains("direct-mode layer", outcome.Message);
+        Assert.Equal(new StartOutcome(false, "No NVIDIA GPU found. Set the profile's direct-mode layer to None."), outcome);
+        Assert.Equal(0, h.Module.BeforeStartCalls);
+        Assert.Equal(0, h.Launcher.Starts);
+    }
+
+    [Fact]
+    public async Task A_layer_that_refuses_after_the_headsets_steps_ends_the_headsets_session()
+    {
+        await using var h = new Harness();
+        h.Module.DefaultDirectMode = DirectModeKind.Nvidia;
+        h.DirectMode.Refusal = new MiradorException("Direct mode didn't pass its check.");
+
+        var outcome = await Start(h).WaitAsync(Harness.Limit);
+
+        Assert.Equal(new StartOutcome(false, "Direct mode didn't pass its check."), outcome);
+        Assert.Equal(1, h.Module.Session!.Ends);
         Assert.Equal(0, h.Launcher.Starts);
         Assert.Equal(SessionState.Stopped, h.Controller.State);
     }
