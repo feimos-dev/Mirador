@@ -491,24 +491,6 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Whether the selected profile's headset gets Mirador's eye steps (the Pimax module, with a Dream Air plugged in or
-    /// no Pimax at all); false when the profiles can't be read.
-    /// </summary>
-    public bool SelectedIsDreamAir()
-    {
-        try
-        {
-            return Profiles.Load().Selected.ModuleId == PimaxModule.ModuleId
-                && Modules.GetValueOrDefault(PimaxModule.ModuleId) is PimaxModule pimax
-                && pimax.Model().EyeSteps;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     public IReadOnlyDictionary<string, IHeadsetModule> Modules { get; }
 
     /// <summary>The direct-mode layers, by kind.</summary>

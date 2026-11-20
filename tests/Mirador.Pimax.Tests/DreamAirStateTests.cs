@@ -7,7 +7,7 @@ public class DreamAirStateTests
     {
         using var dir = new TempDir();
         var store = new DreamAirStateStore(Path.Combine(dir.Path, "dreamair.json"));
-        var state = new DreamAirState("K11_RAWH", "pimax", "XR5DA-1");
+        var state = new DreamAirState("K11_RAWH", "XR5DA-1");
 
         store.Save(state);
 

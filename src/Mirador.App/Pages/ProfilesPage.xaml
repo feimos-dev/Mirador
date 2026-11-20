@@ -243,6 +243,12 @@
                         ItemsSource="{x:Bind ViewModel.DirectModes}"
                         SelectedItem="{x:Bind ViewModel.DirectMode, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
                 </toolkit:SettingsCard>
+                <toolkit:SettingsCard Header="Eye tracker variant" Visibility="{x:Bind ViewModel.ShowsEyeVariant, Mode=OneWay}">
+                    <ComboBox
+                        MinWidth="200"
+                        ItemsSource="{x:Bind ViewModel.EyeVariants}"
+                        SelectedItem="{x:Bind ViewModel.EyeVariant, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
+                </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Lighthouse" />
                 <toolkit:SettingsCard Header="Lighthouse base stations">

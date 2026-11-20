@@ -5,11 +5,9 @@ namespace Mirador.Pimax;
 
 /// <summary>What Mirador remembers about the Dream Air between runs, in <c>dreamair.json</c>.</summary>
 /// <param name="BlobVariant">The eye geometry variant this headset needs, once known.</param>
-/// <param name="BlobSource">Where <paramref name="BlobVariant"/> came from: <c>pimax</c> or <c>owner</c>.</param>
 /// <param name="BlobTrackerSerial">The eye tracker the variant belongs to.</param>
 public sealed record DreamAirState(
     string? BlobVariant = null,
-    string? BlobSource = null,
     string? BlobTrackerSerial = null);
 
 /// <summary>Keeps the <see cref="DreamAirState"/> in one JSON file. Safe to use from several threads.</summary>
@@ -27,7 +25,7 @@ public sealed class DreamAirStateStore(string path)
         {
             var state = JsonFile.Load(path, DreamAirJsonContext.Default.DreamAirState) ?? new DreamAirState();
             return state.BlobVariant is { } variant && !EyeBlobVariants.All.Contains(variant)
-                ? state with { BlobVariant = null, BlobSource = null }
+                ? state with { BlobVariant = null }
                 : state;
         }
     }

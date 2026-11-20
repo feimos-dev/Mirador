@@ -24,6 +24,12 @@ public sealed record DirectModeItem(DirectModeKind Kind, string Name)
     public override string ToString() => Name;
 }
 
+/// <summary>An eye tracker variant choice in the profile editor; a null id is Automatic.</summary>
+public sealed record EyeVariantItem(string? Id, string Name)
+{
+    public override string ToString() => Name;
+}
+
 /// <summary>One extra environment variable in the editor.</summary>
 public sealed partial class EnvRow : ObservableObject
 {
@@ -59,6 +65,13 @@ public sealed partial class ProfilesViewModel : ObservableObject
         foreach (var module in host.Modules.Values)
         {
             Headsets.Insert(Headsets.Count - 1, new HeadsetItem(module.Id, module.DisplayName));
+        }
+
+        EyeVariants.Add(new EyeVariantItem(null, "Automatic"));
+        EyeVariants.Add(new EyeVariantItem(EyeVariantChoice.None, "None"));
+        foreach (var variant in EyeBlobVariants.All)
+        {
+            EyeVariants.Add(new EyeVariantItem(variant, variant));
         }
 
         DirectModes.Add(new DirectModeItem(DirectModeKind.None, "None"));
@@ -118,6 +131,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public ObservableCollection<DirectModeItem> DirectModes { get; } = [];
 
+    public ObservableCollection<EyeVariantItem> EyeVariants { get; } = [];
+
     public ObservableCollection<EnvRow> Extra { get; } = [];
 
     public ObservableCollection<string> Problems { get; } = [];
@@ -130,7 +145,14 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public partial string Name { get; set; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsEyeVariant))]
     public partial HeadsetItem? Headset { get; set; }
+
+    [ObservableProperty]
+    public partial EyeVariantItem? EyeVariant { get; set; }
+
+    /// <summary>Whether the eye tracker variant card shows: for the Pimax headset type.</summary>
+    public bool ShowsEyeVariant => Headset?.Id == PimaxModule.ModuleId;
 
     [ObservableProperty]
     public partial DirectModeItem? DirectMode { get; set; }
@@ -591,6 +613,22 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnDirectModeChanged(DirectModeItem? value) => Changed();
 
+    partial void OnEyeVariantChanged(EyeVariantItem? value) => Changed();
+
+    /// <summary>"Automatic", with the variant Mirador knows for the tracker when it knows one.</summary>
+    private string AutomaticVariantName()
+    {
+        try
+        {
+            var decision = BlobChoice.Resolve(host.DreamAirState.Load(), null);
+            return decision.NeedsOwner ? "Automatic" : $"Automatic ({decision.Variant})";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "Automatic";
+        }
+    }
+
     private DirectModeKind DefaultDirectMode(HeadsetItem? headset) =>
         headset?.Id is { } id && host.Modules.TryGetValue(id, out var module) ? module.DefaultDirectMode : DirectModeKind.None;
 
@@ -827,6 +865,13 @@ public sealed partial class ProfilesViewModel : ObservableObject
             Name = p?.Name ?? "";
             Headset = Headsets.FirstOrDefault(h => h.Id == p?.ModuleId) ?? Headsets[^1];
             DirectMode = ItemFor(p?.DirectMode ?? DefaultDirectMode(Headset));
+            if (AutomaticVariantName() is var automatic && EyeVariants[0].Name != automatic)
+            {
+                EyeVariants[0] = new EyeVariantItem(null, automatic);
+            }
+
+            var eyeVariant = p is null ? null : EyeVariantChoice.Of(p);
+            EyeVariant = EyeVariants.First(v => v.Id == eyeVariant);
             MonadoSource = p?.Monado switch
             {
                 { Kind: SourceKind.Folder } => FolderSource,
@@ -867,12 +912,16 @@ public sealed partial class ProfilesViewModel : ObservableObject
         OnPropertyChanged(nameof(UsesBaseStations));
     }
 
-    /// <summary>The profile as the editor shows it; the module's options, which the editor doesn't show, are kept.</summary>
+    /// <summary>The profile as the editor shows it; the module options the editor doesn't show are kept.</summary>
     private Profile Edited()
     {
-        var options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
+        IReadOnlyDictionary<string, string> options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
+        if (ShowsEyeVariant)
+        {
+            options = EyeVariantChoice.With(options, EyeVariant?.Id);
+        }
 
-        // Left unset while it is the headset type's default, so that it follows the type as a new profile's does.
+        // Left unset while it is the headset type's default.
         var directMode = DirectMode?.Kind ?? DirectModeKind.None;
         return new Profile(
             editing?.Id ?? "",

@@ -5,15 +5,15 @@ public class BlobChoiceTests
     [Fact]
     public void Detected_wins_and_is_remembered()
     {
-        var d = BlobChoice.Resolve(new DreamAirState(BlobVariant: "K10_RAWH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-0"), "K11_RAYH");
+        var d = BlobChoice.Resolve(new DreamAirState(BlobVariant: "K10_RAWH", BlobTrackerSerial: "XR5DA-0"), "K11_RAYH");
 
-        Assert.Equal(new BlobDecision("K11_RAYH", false, new DreamAirState(BlobVariant: "K11_RAYH", BlobSource: "pimax")), d);
+        Assert.Equal(new BlobDecision("K11_RAYH", false, new DreamAirState(BlobVariant: "K11_RAYH")), d);
     }
 
     [Fact]
     public void Without_pimax_the_remembered_one()
     {
-        var s = new DreamAirState(BlobVariant: "K10_RAWH", BlobSource: "owner");
+        var s = new DreamAirState(BlobVariant: "K10_RAWH");
 
         Assert.Equal(new BlobDecision("K10_RAWH", false, s), BlobChoice.Resolve(s, null));
     }
@@ -37,36 +37,34 @@ public class BlobChoiceTests
     [Fact]
     public void The_first_serial_is_stored()
     {
-        var s = BlobChoice.AfterUpload(new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "pimax"), "XR5DA-1");
+        var s = BlobChoice.AfterUpload(new DreamAirState(BlobVariant: "K11_RAWH"), "XR5DA-1");
 
-        Assert.Equal(new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "pimax", BlobTrackerSerial: "XR5DA-1"), s);
+        Assert.Equal(new DreamAirState(BlobVariant: "K11_RAWH", BlobTrackerSerial: "XR5DA-1"), s);
     }
 
     [Fact]
     public void The_same_serial_changes_nothing()
     {
-        var s = new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "pimax", BlobTrackerSerial: "XR5DA-1");
+        var s = new DreamAirState(BlobVariant: "K11_RAWH", BlobTrackerSerial: "XR5DA-1");
 
         Assert.Same(s, BlobChoice.AfterUpload(s, "XR5DA-1"));
         Assert.Same(s, BlobChoice.AfterUpload(s, null));
     }
 
     [Fact]
-    public void A_variant_read_or_picked_for_a_new_headset_survives_its_first_upload()
+    public void A_variant_read_for_a_new_headset_survives_its_first_upload()
     {
-        var old = new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "pimax", BlobTrackerSerial: "XR5DA-A");
+        var old = new DreamAirState(BlobVariant: "K11_RAWH", BlobTrackerSerial: "XR5DA-A");
 
-        var picked = BlobChoice.AfterUpload(BlobChoice.Chosen(old, "K10_RAYH"), "XR5DA-B");
         var read = BlobChoice.AfterUpload(BlobChoice.Resolve(old, "K10_RAYH").State, "XR5DA-B");
 
-        Assert.Equal(new DreamAirState(BlobVariant: "K10_RAYH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-B"), picked);
-        Assert.Equal(new DreamAirState(BlobVariant: "K10_RAYH", BlobSource: "pimax", BlobTrackerSerial: "XR5DA-B"), read);
+        Assert.Equal(new DreamAirState(BlobVariant: "K10_RAYH", BlobTrackerSerial: "XR5DA-B"), read);
     }
 
     [Fact]
     public void A_different_serial_clears_the_remembered_variant()
     {
-        var before = new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-1");
+        var before = new DreamAirState(BlobVariant: "K11_RAWH", BlobTrackerSerial: "XR5DA-1");
 
         var after = BlobChoice.AfterUpload(before, "XR5DA-2");
 

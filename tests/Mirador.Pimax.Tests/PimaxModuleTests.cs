@@ -64,7 +64,7 @@ public sealed class PimaxModuleTests : IDisposable
         new GeometryUploader(consoles.Start, usb, processes, paths, time),
         state,
         () => { duringChecks?.Invoke(); return Path.Combine(dir.Path, "SteamVR"); },
-        _ => EyeBlobVariants.Tested,
+        _ => EyeBlobVariants.Fallback,
         () =>
         {
             usbQueries++;
@@ -305,7 +305,7 @@ public sealed class PimaxModuleTests : IDisposable
     {
         var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
 
-        Assert.Equal(["Pimax Play", "Eye geometry", "SteamVR", "Headset", "Headset variant"], results.Select(r => r.Label));
+        Assert.Equal(["Pimax Play", "Eye geometry", "SteamVR", "Headset", "Eye tracker variant"], results.Select(r => r.Label));
         Assert.All(results.SkipLast(1), r => Assert.Equal(StatusLevel.Ok, r.Level));
         Assert.Equal(StatusLevel.Warning, results[^1].Level); // nothing known about the variant yet
     }
@@ -313,12 +313,75 @@ public sealed class PimaxModuleTests : IDisposable
     [Fact]
     public async Task A_known_variant_needs_no_warning()
     {
-        state.Save(new DreamAirState(BlobVariant: "K11_RAWH", BlobSource: "owner"));
+        state.Save(new DreamAirState(BlobVariant: "K11_RAWH"));
 
         var results = await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
 
-        Assert.DoesNotContain(results, r => r.Label == "Headset variant");
+        Assert.DoesNotContain(results, r => r.Label == "Eye tracker variant");
     }
+
+    private static Profile WithVariant(string variant) =>
+        DreamAirProfile() with { ModuleOptions = new Dictionary<string, string> { [EyeVariantChoice.OptionKey] = variant } };
+
+    [Fact]
+    public async Task A_profile_with_no_eye_variant_uploads_nothing_and_needs_no_pimax_play()
+    {
+        Registry.Set(@"HKLM\SYSTEM\CurrentControlSet\Services\PiServiceLauncher", "ImagePath", "");
+        var profile = WithVariant(EyeVariantChoice.None);
+
+        var results = await Module().CheckAsync(Context, profile, CancellationToken.None);
+        using var session = (DreamAirSession)await BeforeStart(profile);
+
+        Assert.DoesNotContain(results, r => r.Label is "Eye geometry" or "Eye tracker variant");
+        Assert.DoesNotContain("upload", steps);
+        Assert.DoesNotContain(session.Status, l => l.Key == DreamAirLogParser.EyeKey);
+    }
+
+    [Fact]
+    public async Task A_profiles_own_variant_is_uploaded_without_a_warning()
+    {
+        File.WriteAllText(new PimaxInstall(Path.Combine(dir.Path, "Pimax", "Runtime"), null).BlobPath("K10_RAYH"), "blob");
+        var profile = WithVariant("K10_RAYH");
+
+        var results = await Module().CheckAsync(Context, profile, CancellationToken.None);
+        using var session = (DreamAirSession)await BeforeStart(profile);
+
+        Assert.DoesNotContain(results, r => r.Label == "Eye tracker variant");
+        Assert.Contains(consoles.Specs, spec => spec.Arguments.Contains("config_XR5PIMAXDA_K10_RAYH.bin", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_profiles_own_variant_isnt_called_a_different_headset()
+    {
+        state.Save(new DreamAirState(BlobVariant: "K10_RAYH", BlobTrackerSerial: "XR5DA-0"));
+        using var session = (DreamAirSession)await BeforeStart(WithVariant("K11_RAWH"));
+        var warnings = new List<SessionWarning>();
+        session.Warning += w => { lock (warnings) { warnings.Add(w); } };
+
+        Poll(1);
+
+        lock (warnings)
+        {
+            Assert.Empty(warnings);
+        }
+    }
+
+    [Fact]
+    public async Task A_profiles_own_variant_uploads_nothing_to_a_headset_without_an_eye_tracker()
+    {
+        Plug(PimaxModels.CrystalLight);
+
+        using var session = (DreamAirSession)await BeforeStart(WithVariant("K11_RAWH"));
+
+        Assert.DoesNotContain("upload", steps);
+    }
+
+    [Theory]
+    [InlineData("..\\evil")]
+    [InlineData("K12_RAWH")]
+    [InlineData("")]
+    public void An_eye_variant_mirador_doesnt_know_is_automatic(string value) =>
+        Assert.Null(EyeVariantChoice.Of(WithVariant(value)));
 
     [Fact]
     public async Task Checks_read_the_variant_pimax_runs_with_and_remember_it()
@@ -328,7 +391,7 @@ public sealed class PimaxModuleTests : IDisposable
 
         await Module().CheckAsync(Context, DreamAirProfile(), CancellationToken.None);
 
-        Assert.Equal(("K10_RAYH", "pimax"), (state.Load().BlobVariant, state.Load().BlobSource));
+        Assert.Equal("K10_RAYH", state.Load().BlobVariant);
     }
 
     [Fact]
@@ -342,7 +405,7 @@ public sealed class PimaxModuleTests : IDisposable
     [Fact]
     public async Task A_different_tracker_clears_the_variant_and_says_so_at_the_first_look()
     {
-        state.Save(new DreamAirState(BlobVariant: "K10_RAYH", BlobSource: "owner", BlobTrackerSerial: "XR5DA-0"));
+        state.Save(new DreamAirState(BlobVariant: "K10_RAYH", BlobTrackerSerial: "XR5DA-0"));
         using var session = (DreamAirSession)await BeforeStart();
         var warnings = new List<SessionWarning>();
         session.Warning += w => { lock (warnings) { warnings.Add(w); } };

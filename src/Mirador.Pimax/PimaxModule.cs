@@ -11,7 +11,7 @@ namespace Mirador.Pimax;
 /// <param name="Geometry">Uploads the eye geometry.</param>
 /// <param name="State">What Mirador remembers about the Dream Air.</param>
 /// <param name="SteamVrDir">SteamVR's folder (<see cref="DreamAirChecks.FindSteamVr"/>).</param>
-/// <param name="BlobVariant">The eye geometry variant to use for a state; <see cref="EyeBlobVariants.Tested"/> until Mirador can tell.</param>
+/// <param name="BlobVariant">The eye geometry variant Automatic uses for a state; <see cref="EyeBlobVariants.Fallback"/> until Mirador can tell.</param>
 /// <param name="PresentDevices">The USB devices plugged in now, to tell the Pimax model apart; null: none known (the Dream Air's steps).</param>
 public sealed record PimaxDeps(
     IRegistryReader Registry,
@@ -71,32 +71,33 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     public bool IsPresent(IReadOnlySet<UsbId> devices) =>
         PimaxModels.Detect(devices) is not null || devices.Contains(DreamAirIds.EyeTracker);
 
-    /// <summary>The checks of <see cref="DreamAirChecks"/>, and a warning while the headset's variant isn't known.</summary>
+    /// <summary>The checks of <see cref="DreamAirChecks"/>, and a warning while Automatic doesn't know the variant.</summary>
     public Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, Profile profile, CancellationToken ct) =>
         Task.Run<IReadOnlyList<CheckResult>>(
             async () =>
             {
-                var model = Remember(Present(ctx));
+                var choice = EyeVariantChoice.Of(profile);
+                var model = WithChoice(Remember(Present(ctx)), choice);
                 if (model.EyeSteps)
                 {
                     await DetectVariantAsync(ctx, ct).ConfigureAwait(false);
                 }
 
                 var state = LoadState();
-                var variant = deps.BlobVariant(state);
+                var variant = Variant(choice, state);
                 List<CheckResult> results = [.. Checks(ctx).Run(variant, model)];
                 if (!model.Tested)
                 {
                     results.Add(new CheckResult("Headset", StatusLevel.Warning, $"The {model.Name} isn't tested with Mirador."));
                 }
 
-                if (model.EyeSteps && BlobChoice.Resolve(state, null).NeedsOwner)
+                if (model.EyeSteps && choice is null && BlobChoice.Resolve(state, null).NeedsOwner)
                 {
                     results.Add(new CheckResult(
-                        "Headset variant",
+                        "Eye tracker variant",
                         StatusLevel.Warning,
-                        $"Not known yet: Mirador uploads the eye geometry of {variant}, the tested one.",
-                        "Pick yours in Eye tracking, or start Pimax Play once and Mirador reads it."));
+                        $"Not known, using {variant}.",
+                        "Open Pimax Play once, or pick it in the profile."));
                 }
 
                 return results;
@@ -119,7 +120,8 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
     {
         // The model, once for this Start, and whether its board (and receiver) are there for Monado to find.
         var devices = Present(ctx);
-        var model = Remember(devices);
+        var choice = EyeVariantChoice.Of(profile);
+        var model = WithChoice(Remember(devices), choice);
         var headsetThere = devices.Contains(model.Board) && (!model.Lighthouse || devices.Contains(DreamAirIds.Receiver));
 
         // Pimax's software still runs now: the last moment to read which geometry it uses.
@@ -129,7 +131,7 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
         }
 
         var state = LoadState();
-        var variant = deps.BlobVariant(state);
+        var variant = Variant(choice, state);
 
         // Everything that can refuse without changing the computer comes first.
         progress.Report("Checking the computer…");
@@ -158,7 +160,8 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
             progress.Report("Uploading the eye geometry…");
             upload = await deps.Geometry.UploadAsync(pimax!, variant, ct).ConfigureAwait(false);
 
-            if (RememberTracker(upload.TrackerSerial))
+            // Only Automatic uses what is remembered for the tracker.
+            if (RememberTracker(upload.TrackerSerial) && choice is null)
             {
                 warnings.Add(new SessionWarning("geometry", DifferentHeadset));
             }
@@ -176,10 +179,18 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
         var pimax = Safe(() => PimaxInstall.Locate(deps.Registry));
         text.Append("Pimax Play: ").AppendLine(pimax is null ? "not found" : $"{pimax.Version ?? "unknown version"} in {pimax.RuntimeDir}");
         text.Append("SteamVR: ").AppendLine(Safe(deps.SteamVrDir) ?? "not found");
-        text.Append("Eye geometry variant: ").AppendLine(deps.BlobVariant(LoadState()));
+        text.Append("Eye geometry variant: ").AppendLine(EyeVariantChoice.Of(profile) ?? $"automatic, {deps.BlobVariant(LoadState())}");
         sink.AddText("dreamair.txt", text.ToString());
         sink.AddFile("geometry-runtime.txt", Path.Combine(ctx.Paths.GeometryDir, "runtime.log"));
     }
+
+    /// <summary><paramref name="model"/> without its eye steps when the profile's variant is None.</summary>
+    private static PimaxModel WithChoice(PimaxModel model, string? choice) =>
+        choice == EyeVariantChoice.None ? model with { EyeSteps = false } : model;
+
+    /// <summary>The variant to upload: the profile's, or Automatic's for <paramref name="state"/>.</summary>
+    private string Variant(string? choice, DreamAirState state) =>
+        choice is { } chosen && chosen != EyeVariantChoice.None ? chosen : deps.BlobVariant(state);
 
     private static bool ServiceRuns(IReadOnlyList<ProcInfo> running) =>
         running.Any(p => string.Equals(p.Name, PimaxNames.Service, StringComparison.OrdinalIgnoreCase));
