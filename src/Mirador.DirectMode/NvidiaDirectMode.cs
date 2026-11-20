@@ -4,6 +4,7 @@ using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.Native;
 using Mirador.Core.Profiles;
+using Mirador.Ipc;
 
 namespace Mirador.DirectMode;
 
@@ -23,8 +24,8 @@ public sealed record NvidiaDirectModeDeps(
     Func<bool>? MonadoRuns = null);
 
 /// <summary>
-/// NVIDIA direct mode through Mirador's layer: checks the GPU and the layer, checks direct mode again when the driver
-/// changed, and gives Monado the layer's variables.
+/// NVIDIA direct mode through Mirador's layer: checks the GPU and the layer, has the helper register the layer, checks
+/// direct mode again when the driver changed, and gives Monado the layer's variables.
 /// </summary>
 public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
 {
@@ -54,9 +55,25 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
             },
             ct);
 
+    public async Task<string?> SetRegisteredAsync(ModuleContext ctx, bool used, CancellationToken ct)
+    {
+        var request = new HelperRequest(used ? HelperCommand.RegisterLayer : HelperCommand.UnregisterLayer, Layer: DirectModeEnvironment.Nvidia);
+        var reply = await ctx.Helper.SendAsync(request, ct).ConfigureAwait(false);
+        return reply.Ok ? null : reply.Error ?? "Mirador's helper service couldn't change the Vulkan layers.";
+    }
+
+    /// <summary>
+    /// Registers the layer (again: profiles are per Windows user, the registration per machine, so another user may have
+    /// taken it out), checks direct mode when the driver changed, and gives Monado the layer's variables.
+    /// </summary>
     public async Task<ModuleSession> BeforeStartAsync(ModuleContext ctx, IProgress<string> progress, CancellationToken ct)
     {
         var layer = DirectModeLayer.Locate(deps.BundledLayerDir);
+        if (await SetRegisteredAsync(ctx, used: true, ct).ConfigureAwait(false) is { } problem)
+        {
+            throw new MiradorException(problem);
+        }
+
         var notUsed = await new DirectModeCheck(DriverNow, deps.StartConsole).EnsureAsync(
             layer, LoadState().LastGoodDriver, RememberDriver, check => SaveCheckOutput(ctx, check), progress, ct).ConfigureAwait(false);
         return new DirectModeSession(DirectModeLayer.Environment(deps.BundledLayerDir), notUsed, ctx.Time);

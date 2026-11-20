@@ -11,6 +11,9 @@ public static class DirectModeEnvironment
     /// <summary>The NVIDIA layer's name in a helper request.</summary>
     public const string Nvidia = "nvidia";
 
+    /// <summary>The NVIDIA layer's manifest, in the <c>layer</c> folder that comes with Mirador.</summary>
+    public const string ManifestName = "mirador_direct_mode.json";
+
     public static IReadOnlyList<KeyValuePair<string, string>> Variables { get; } =
     [
         new("MIRADOR_DIRECT_MODE", "1"),

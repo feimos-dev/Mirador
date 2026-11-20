@@ -19,6 +19,7 @@ public sealed class NvidiaDirectModeTests : IDisposable
     private readonly FakeConsoleStarter consoles;
     private readonly AppPaths paths;
     private readonly DirectModeStateStore state;
+    private readonly FakeHelper helper = new();
     private readonly string bundledLayer;
     private string? nvidia = "32.0.16.2101";
     private IReadOnlyList<MonitorEntry> monitors = [];
@@ -47,7 +48,7 @@ public sealed class NvidiaDirectModeTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
-    private ModuleContext Context => new(paths, new NoHelper(), new FakeProcesses(), new FakeUsbDevices(), time);
+    private ModuleContext Context => new(paths, helper, new FakeProcesses(), new FakeUsbDevices(), time);
 
     private NvidiaDirectMode Layer() => new(new NvidiaDirectModeDeps(
         bundledLayer, consoles.Start, state, () => nvidia, () => monitors, () => monadoRuns));
@@ -149,6 +150,33 @@ public sealed class NvidiaDirectModeTests : IDisposable
         Assert.False(env.ContainsKey("MIRADOR_DIRECT_MODE_IGNORE_HOLDERS"));
         Assert.False(env.ContainsKey("VK_ADD_IMPLICIT_LAYER_PATH"));
         Assert.Empty(session.RecoveryData);
+    }
+
+    [Fact]
+    public async Task A_start_has_the_helper_register_the_layer_by_its_kind()
+    {
+        using var session = (DirectModeSession)await BeforeStart();
+
+        Assert.Equal([new HelperRequest(HelperCommand.RegisterLayer, Layer: "nvidia")], helper.Sent);
+    }
+
+    [Fact]
+    public async Task A_layer_the_helper_cant_register_refuses_the_start()
+    {
+        helper.Reply = new HelperReply(false, "Mirador's helper service isn't running.");
+
+        var e = await Assert.ThrowsAsync<MiradorException>(BeforeStart);
+
+        Assert.Equal("Mirador's helper service isn't running.", e.Message);
+        Assert.Empty(steps);
+    }
+
+    [Fact]
+    public async Task A_layer_no_profile_uses_is_taken_out()
+    {
+        Assert.Null(await Layer().SetRegisteredAsync(Context, used: false, CancellationToken.None));
+
+        Assert.Equal([new HelperRequest(HelperCommand.UnregisterLayer, Layer: "nvidia")], helper.Sent);
     }
 
     [Fact]
@@ -326,9 +354,18 @@ public sealed class NvidiaDirectModeTests : IDisposable
         }
     }
 
-    private sealed class NoHelper : IHelperClient
+    private sealed class FakeHelper : IHelperClient
     {
-        public Task<HelperReply> SendAsync(HelperCommand command, CancellationToken ct) =>
-            throw new InvalidOperationException("The direct-mode layer doesn't use the helper.");
+        public List<HelperRequest> Sent { get; } = [];
+
+        public HelperReply Reply { get; set; } = new(true);
+
+        public Task<HelperReply> SendAsync(HelperCommand command, CancellationToken ct) => SendAsync(new HelperRequest(command), ct);
+
+        public Task<HelperReply> SendAsync(HelperRequest request, CancellationToken ct)
+        {
+            Sent.Add(request);
+            return Task.FromResult(Reply);
+        }
     }
 }

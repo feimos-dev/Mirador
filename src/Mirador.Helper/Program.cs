@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.EventLog;
 using Mirador.Ipc;
 using Mirador.Helper;
+using Mirador.Helper.DirectMode;
 using Mirador.Helper.ElevatedMonado;
 
 // `Mirador.Helper.exe --send-exit-key <pid>`: started by the helper with an elevated Monado's own token, in its session,
@@ -48,7 +49,8 @@ builder.Services.AddSingleton(services =>
         consent: elevatedConsent,
         elevated: new ElevatedMonadoRunner(elevatedConsent, monado: monado, approved: approved),
         monado: monado,
-        approved: approved);
+        approved: approved,
+        layers: new LayerRegistration(new SystemImplicitLayers(), HelperHandler.DefaultInstallDir));
 });
 builder.Services.AddHostedService<HelperPipeServer>();
 builder.Build().Run();

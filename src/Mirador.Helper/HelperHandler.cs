@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Principal;
+using Mirador.Helper.DirectMode;
 using Mirador.Helper.ElevatedMonado;
 using Mirador.Ipc;
 
@@ -85,6 +86,7 @@ public sealed class HelperHandler
     private const string NoElevated = "Mirador's helper service can't start Monado as administrator.";
     private const string NoStart = "Mirador's helper service was asked to start Monado as administrator without any settings.";
     private const string UnknownCommand = "Mirador's helper service doesn't know that command.";
+    private const string NoLayers = "Mirador's helper service can't register the direct-mode layer.";
     // A message goes into one protocol line, where JSON writes each character outside ASCII as six bytes (\uXXXX).
     private const int MaxErrorLength = 600;
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(20);
@@ -98,6 +100,7 @@ public sealed class HelperHandler
     private readonly string installDir;
     private readonly IMonadoInstaller? monado;
     private readonly IApprovedBuildStore? approved;
+    private readonly LayerRegistration? layers;
     private readonly object gate = new();
 
     /// <param name="version">What <see cref="HelperCommand.Ping"/> answers; the helper's own version when null.</param>
@@ -105,11 +108,13 @@ public sealed class HelperHandler
     /// <param name="elevated">Starts and stops the elevated Monado; without it, the elevated commands fail with a message.</param>
     /// <param name="installDir">What <see cref="HelperCommand.GetInstallFolder"/> answers; <see cref="DefaultInstallDir"/> when null.</param>
     /// <param name="monado">The bundled Monado; without it, installing and setting it as the runtime fail with a message.</param>
+    /// <param name="layers">Registers the direct-mode layer; without it, registering fails with a message.</param>
     public HelperHandler(
         IServiceControl services, IProcessControl processes, IRuntimeRegistry registry,
         string? version = null, ElevatedConsent? consent = null, IElevatedMonado? elevated = null, string? installDir = null,
-        IMonadoInstaller? monado = null, IApprovedBuildStore? approved = null)
+        IMonadoInstaller? monado = null, IApprovedBuildStore? approved = null, LayerRegistration? layers = null)
     {
+        this.layers = layers;
         this.monado = monado;
         this.approved = approved;
         this.services = services;
@@ -214,6 +219,8 @@ public sealed class HelperHandler
             HelperCommand.SetRuntimeApproved => SetRuntimeApproved(request.Build, caller),
             HelperCommand.ListApprovedBuilds => ListApprovedBuilds(caller),
             HelperCommand.ForgetApprovedBuild => ForgetApprovedBuild(request.Build, caller),
+            HelperCommand.RegisterLayer => layers?.Register(request.Layer) ?? new HelperReply(false, NoLayers),
+            HelperCommand.UnregisterLayer => layers?.Unregister(request.Layer) ?? new HelperReply(false, NoLayers),
             _ => new HelperReply(false, UnknownCommand),
         });
     }

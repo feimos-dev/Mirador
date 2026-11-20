@@ -460,6 +460,35 @@ public sealed class AppHost : IAsyncDisposable
     {
         ProfilesChanged?.Invoke();
         _ = Task.Run(Session.PlaceStandIn);
+        _ = Task.Run(MatchLayerRegistrationAsync);
+    }
+
+    private readonly SemaphoreSlim layerRegistration = new(1, 1);
+
+    /// <summary>Registers each direct-mode layer while a profile uses it and takes it out once none does. Never throws.</summary>
+    private async Task MatchLayerRegistrationAsync()
+    {
+        await layerRegistration.WaitAsync();
+        try
+        {
+            var profiles = Profiles.Load().Profiles;
+            foreach (var layer in DirectModes.Values)
+            {
+                var used = profiles.Any(p => PartsOf(p).DirectMode == layer);
+                if (await layer.SetRegisteredAsync(Context, used, CancellationToken.None) is { } problem)
+                {
+                    AppLog.Write($"The {layer.DisplayName} direct-mode layer couldn't be {(used ? "registered" : "taken out")}: {problem}");
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            AppLog.Write("Matching the direct-mode layers to the profiles failed", e);
+        }
+        finally
+        {
+            layerRegistration.Release();
+        }
     }
 
     /// <summary>
@@ -791,6 +820,7 @@ public sealed class AppHost : IAsyncDisposable
 
         host.FirstRun = !File.Exists(paths.ProfilesFile);
         host.CheckStore("profiles", paths.ProfilesFile, () => host.Profiles.Load());
+        _ = Task.Run(host.MatchLayerRegistrationAsync);
 
         // A consent no profile uses (one an older installer's task recorded, or left after a failed take-back) goes.
         _ = Task.Run(async () =>

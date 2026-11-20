@@ -60,8 +60,6 @@ Source: "{#Bundle}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs 
 Name: "{autoprograms}\Mirador"; Filename: "{app}\Mirador.exe"
 
 [Registry]
-; The layer, registered as an implicit layer; it acts only when MIRADOR_DIRECT_MODE=1 (in Monado's process).
-Root: HKLM64; Subkey: "SOFTWARE\Khronos\Vulkan\ImplicitLayers"; ValueType: dword; ValueName: "{app}\layer\mirador_direct_mode.json"; ValueData: "0"; Flags: uninsdeletevalue
 ; Where the stand-in finds Mirador when no user has run it yet.
 Root: HKLM64; Subkey: "SOFTWARE\Mirador"; ValueType: string; ValueName: "AppPath"; ValueData: "{app}\Mirador.exe"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
@@ -173,12 +171,12 @@ begin
     end;
 end;
 
-{ A step of the helper's setup that failed is said, with what to do: Mirador can't stop Pimax's software without it. }
+{ A step of the helper's setup that failed is said, with what to do: Mirador needs it for the steps that need an administrator. }
 procedure HelperStep(const What: String; Code: Integer);
 begin
   if Code <> 0 then
     SuppressibleMsgBox('Mirador''s helper service couldn''t be ' + What + ' (sc.exe error ' + IntToStr(Code) + '). ' +
-      'Restart Windows and run this setup again; until then Mirador can''t stop Pimax''s software for Monado.',
+      'Restart Windows and run this setup again; until then Mirador can''t do the steps that need an administrator.',
       mbError, MB_OK, IDOK);
 end;
 
@@ -191,7 +189,7 @@ begin
     HelperStep('set up', Sc('config {#ServiceName} binPath= ' + BinPath + ' start= auto DisplayName= "Mirador helper"'))
   else
     HelperStep('installed', Sc('create {#ServiceName} binPath= ' + BinPath + ' start= auto DisplayName= "Mirador helper"'));
-  Sc('description {#ServiceName} "Does the steps Mirador needs an administrator for: Pimax''s service and the OpenXR runtime."');
+  Sc('description {#ServiceName} "Does the steps Mirador needs an administrator for."');
   HelperStep('started', Sc('start {#ServiceName}'));
 end;
 
@@ -266,6 +264,8 @@ begin
   RemoveMiradorsRuntimes;
 
   StopHelper;
+  { The helper registers the direct-mode layer while a profile uses it. }
+  RegDeleteValue(HKLM64, ImplicitLayers, ExpandConstant('{app}\layer\mirador_direct_mode.json'));
   Sc('delete {#ServiceName}');
   RegDeleteValue(HKLM64, MiradorKey, 'PreviousActiveRuntime');
   { Everyone's consent to run Monado as administrator goes with Mirador (Mirador.md section 4.10 item 44), and with it

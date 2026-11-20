@@ -20,6 +20,12 @@ public interface IDirectMode
     Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, CancellationToken ct);
 
     /// <summary>
+    /// Registers the layer for the machine while a profile <paramref name="used"/> it, else takes it out. Null when that
+    /// worked, else why not.
+    /// </summary>
+    Task<string?> SetRegisteredAsync(ModuleContext ctx, bool used, CancellationToken ct);
+
+    /// <summary>
     /// Gets the layer ready for Monado, which starts right after, once the headset module's steps are done (they free the
     /// headset's display). The session gives Monado the layer's variables and shows the display's status line.
     /// </summary>

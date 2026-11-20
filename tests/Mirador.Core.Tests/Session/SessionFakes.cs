@@ -465,6 +465,8 @@ internal sealed class FakeDirectMode(Steps steps) : IDirectMode
         return Task.FromResult<IReadOnlyList<CheckResult>>([.. Checks]);
     }
 
+    public Task<string?> SetRegisteredAsync(ModuleContext ctx, bool used, CancellationToken ct) => Task.FromResult<string?>(null);
+
     public Task<ModuleSession> BeforeStartAsync(ModuleContext ctx, IProgress<string> progress, CancellationToken ct)
     {
         steps.Add("layer-before-start");

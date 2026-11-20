@@ -12,7 +12,7 @@ public sealed record LayerFiles(string ManifestDir, string CheckExe);
 /// <summary>Finds the direct-mode Vulkan layer that comes with Mirador (<c>{app}\layer</c>).</summary>
 public static class DirectModeLayer
 {
-    public const string ManifestName = "mirador_direct_mode.json";
+    public const string ManifestName = DirectModeEnvironment.ManifestName;
     public const string DllName = "mirador_direct_mode.dll";
     public const string CheckExeName = "mirador-display-check.exe";
 

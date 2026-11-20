@@ -95,6 +95,16 @@ public enum HelperCommand
     /// is the active OpenXR runtime hands that over to Mirador's Monado first. Taking a right away needs no prompt.
     /// </summary>
     ForgetApprovedBuild,
+
+    /// <summary>
+    /// Registers the direct-mode layer of the kind <see cref="HelperRequest.Layer"/> names, the one that comes with
+    /// Mirador, as a Vulkan implicit layer for the machine; registered already is fine. Mirador asks while a profile
+    /// uses it, and before each Start that does.
+    /// </summary>
+    RegisterLayer,
+
+    /// <summary>Takes the direct-mode layer of the kind <see cref="HelperRequest.Layer"/> names out of the Vulkan implicit layers, once no profile uses it.</summary>
+    UnregisterLayer,
 }
 
 /// <summary>
@@ -148,10 +158,13 @@ public sealed record ElevatedStart(
 /// A request: a command, the typed <see cref="Start"/> only with <see cref="HelperCommand.StartMonadoElevated"/>, and
 /// <see cref="Version"/> only with <see cref="HelperCommand.InstallMonado"/> (a weekly build's name, checked by the helper), and
 /// <see cref="Build"/> only with <see cref="HelperCommand.SetRuntimeApproved"/> (a profile's id, looked up by the helper), and
-/// <see cref="Clean"/> only with <see cref="HelperCommand.StopMonadoElevated"/> (Monado is asked to end by itself first).
+/// <see cref="Clean"/> only with <see cref="HelperCommand.StopMonadoElevated"/> (Monado is asked to end by itself first), and
+/// <see cref="Layer"/> only with <see cref="HelperCommand.RegisterLayer"/> and <see cref="HelperCommand.UnregisterLayer"/>
+/// (a direct-mode layer's kind, never a path).
 /// </summary>
 public sealed record HelperRequest(
-    [property: JsonRequired] HelperCommand Command, ElevatedStart? Start = null, string? Version = null, string? Build = null, bool? Clean = null);
+    [property: JsonRequired] HelperCommand Command, ElevatedStart? Start = null, string? Version = null, string? Build = null, bool? Clean = null,
+    string? Layer = null);
 
 /// <summary>
 /// Why the helper refused, for the refusals Mirador answers in its own way rather than only showing
