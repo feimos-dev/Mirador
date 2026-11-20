@@ -1,4 +1,5 @@
 using Mirador.Core.Monado;
+using Mirador.Core.Native;
 
 namespace Mirador.Core.DirectMode;
 

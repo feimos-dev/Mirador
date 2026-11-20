@@ -4,6 +4,7 @@ using Mirador.Core.DirectMode;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
+using Mirador.Core.Native;
 using Mirador.Core.Profiles;
 using Mirador.Ipc;
 

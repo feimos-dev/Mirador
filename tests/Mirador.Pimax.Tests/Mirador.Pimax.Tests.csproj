@@ -14,15 +14,12 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\Shared\FakeConsole.cs" Link="Shared\FakeConsole.cs" />
     <Compile Include="..\Shared\TempDir.cs" Link="Shared\TempDir.cs" />
     <Compile Include="..\Shared\TestThreadPool.cs" Link="Shared\TestThreadPool.cs" />
     <Compile Include="..\Shared\TimerWatch.cs" Link="Shared\TimerWatch.cs" />
     <Using Include="Mirador.Tests" />
     <Using Include="Mirador.Core.DirectMode" />
-    <Using Include="Mirador.Core.Tests.DirectMode" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- The fake console programs, shared with the core's tests (the display check moved there with direct mode). -->
-    <Compile Include="..\Mirador.Core.Tests\DirectMode\FakeConsole.cs" Link="FakeConsole.cs" />
+    <Using Include="Mirador.Core.Native" />
   </ItemGroup>
 </Project>

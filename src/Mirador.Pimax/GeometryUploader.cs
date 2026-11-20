@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 using Mirador.Core;
-using Mirador.Core.DirectMode;
+using Mirador.Core.Native;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Ipc;

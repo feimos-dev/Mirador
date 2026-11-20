@@ -2,9 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Mirador.Core;
 using Mirador.Core.Monado;
-using Mirador.Core.Native;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.Core.Native;
 
 /// <summary>
 /// A console program Mirador runs for a moment and talks to through its standard input: a headset module's own tools

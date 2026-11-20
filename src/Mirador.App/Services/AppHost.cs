@@ -9,6 +9,7 @@ using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Native;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
