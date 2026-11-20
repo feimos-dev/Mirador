@@ -1,9 +1,9 @@
-using Mirador.Core.DirectMode;
+using Mirador.Core.Native;
 using System.Diagnostics;
 using Mirador.Core;
 using Mirador.Core.Monado;
 
-namespace Mirador.Core.Tests.DirectMode;
+namespace Mirador.Core.Tests.Native;
 
 public class ConsoleProcessTests
 {

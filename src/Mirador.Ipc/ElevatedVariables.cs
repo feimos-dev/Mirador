@@ -14,9 +14,9 @@ public static partial class ElevatedVariables
     /// <summary>
     /// The refused names: the search path, the temp and user folders (the pipe's name comes from the temp folder, or from
     /// the XDG folders before it), Windows' own folders and settings the helper sets, SteamVR's folder and Lighthouse
-    /// switch, the Vulkan loader's path and layer variables, every name of <see cref="DirectModeEnvironment.Cleared"/>, the
-    /// module's and the layer's fixed tables, Monado's settings and the headless run's variables. Names starting with one
-    /// of <see cref="RefusedPrefixes"/> are refused too.
+    /// switch, the Vulkan loader's path and layer variables, every name of <see cref="ClearedEnvironment"/> and
+    /// <see cref="DirectModeEnvironment.Cleared"/>, the module's and the layer's fixed tables, Monado's settings and the
+    /// headless run's variables. Names starting with one of <see cref="RefusedPrefixes"/> are refused too.
     /// </summary>
     public static IReadOnlyList<string> RefusedNames { get; } =
     [
@@ -48,9 +48,10 @@ public static partial class ElevatedVariables
         "VK_DRIVER_FILES",
         "VK_ADD_DRIVER_FILES",
         "VK_INSTANCE_LAYERS",
+        .. ClearedEnvironment.Names,
         .. DirectModeEnvironment.Cleared,
         .. DirectModeEnvironment.Variables.Select(v => v.Key),
-        .. DreamAirEnvironment.ModuleVariables.Select(v => v.Key),
+        .. PimaxEnvironment.DreamAirVariables.Select(v => v.Key),
         .. SettingsNames(),
         .. HeadlessEnvironment.Variables.Select(v => v.Key),
     ];

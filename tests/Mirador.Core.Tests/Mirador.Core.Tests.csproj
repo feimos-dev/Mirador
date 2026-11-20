@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\Shared\FakeConsole.cs" Link="Shared\FakeConsole.cs" />
     <Compile Include="..\Shared\MonadoInstallFactAttribute.cs" Link="Shared\MonadoInstallFactAttribute.cs" />
     <Compile Include="..\Shared\TempDir.cs" Link="Shared\TempDir.cs" />
     <Compile Include="..\Shared\TestThreadPool.cs" Link="Shared\TestThreadPool.cs" />

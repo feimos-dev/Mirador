@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
 using Mirador.Core;
 using Mirador.Core.Build;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Profiles;
 using Mirador.Core.Session;
@@ -15,6 +14,18 @@ namespace Mirador.App.ViewModels;
 
 /// <summary>A headset choice in the profile editor's Windows tools; a null id is "None".</summary>
 public sealed record HeadsetItem(string? Id, string Name)
+{
+    public override string ToString() => Name;
+}
+
+/// <summary>A direct-mode layer choice in the profile editor's Windows tools.</summary>
+public sealed record DirectModeItem(DirectModeKind Kind, string Name)
+{
+    public override string ToString() => Name;
+}
+
+/// <summary>An eye tracker variant choice in the profile editor; a null id is Automatic.</summary>
+public sealed record EyeVariantItem(string? Id, string Name)
 {
     public override string ToString() => Name;
 }
@@ -54,6 +65,19 @@ public sealed partial class ProfilesViewModel : ObservableObject
         foreach (var module in host.Modules.Values)
         {
             Headsets.Insert(Headsets.Count - 1, new HeadsetItem(module.Id, module.DisplayName));
+        }
+
+        EyeVariants.Add(new EyeVariantItem(null, "Automatic"));
+        EyeVariants.Add(new EyeVariantItem(EyeVariantChoice.None, "None"));
+        foreach (var variant in EyeBlobVariants.All)
+        {
+            EyeVariants.Add(new EyeVariantItem(variant, variant));
+        }
+
+        DirectModes.Add(new DirectModeItem(DirectModeKind.None, "None"));
+        foreach (var layer in host.DirectModes.Values)
+        {
+            DirectModes.Add(new DirectModeItem(layer.Kind, layer.DisplayName));
         }
 
         Extra.CollectionChanged += (_, e) =>
@@ -105,6 +129,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     public ObservableCollection<HeadsetItem> Headsets { get; } = [];
 
+    public ObservableCollection<DirectModeItem> DirectModes { get; } = [];
+
+    public ObservableCollection<EyeVariantItem> EyeVariants { get; } = [];
+
     public ObservableCollection<EnvRow> Extra { get; } = [];
 
     public ObservableCollection<string> Problems { get; } = [];
@@ -117,7 +145,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public partial string Name { get; set; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsEyeVariant))]
     public partial HeadsetItem? Headset { get; set; }
+
+    [ObservableProperty]
+    public partial EyeVariantItem? EyeVariant { get; set; }
+
+    /// <summary>Whether the eye tracker variant card shows: for the Pimax headset type.</summary>
+    public bool ShowsEyeVariant => Headset?.Id == PimaxModule.ModuleId;
+
+    [ObservableProperty]
+    public partial DirectModeItem? DirectMode { get; set; }
 
     /// <summary>
     /// The "Monado" drop-down (Mirador.md §4.11 item 55): 0 Mirador's Monado, 1 build upstream main, 2 build from a
@@ -185,11 +223,16 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// <summary>False for a standard account, which has no administrator token to run Monado with.</summary>
     public bool CanRunAsAdministrator { get; } = !SafeIsStandardAccount();
 
-    /// <summary>The toggle's description, for the Monado the profile runs.</summary>
+    /// <summary>The toggle's description: why the saved profile can't be approved, when it can't; else what the switch does.</summary>
     public string RunAsAdministratorDescription
     {
         get
         {
+            if (ApprovalBlocked is { } blocked)
+            {
+                return blocked;
+            }
+
             var text = MonadoSource == MiradorSource
                 ? "Gives Monado realtime GPU priority."
                 : "Only for a branch you trust: it gets full control of your PC.";
@@ -209,20 +252,14 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Whether the approval card shows: the saved profile has something to approve (a branch's or build folder's build,
-    /// or the bundled Monado's extra variables) and runs as administrator, or is approved.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool CanApprove { get; set; }
-
-    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the card shows a check.</summary>
+    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the toggle shows a check.</summary>
     [ObservableProperty]
     public partial bool IsApproved { get; set; }
 
-    /// <summary>The approval's state: approved, a newer build waiting, or none.</summary>
+    /// <summary>Why the saved profile, run as administrator, can't be approved; null when it can, or needs no approval.</summary>
     [ObservableProperty]
-    public partial string ApprovalStatus { get; set; } = "";
+    [NotifyPropertyChangedFor(nameof(RunAsAdministratorDescription))]
+    public partial string? ApprovalBlocked { get; set; }
 
     /// <summary>Extra CMake options for a branch, one per line or separated by spaces.</summary>
     [ObservableProperty]
@@ -562,7 +599,39 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnNameChanged(string value) => Changed();
 
-    partial void OnHeadsetChanged(HeadsetItem? value) => Changed();
+    /// <summary>A new headset type brings its own direct-mode layer, which the user can change after.</summary>
+    partial void OnHeadsetChanged(HeadsetItem? value)
+    {
+        if (!loading)
+        {
+            DirectMode = ItemFor(DefaultDirectMode(value));
+        }
+
+        Changed();
+    }
+
+    partial void OnDirectModeChanged(DirectModeItem? value) => Changed();
+
+    partial void OnEyeVariantChanged(EyeVariantItem? value) => Changed();
+
+    /// <summary>"Automatic", with the variant Mirador knows for the tracker when it knows one.</summary>
+    private string AutomaticVariantName()
+    {
+        try
+        {
+            var decision = BlobChoice.Resolve(host.DreamAirState.Load(), null);
+            return decision.NeedsOwner ? "Automatic" : $"Automatic ({decision.Variant})";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "Automatic";
+        }
+    }
+
+    private DirectModeKind DefaultDirectMode(HeadsetItem? headset) =>
+        headset?.Id is { } id && host.Modules.TryGetValue(id, out var module) ? module.DefaultDirectMode : DirectModeKind.None;
+
+    private DirectModeItem ItemFor(DirectModeKind kind) => DirectModes.FirstOrDefault(d => d.Kind == kind) ?? DirectModes[0];
 
     partial void OnMonadoSourceChanged(int value)
     {
@@ -704,19 +773,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     {
         var approvable = editing is not null && Approvable(editing);
         IsApproved = approvable && host.FullyApproved(editing!);
-        CanApprove = approvable && (editing!.RunAsAdministrator || IsApproved);
-        if (!CanApprove)
-        {
-            return;
-        }
-
-        ApprovalStatus = ElevatedChoice.ApprovalProblem(editing!) is { } blocked
-            ? blocked
-            : IsApproved
-                ? "Approved."
-                : host.WouldApprove(editing!)
-                    ? "Not approved yet. Windows asks at the next Start."
-                    : "Not approved.";
+        ApprovalBlocked = approvable && editing!.RunAsAdministrator ? ElevatedChoice.ApprovalProblem(editing!) : null;
     }
 
     partial void OnMonadoOptionsChanged(string value) => Changed();
@@ -794,6 +851,14 @@ public sealed partial class ProfilesViewModel : ObservableObject
         {
             Name = p?.Name ?? "";
             Headset = Headsets.FirstOrDefault(h => h.Id == p?.ModuleId) ?? Headsets[^1];
+            DirectMode = ItemFor(p?.DirectMode ?? DefaultDirectMode(Headset));
+            if (AutomaticVariantName() is var automatic && EyeVariants[0].Name != automatic)
+            {
+                EyeVariants[0] = new EyeVariantItem(null, automatic);
+            }
+
+            var eyeVariant = p is null ? null : EyeVariantChoice.Of(p);
+            EyeVariant = EyeVariants.First(v => v.Id == eyeVariant);
             MonadoSource = p?.Monado switch
             {
                 { Kind: SourceKind.Folder } => FolderSource,
@@ -834,10 +899,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
         OnPropertyChanged(nameof(UsesBaseStations));
     }
 
-    /// <summary>The profile as the editor shows it; the module's options, which the editor doesn't show, are kept.</summary>
+    /// <summary>The profile as the editor shows it; the module options the editor doesn't show are kept.</summary>
     private Profile Edited()
     {
-        var options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
+        IReadOnlyDictionary<string, string> options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
+        if (ShowsEyeVariant)
+        {
+            options = EyeVariantChoice.With(options, EyeVariant?.Id);
+        }
+
+        // Left unset while it is the headset type's default.
+        var directMode = DirectMode?.Kind ?? DirectModeKind.None;
         return new Profile(
             editing?.Id ?? "",
             Name.Trim(),
@@ -846,7 +918,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
             [.. Extra.Select(r => new EnvVar(r.Name.Trim(), r.Value))],
             options,
             lighthouse,
-            RunAsAdministrator && CanRunAsAdministrator);
+            RunAsAdministrator && CanRunAsAdministrator,
+            editing?.DirectMode is null && directMode == DefaultDirectMode(Headset) ? null : directMode);
     }
 
     /// <summary>

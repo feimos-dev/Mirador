@@ -13,7 +13,6 @@ using Mirador.Core.Monado.Libmonado;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
-using Mirador.Pimax;
 using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
@@ -933,7 +932,7 @@ public sealed partial class HomeViewModel : ObservableObject
         RefreshRuntime();
     }
 
-    /// <summary>Runs the selected profile's headset checks and shows those that need a look.</summary>
+    /// <summary>Runs the selected profile's direct-mode and headset checks and shows those that need a look.</summary>
     private async Task RunChecksAsync()
     {
         checking?.Cancel();
@@ -948,12 +947,21 @@ public sealed partial class HomeViewModel : ObservableObject
             return;
         }
 
-        IReadOnlyList<CheckResult> results = [];
-        if (profile.ModuleId is { } id && host.Modules.TryGetValue(id, out var module))
+        List<CheckResult> results = [];
+        var (module, directMode) = host.PartsOf(profile);
+        if (module is not null || directMode is not null)
         {
             try
             {
-                results = await module.CheckAsync(host.Context, profile, cts.Token);
+                if (directMode is not null)
+                {
+                    results.AddRange(await directMode.CheckAsync(host.Context, cts.Token));
+                }
+
+                if (module is not null)
+                {
+                    results.AddRange(await module.CheckAsync(host.Context, profile, cts.Token));
+                }
             }
             catch (OperationCanceledException)
             {
@@ -980,9 +988,9 @@ public sealed partial class HomeViewModel : ObservableObject
 
         // Only while Monado is stopped: a check that finished after a Start began is stale.
         DirectModeNotice = State == SessionState.Stopped
-            ? results.FirstOrDefault(r => r.Label == PimaxModule.DirectModeOffLabel)?.Text
+            ? results.FirstOrDefault(r => r.Label == IDirectMode.HeadsetOnDesktopLabel)?.Text
             : null;
-        foreach (var r in results.Where(r => r.Level is StatusLevel.Warning or StatusLevel.Error && r.Label != PimaxModule.DirectModeOffLabel))
+        foreach (var r in results.Where(r => r.Level is StatusLevel.Warning or StatusLevel.Error && r.Label != IDirectMode.HeadsetOnDesktopLabel))
         {
             Notices.Add(new NoticeItem(
                 "check:" + r.Label,
@@ -994,13 +1002,19 @@ public sealed partial class HomeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// "Fix direct mode" on the direct mode warning: Pimax's software is stopped and the display check turns direct mode
-    /// on, while Monado is stopped (through the session, which keeps Starts out meanwhile). The checks run again after.
+    /// "Fix direct mode" on the direct mode warning: the headset's module frees its display and the direct-mode layer
+    /// turns direct mode on, while Monado is stopped (through the session, which keeps Starts out meanwhile). The checks
+    /// run again after.
     /// </summary>
     [RelayCommand]
     private async Task FixDirectModeAsync()
     {
-        if (host.Modules.GetValueOrDefault(PimaxModule.ModuleId) is not PimaxModule module)
+        Profile profile;
+        try
+        {
+            profile = SelectedSet().Selected;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return;
         }
@@ -1009,8 +1023,7 @@ public sealed partial class HomeViewModel : ObservableObject
         RemoveNotice("fix-direct-mode");
         try
         {
-            var problem = await host.Session.RunWhileStoppedAsync(
-                PimaxModule.ModuleId, (save, ct) => module.FixDirectModeAsync(host.Context, save, ct), CancellationToken.None);
+            var problem = await host.WithDisplayFreeAsync(profile, (directMode, ct) => directMode.FixAsync(host.Context, ct));
             if (problem is not null)
             {
                 ShowNotice("fix-direct-mode", "Direct mode", problem, InfoBarSeverity.Error);

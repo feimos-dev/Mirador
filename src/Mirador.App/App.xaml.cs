@@ -124,7 +124,7 @@ public partial class App : Application
 
         // The pipe opens before recovery has finished, without waiting for it: a game's Start waits for recovery
         // inside the session (it never replaces session.json that still holds steps to undo), and a stand-in that
-        // started Mirador gets connected at once instead of timing out while Pimax's service comes back.
+        // started Mirador gets connected at once instead of timing out while recovery runs.
         var recovery = Host.Session.RecoverAsync(CancellationToken.None);
         try
         {
@@ -264,7 +264,7 @@ public partial class App : Application
         AppLog.Write("Quitting");
         try
         {
-            // A display check (or recovery) under way has Pimax's software stopped: it puts it back first.
+            // A display check or recovery under way finishes first.
             await Host.Session.WhenSettledAsync();
             await Host.DisposeAsync();
         }

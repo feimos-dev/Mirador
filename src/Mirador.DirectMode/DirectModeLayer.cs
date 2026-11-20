@@ -2,17 +2,17 @@ using Mirador.Core;
 using Mirador.Core.Profiles;
 using Mirador.Ipc;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.DirectMode;
 
 /// <summary>The direct-mode Vulkan layer's files Mirador uses.</summary>
 /// <param name="ManifestDir">The folder holding <c>mirador_direct_mode.json</c> and its DLL.</param>
 /// <param name="CheckExe">The full path of <c>mirador-display-check.exe</c>, which tells whether direct mode works.</param>
 public sealed record LayerFiles(string ManifestDir, string CheckExe);
 
-/// <summary>Finds the direct-mode Vulkan layer that comes with Mirador (<c>{app}\layer</c>), which its installer registers.</summary>
+/// <summary>Finds the direct-mode Vulkan layer that comes with Mirador (<c>{app}\layer</c>).</summary>
 public static class DirectModeLayer
 {
-    public const string ManifestName = "mirador_direct_mode.json";
+    public const string ManifestName = DirectModeEnvironment.ManifestName;
     public const string DllName = "mirador_direct_mode.dll";
     public const string CheckExeName = "mirador-display-check.exe";
 

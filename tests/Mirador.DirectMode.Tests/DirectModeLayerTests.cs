@@ -1,7 +1,7 @@
-using Mirador.Core.DirectMode;
+using Mirador.DirectMode;
 using Mirador.Core;
 
-namespace Mirador.Core.Tests.DirectMode;
+namespace Mirador.DirectMode.Tests;
 
 public class DirectModeLayerTests
 {

@@ -85,15 +85,14 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.True((await stopping).Ok);
     }
 
-    // StopPimax / StartPimax
+    // StopPimax
 
     [Fact]
-    public async Task StopPimax_reports_was_running_and_kills_the_fixed_list()
+    public async Task StopPimax_stops_the_service_and_kills_the_fixed_list()
     {
         var r = await Handler(serviceRunning: true).HandleAsync(new(HelperCommand.StopPimax));
 
         Assert.True(r.Ok);
-        Assert.True(r.WasRunning);
         Assert.Equal(["PiServiceLauncher"], services.Stopped);
         Assert.Equal([TimeSpan.FromSeconds(20)], services.StopTimeouts);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
@@ -105,7 +104,6 @@ public sealed class HelperHandlerTests : IDisposable
         var r = await Handler(serviceRunning: false).HandleAsync(Request(HelperCommand.StopPimax));
 
         Assert.True(r.Ok);
-        Assert.False(r.WasRunning);
         Assert.Empty(services.Stopped);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
     }
@@ -118,7 +116,6 @@ public sealed class HelperHandlerTests : IDisposable
         var r = await Handler().HandleAsync(Request(HelperCommand.StopPimax));
 
         Assert.True(r.Ok);
-        Assert.False(r.WasRunning);
         Assert.Empty(services.Stopped);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
     }
@@ -130,7 +127,7 @@ public sealed class HelperHandlerTests : IDisposable
 
         var r = await Handler(serviceRunning: true).HandleAsync(Request(HelperCommand.StopPimax));
 
-        Assert.Equal(new HelperReply(false, "The service PiServiceLauncher didn't stop within 20 seconds.", WasRunning: true), r);
+        Assert.Equal(new HelperReply(false, "The service PiServiceLauncher didn't stop within 20 seconds."), r);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
     }
 
@@ -141,7 +138,7 @@ public sealed class HelperHandlerTests : IDisposable
 
         var r = await Handler(serviceRunning: true).HandleAsync(Request(HelperCommand.StopPimax));
 
-        Assert.Equal(new HelperReply(false, "Windows wouldn't end pi_server: Access is denied.", WasRunning: true), r);
+        Assert.Equal(new HelperReply(false, "Windows wouldn't end pi_server: Access is denied."), r);
         Assert.Equal(["PiServiceLauncher"], services.Stopped);
     }
 
@@ -153,51 +150,8 @@ public sealed class HelperHandlerTests : IDisposable
 
         var r = await Handler(serviceRunning: true).HandleAsync(Request(HelperCommand.StopPimax));
 
-        Assert.Equal(new HelperReply(false, "stop failed", WasRunning: true), r);
+        Assert.Equal(new HelperReply(false, "stop failed"), r);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
-    }
-
-    [Fact]
-    public async Task StartPimax_starts_a_stopped_service()
-    {
-        var r = await Handler(serviceRunning: false).HandleAsync(Request(HelperCommand.StartPimax));
-
-        Assert.True(r.Ok);
-        Assert.Equal(["PiServiceLauncher"], services.Started);
-    }
-
-    [Fact]
-    public async Task StartPimax_leaves_a_running_service_alone()
-    {
-        var r = await Handler(serviceRunning: true).HandleAsync(Request(HelperCommand.StartPimax));
-
-        Assert.True(r.Ok);
-        Assert.Empty(services.Started);
-    }
-
-    [Fact]
-    public async Task StartPimax_starts_a_service_that_is_still_stopping_after_giving_it_time_to_stop()
-    {
-        // A StopPimax whose 20 s ran out leaves the service stopping. Left alone it would end up stopped for good.
-        var handler = Handler(serviceRunning: false);
-        services.Stopping = true;
-
-        var r = await handler.HandleAsync(Request(HelperCommand.StartPimax));
-
-        Assert.True(r.Ok);
-        Assert.Equal(["PiServiceLauncher"], services.Started);
-        Assert.Equal([TimeSpan.FromSeconds(20)], services.StartTimeouts);
-    }
-
-    [Fact]
-    public async Task StartPimax_without_pimax_is_ok()
-    {
-        services.Installed = false;
-
-        var r = await Handler().HandleAsync(Request(HelperCommand.StartPimax));
-
-        Assert.True(r.Ok);
-        Assert.Empty(services.Started);
     }
 
     // The OpenXR runtime
@@ -537,7 +491,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.False(r.Ok);
         Assert.False(string.IsNullOrWhiteSpace(r.Error));
         Assert.Empty(services.Stopped);
-        Assert.Empty(services.Started);
         Assert.Empty(processes.Killed);
         Assert.Equal(0, registry.Writes);
     }

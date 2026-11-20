@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Principal;
+using Mirador.Helper.DirectMode;
 using Mirador.Helper.ElevatedMonado;
 using Mirador.Ipc;
 
@@ -19,13 +20,6 @@ public interface IServiceControl
 
     /// <summary>Stops the service and waits until it has stopped; throws a plain message when it doesn't in time.</summary>
     void Stop(string name, TimeSpan timeout);
-
-    /// <summary>
-    /// Makes sure the service runs: starts it when it is stopped, and first waits (at most <paramref name="timeout"/>)
-    /// for one that is still stopping; one that runs or is starting already is left as it is. Throws a plain message
-    /// when it can't.
-    /// </summary>
-    void Start(string name, TimeSpan timeout);
 
     /// <summary>The service's <c>ImagePath</c> (variables expanded), or null when it isn't installed.</summary>
     string? ImagePath(string name);
@@ -92,6 +86,7 @@ public sealed class HelperHandler
     private const string NoElevated = "Mirador's helper service can't start Monado as administrator.";
     private const string NoStart = "Mirador's helper service was asked to start Monado as administrator without any settings.";
     private const string UnknownCommand = "Mirador's helper service doesn't know that command.";
+    private const string NoLayers = "Mirador's helper service can't register the direct-mode layer.";
     // A message goes into one protocol line, where JSON writes each character outside ASCII as six bytes (\uXXXX).
     private const int MaxErrorLength = 600;
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(20);
@@ -105,6 +100,7 @@ public sealed class HelperHandler
     private readonly string installDir;
     private readonly IMonadoInstaller? monado;
     private readonly IApprovedBuildStore? approved;
+    private readonly LayerRegistration? layers;
     private readonly object gate = new();
 
     /// <param name="version">What <see cref="HelperCommand.Ping"/> answers; the helper's own version when null.</param>
@@ -112,11 +108,13 @@ public sealed class HelperHandler
     /// <param name="elevated">Starts and stops the elevated Monado; without it, the elevated commands fail with a message.</param>
     /// <param name="installDir">What <see cref="HelperCommand.GetInstallFolder"/> answers; <see cref="DefaultInstallDir"/> when null.</param>
     /// <param name="monado">The bundled Monado; without it, installing and setting it as the runtime fail with a message.</param>
+    /// <param name="layers">Registers the direct-mode layer; without it, registering fails with a message.</param>
     public HelperHandler(
         IServiceControl services, IProcessControl processes, IRuntimeRegistry registry,
         string? version = null, ElevatedConsent? consent = null, IElevatedMonado? elevated = null, string? installDir = null,
-        IMonadoInstaller? monado = null, IApprovedBuildStore? approved = null)
+        IMonadoInstaller? monado = null, IApprovedBuildStore? approved = null, LayerRegistration? layers = null)
     {
+        this.layers = layers;
         this.monado = monado;
         this.approved = approved;
         this.services = services;
@@ -211,7 +209,6 @@ public sealed class HelperHandler
         {
             HelperCommand.SetRuntimeBundled => SetRuntimeBundled(),
             HelperCommand.StopPimax => StopPimax(),
-            HelperCommand.StartPimax => StartPimax(),
             HelperCommand.GetPimaxEyeBlob => GetPimaxEyeBlob(),
             HelperCommand.RevokeElevatedMonado => RevokeElevatedMonado(caller),
             HelperCommand.StartMonadoElevated => StartMonadoElevated(request.Start, caller),
@@ -222,6 +219,8 @@ public sealed class HelperHandler
             HelperCommand.SetRuntimeApproved => SetRuntimeApproved(request.Build, caller),
             HelperCommand.ListApprovedBuilds => ListApprovedBuilds(caller),
             HelperCommand.ForgetApprovedBuild => ForgetApprovedBuild(request.Build, caller),
+            HelperCommand.RegisterLayer => layers?.Register(request.Layer) ?? new HelperReply(false, NoLayers),
+            HelperCommand.UnregisterLayer => layers?.Unregister(request.Layer) ?? new HelperReply(false, NoLayers),
             _ => new HelperReply(false, UnknownCommand),
         });
     }
@@ -424,13 +423,12 @@ public sealed class HelperHandler
 
     /// <summary>
     /// Stops Pimax's service, then ends its processes, whether or not the service stopped. A failure of either step is
-    /// in the reply (the first one if both fail) together with <c>WasRunning</c>.
+    /// in the reply (the first one if both fail).
     /// </summary>
     private HelperReply StopPimax()
     {
-        var wasRunning = services.Exists(PimaxNames.Service) && services.IsRunning(PimaxNames.Service);
         string? error = null;
-        if (wasRunning)
+        if (services.Exists(PimaxNames.Service) && services.IsRunning(PimaxNames.Service))
         {
             try
             {
@@ -451,21 +449,7 @@ public sealed class HelperHandler
             error ??= Shorten(e.Message);
         }
 
-        return new HelperReply(error is null, error, wasRunning);
-    }
-
-    /// <summary>
-    /// Starts Pimax's service unless it runs. One that is still stopping (a stop that timed out) is waited for, then
-    /// started: left alone, it would finish stopping and stay stopped.
-    /// </summary>
-    private HelperReply StartPimax()
-    {
-        if (services.Exists(PimaxNames.Service))
-        {
-            services.Start(PimaxNames.Service, StopTimeout);
-        }
-
-        return new HelperReply(true);
+        return new HelperReply(error is null, error);
     }
 
     /// <summary>

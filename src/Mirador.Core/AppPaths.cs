@@ -13,6 +13,7 @@ public sealed class AppPaths(string root)
     public string SessionFile { get; } = Path.Combine(root, "session.json");
     public string BaseStationsFile { get; } = Path.Combine(root, "basestations.json");
     public string DreamAirFile { get; } = Path.Combine(root, "dreamair.json");
+    public string DirectModeFile { get; } = Path.Combine(root, "directmode.json");
     public string RoomSetupFile { get; } = Path.Combine(root, "roomsetup.json");
 
     public string LogsDir { get; } = Path.Combine(root, "logs");

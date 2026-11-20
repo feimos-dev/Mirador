@@ -15,11 +15,11 @@ public class ElevatedEnvironmentTests
     private const string SteamVrPath = @"C:\Program Files (x86)\Steam\steamapps\common\SteamVR";
 
     private static ElevatedStart Start(
-        int lh = 3000, int scale = 100, int comp = 6, bool exit = false, string module = "") =>
-        new(lh, scale, comp, exit, module);
+        int lh = 3000, int scale = 100, int comp = 6, bool exit = false, string module = "", string directMode = "") =>
+        new(lh, scale, comp, exit, module, DirectMode: directMode);
 
-    private static IReadOnlyDictionary<string, string> Build(ElevatedStart? start = null, string module = "") =>
-        ElevatedEnvironment.Build(start ?? Start(module: module), Folders, ServerDir, SteamVrPath);
+    private static IReadOnlyDictionary<string, string> Build(ElevatedStart? start = null, string module = "", string directMode = "") =>
+        ElevatedEnvironment.Build(start ?? Start(module: module, directMode: directMode), Folders, ServerDir, SteamVrPath);
 
     [Fact]
     public void Approved_variables_come_last_and_win()
@@ -197,11 +197,18 @@ public class ElevatedEnvironmentTests
         Assert.Throws<ArgumentException>(() => Build(Start(module: "vive")));
 
     [Fact]
-    public void The_dream_airs_elevated_table_is_exactly_its_six_variables()
+    public void Unknown_direct_mode_refused() =>
+        Assert.Throws<ArgumentException>(() => Build(directMode: "amd"));
+
+    [Fact]
+    public void A_headless_monado_refuses_a_direct_mode_layer() =>
+        Assert.Throws<ArgumentException>(() => Build(Start(directMode: DirectModeEnvironment.Nvidia) with { Headless = true }));
+
+    [Fact]
+    public void The_nvidia_layers_table_is_exactly_its_five_variables()
     {
         var expected = new Dictionary<string, string>
         {
-            ["STEAMVR_LH_ENABLE"] = "1",
             ["MIRADOR_DIRECT_MODE"] = "1",
             ["DISABLE_RTSS_LAYER"] = "1",
             ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
@@ -209,34 +216,36 @@ public class ElevatedEnvironmentTests
             ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
         };
 
-        Assert.Equal(expected, DreamAirEnvironment.FixedEnvironment.ToDictionary(p => p.Key, p => p.Value));
-        Assert.Equal(6, DreamAirEnvironment.FixedEnvironment.Count);
-        Assert.Equal(
-            ["MIRADOR_DIRECT_MODE", "DISABLE_RTSS_LAYER", "VK_LOADER_LAYERS_ALLOW", "XRT_COMPOSITOR_FORCE_VK_DISPLAY", "XRT_COMPOSITOR_USE_PRESENT_WAIT"],
-            DirectModeEnvironment.Variables.Select(p => p.Key));
+        Assert.Equal(expected, DirectModeEnvironment.Variables.ToDictionary(p => p.Key, p => p.Value));
+        Assert.Equal(5, DirectModeEnvironment.Variables.Count);
     }
 
     [Fact]
-    public void Pimax_adds_the_dream_airs_fixed_table()
+    public void Nvidia_direct_mode_adds_the_layers_table_whatever_the_module()
     {
-        var env = Build(module: PimaxEnvironment.ModuleId);
-
-        foreach (var (name, value) in DreamAirEnvironment.FixedEnvironment)
+        foreach (var module in new[] { "", PimaxEnvironment.ModuleId })
         {
-            Assert.Equal(value, env[name]);
+            var env = Build(module: module, directMode: DirectModeEnvironment.Nvidia);
+
+            foreach (var (name, value) in DirectModeEnvironment.Variables)
+            {
+                Assert.Equal(value, env[name]);
+            }
         }
+
+        Assert.False(Build(module: PimaxEnvironment.ModuleId).ContainsKey("MIRADOR_DIRECT_MODE"));
     }
 
     [Fact]
     public void No_vk_or_xr_variables_but_layers_allow()
     {
-        var env = Build(module: PimaxEnvironment.ModuleId);
+        var env = Build(module: PimaxEnvironment.ModuleId, directMode: DirectModeEnvironment.Nvidia);
 
         var vk = env.Keys.Where(k => k.StartsWith("VK_", StringComparison.OrdinalIgnoreCase)).ToList();
         Assert.Equal(["VK_LOADER_LAYERS_ALLOW"], vk);
         Assert.DoesNotContain(env.Keys, k => k.StartsWith("XR_", StringComparison.OrdinalIgnoreCase));
 
-        // A profile with no module carries no VK_* or XR_* at all.
+        // A profile without direct mode carries no VK_* or XR_* at all.
         var plain = Build();
         Assert.DoesNotContain(plain.Keys, k => k.StartsWith("VK_", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plain.Keys, k => k.StartsWith("XR_", StringComparison.OrdinalIgnoreCase));

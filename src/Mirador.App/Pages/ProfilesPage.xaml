@@ -130,17 +130,16 @@
                     Description="{x:Bind ViewModel.RunAsAdministratorDescription, Mode=OneWay}"
                     Header="Run as administrator"
                     IsEnabled="{x:Bind ViewModel.CanRunAsAdministrator}">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=TwoWay}" />
-                </toolkit:SettingsCard>
-                <toolkit:SettingsCard
-                    Description="{x:Bind ViewModel.ApprovalStatus, Mode=OneWay}"
-                    Header="Approved build"
-                    Visibility="{x:Bind ViewModel.CanApprove, Mode=OneWay}">
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource SystemFillColorSuccessBrush}"
-                        Glyph="&#xE73E;"
-                        Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Approved"
+                            Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                            Glyph="&#xE73E;"
+                            ToolTipService.ToolTip="Approved"
+                            Visibility="{x:Bind ViewModel.IsApproved, Mode=OneWay}" />
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=TwoWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <!--
                     The build with its log's newest line inside, opened only by its arrow; it closes when the build ends. The
@@ -230,13 +229,24 @@
                         Text="{x:Bind ViewModel.MonadoOptions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </toolkit:SettingsCard>
 
-                <!-- What Mirador does on Windows for the headset: one choice turns all of it on, the layer included. -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Windows tools" />
                 <toolkit:SettingsCard Header="Headset Type">
                     <ComboBox
                         MinWidth="200"
                         ItemsSource="{x:Bind ViewModel.Headsets}"
                         SelectedItem="{x:Bind ViewModel.Headset, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard Header="Direct-mode layer">
+                    <ComboBox
+                        MinWidth="200"
+                        ItemsSource="{x:Bind ViewModel.DirectModes}"
+                        SelectedItem="{x:Bind ViewModel.DirectMode, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard Header="Eye tracker variant" Visibility="{x:Bind ViewModel.ShowsEyeVariant, Mode=OneWay}">
+                    <ComboBox
+                        MinWidth="200"
+                        ItemsSource="{x:Bind ViewModel.EyeVariants}"
+                        SelectedItem="{x:Bind ViewModel.EyeVariant, Mode=TwoWay, Converter={StaticResource ProfileConverter}}" />
                 </toolkit:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Lighthouse" />

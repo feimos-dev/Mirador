@@ -25,9 +25,6 @@ public enum HelperCommand
     /// </summary>
     StopPimax,
 
-    /// <summary>Starts Pimax's service again unless it runs; one that is still stopping is given 20 s to stop first.</summary>
-    StartPimax,
-
     /// <summary>Reads which eye geometry file Pimax's eye tracking runtime was started with.</summary>
     GetPimaxEyeBlob,
 
@@ -98,6 +95,16 @@ public enum HelperCommand
     /// is the active OpenXR runtime hands that over to Mirador's Monado first. Taking a right away needs no prompt.
     /// </summary>
     ForgetApprovedBuild,
+
+    /// <summary>
+    /// Registers the direct-mode layer of the kind <see cref="HelperRequest.Layer"/> names, the one that comes with
+    /// Mirador, as a Vulkan implicit layer for the machine; registered already is fine. Mirador asks while a profile
+    /// uses it, and before each Start that does.
+    /// </summary>
+    RegisterLayer,
+
+    /// <summary>Takes the direct-mode layer of the kind <see cref="HelperRequest.Layer"/> names out of the Vulkan implicit layers, once no profile uses it.</summary>
+    UnregisterLayer,
 }
 
 /// <summary>
@@ -132,6 +139,7 @@ public enum HelperCommand
 /// The profile's own environment variables, in its order; null or empty for none. The helper runs them only when they
 /// are exactly what the caller approved for <see cref="ProfileId"/> and none is refused (<see cref="ElevatedVariables"/>).
 /// </param>
+/// <param name="DirectMode">The direct-mode layer's table: <c>""</c> for none, or <c>"nvidia"</c>.</param>
 public sealed record ElevatedStart(
     [property: JsonRequired] int LighthouseWaitMs,
     [property: JsonRequired] int RenderScalePercent,
@@ -143,16 +151,20 @@ public sealed record ElevatedStart(
     bool ElevationFix = false,
     bool StandbyOnExit = false,
     string ProfileId = "",
-    IReadOnlyList<KeyValuePair<string, string>>? Variables = null);
+    IReadOnlyList<KeyValuePair<string, string>>? Variables = null,
+    string DirectMode = "");
 
 /// <summary>
 /// A request: a command, the typed <see cref="Start"/> only with <see cref="HelperCommand.StartMonadoElevated"/>, and
 /// <see cref="Version"/> only with <see cref="HelperCommand.InstallMonado"/> (a weekly build's name, checked by the helper), and
 /// <see cref="Build"/> only with <see cref="HelperCommand.SetRuntimeApproved"/> (a profile's id, looked up by the helper), and
-/// <see cref="Clean"/> only with <see cref="HelperCommand.StopMonadoElevated"/> (Monado is asked to end by itself first).
+/// <see cref="Clean"/> only with <see cref="HelperCommand.StopMonadoElevated"/> (Monado is asked to end by itself first), and
+/// <see cref="Layer"/> only with <see cref="HelperCommand.RegisterLayer"/> and <see cref="HelperCommand.UnregisterLayer"/>
+/// (a direct-mode layer's kind, never a path).
 /// </summary>
 public sealed record HelperRequest(
-    [property: JsonRequired] HelperCommand Command, ElevatedStart? Start = null, string? Version = null, string? Build = null, bool? Clean = null);
+    [property: JsonRequired] HelperCommand Command, ElevatedStart? Start = null, string? Version = null, string? Build = null, bool? Clean = null,
+    string? Layer = null);
 
 /// <summary>
 /// Why the helper refused, for the refusals Mirador answers in its own way rather than only showing
@@ -173,7 +185,6 @@ public enum HelperRefusal
 /// <summary>The helper's answer. <see cref="Error"/> is a message meant for the user when <see cref="Ok"/> is false.</summary>
 /// <param name="Ok">Whether the command was carried out.</param>
 /// <param name="Error">Why it was not, in plain words.</param>
-/// <param name="WasRunning">For <see cref="HelperCommand.StopPimax"/>: whether Pimax's service was running.</param>
 /// <param name="Value">For <see cref="HelperCommand.Ping"/> the version, for <see cref="HelperCommand.GetPimaxEyeBlob"/> the
 /// variant (or null), for <see cref="HelperCommand.StartMonadoElevated"/> the service's process id, for
 /// <see cref="HelperCommand.WaitMonadoElevated"/> the exit code once Monado has ended (null while it runs), for
@@ -183,7 +194,6 @@ public enum HelperRefusal
 public sealed record HelperReply(
     [property: JsonRequired] bool Ok,
     string? Error = null,
-    bool? WasRunning = null,
     string? Value = null,
     HelperRefusal? Refusal = null)
 {

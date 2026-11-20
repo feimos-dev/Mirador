@@ -20,6 +20,19 @@ public class ModuleIdTests
         Assert.Equal("fake-table", Assert.Single(h.ElevatedStarts).Module);
     }
 
+    [Theory]
+    [InlineData(DirectModeKind.Nvidia, "nvidia")]
+    [InlineData(DirectModeKind.None, "")]
+    public async Task The_helper_gets_the_profiles_direct_mode_layer(DirectModeKind directMode, string expected)
+    {
+        await using var h = new Harness(installedCopy: true);
+        h.UseProfile(Harness.DreamAir with { RunAsAdministrator = true, DirectMode = directMode });
+
+        await h.StartRunningAsync();
+
+        Assert.Equal(expected, Assert.Single(h.ElevatedStarts).DirectMode);
+    }
+
     [Fact]
     public async Task A_module_with_no_elevated_table_for_this_headset_runs_as_you()
     {

@@ -1,9 +1,9 @@
-using Mirador.Core.DirectMode;
+using Mirador.Core.Native;
 using Mirador.Core;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 
-namespace Mirador.Core.Tests.DirectMode;
+namespace Mirador.Tests;
 
 /// <summary>A console program that writes the lines it is given and ends when told to.</summary>
 internal sealed class FakeConsole : IConsoleProcess

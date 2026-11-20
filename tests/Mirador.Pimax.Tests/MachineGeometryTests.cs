@@ -21,7 +21,7 @@ public class MachineGeometryTests
         var uploader = new GeometryUploader(
             ConsoleProcess.Start, new WmiUsbDevices(), new SystemProcessList(), new AppPaths(dir.Path), TimeProvider.System);
 
-        var result = await uploader.UploadAsync(pimax, EyeBlobVariants.Tested, CancellationToken.None);
+        var result = await uploader.UploadAsync(pimax, EyeBlobVariants.Fallback, CancellationToken.None);
 
         Assert.True(result.Ok, $"{result.Message}\n{(File.Exists(result.LogPath) ? File.ReadAllText(result.LogPath) : "")}");
         Assert.False(string.IsNullOrWhiteSpace(result.TrackerSerial));

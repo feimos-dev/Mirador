@@ -58,8 +58,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += OnWindowChanged;
         Activated += OnActivated;
         NavView.SelectedItem = NavView.MenuItems[0];
-        App.Current.Host.ProfilesChanged += ShowHeadsetPages;
-        ShowHeadsetPages();
+        NavView.LayoutUpdated += FitPaneOnce;
         if (App.Current.Host.FirstRun)
         {
             _ = AskWhereMonadoComesFromAsync();
@@ -224,21 +223,6 @@ public sealed partial class MainWindow : Window
         {
             Services.AppLog.Write("Couldn't start minimized", ex);
         }
-    }
-
-    /// <summary>The Eye tracking page is there only for a Dream Air profile; leaving one while on it goes Home.</summary>
-    private void ShowHeadsetPages()
-    {
-        var dreamAir = App.Current.Host.SelectedIsDreamAir();
-        EyeTrackingItem.Visibility = dreamAir ? Visibility.Visible : Visibility.Collapsed;
-        if (!dreamAir && ReferenceEquals(NavView.SelectedItem, EyeTrackingItem))
-        {
-            Navigate("Home");
-        }
-
-        // The labels shown have changed: fit the pane to them once they are laid out.
-        NavView.LayoutUpdated -= FitPaneOnce;
-        NavView.LayoutUpdated += FitPaneOnce;
     }
 
     private void FitPaneOnce(object? sender, object e)

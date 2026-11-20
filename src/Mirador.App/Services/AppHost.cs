@@ -3,17 +3,18 @@ using Microsoft.Win32;
 using Mirador.Core;
 using Mirador.Core.BaseStations;
 using Mirador.Core.Build;
-using Mirador.Core.DirectMode;
 using Mirador.Core.Elevation;
 using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Native;
 using Mirador.Core.OpenVr;
 using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
+using Mirador.DirectMode;
 using Mirador.Pimax;
 using Mirador.Ipc;
 
@@ -83,17 +84,20 @@ public sealed class AppHost : IAsyncDisposable
 
         var dreamAir = new PimaxModule(new PimaxDeps(
             new WindowsRegistryReader(),
-            ConsoleProcess.Start,
             new GeometryUploader(ConsoleProcess.Start, Usb, Processes, paths, TimeProvider.System),
             DreamAirState,
-            Path.Combine(appDir, "layer"),
-            NvidiaDriver.CurrentWindowsVersion,
             DreamAirChecks.FindSteamVr,
             state => BlobChoice.Resolve(state, null).Variant,
-            () => Usb.Present(),
+            () => Usb.Present()));
+        Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
+        var nvidia = new NvidiaDirectMode(new NvidiaDirectModeDeps(
+            Path.Combine(appDir, "layer"),
+            ConsoleProcess.Start,
+            new DirectModeStateStore(paths.DirectModeFile),
+            NvidiaDriver.CurrentWindowsVersion,
             HeadsetMonitor.List,
             () => Session!.State != SessionState.Stopped));
-        Modules = new Dictionary<string, IHeadsetModule> { [dreamAir.Id] = dreamAir };
+        DirectModes = new Dictionary<DirectModeKind, IDirectMode> { [nvidia.Kind] = nvidia };
         OpenComposite = new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder);
         OpenVr = new OpenVrGames(new OpenVrPaths(OpenVrPaths.DefaultFile, OpenComposite.Folder), OpenComposite);
         OpenVrWatch = new FolderWatch(
@@ -130,7 +134,7 @@ public sealed class AppHost : IAsyncDisposable
                 SteamVrChecked = OnSteamVrChecked,
             },
             ElevatedInstalledCopy: () => IsInstalledCopy(askHelper: true),
-            BundledLayerDir: Path.Combine(appDir, "layer"),
+            DirectModes: DirectModes,
             ElevationFixVerified: ElevationFixVerified,
             ControllersOffAtStop: () => StationSettings().ControllersOffAtStop,
             FolderBackups: FolderBackups,
@@ -456,27 +460,75 @@ public sealed class AppHost : IAsyncDisposable
     {
         ProfilesChanged?.Invoke();
         _ = Task.Run(Session.PlaceStandIn);
+        _ = Task.Run(MatchLayerRegistrationAsync);
     }
 
-    /// <summary>
-    /// Whether the selected profile's headset gets Mirador's eye steps (the Pimax module, with a Dream Air plugged in or
-    /// no Pimax at all); false when the profiles can't be read.
-    /// </summary>
-    public bool SelectedIsDreamAir()
+    private readonly SemaphoreSlim layerRegistration = new(1, 1);
+
+    /// <summary>Registers each direct-mode layer while a profile uses it and takes it out once none does. Never throws.</summary>
+    private async Task MatchLayerRegistrationAsync()
     {
+        await layerRegistration.WaitAsync();
         try
         {
-            return Profiles.Load().Selected.ModuleId == PimaxModule.ModuleId
-                && Modules.GetValueOrDefault(PimaxModule.ModuleId) is PimaxModule pimax
-                && pimax.Model().EyeSteps;
+            var profiles = Profiles.Load().Profiles;
+            foreach (var layer in DirectModes.Values)
+            {
+                var used = profiles.Any(p => PartsOf(p).DirectMode == layer);
+                if (await layer.SetRegisteredAsync(Context, used, CancellationToken.None) is { } problem)
+                {
+                    AppLog.Write($"The {layer.DisplayName} direct-mode layer couldn't be {(used ? "registered" : "taken out")}: {problem}");
+                }
+            }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
-            return false;
+            AppLog.Write("Matching the direct-mode layers to the profiles failed", e);
+        }
+        finally
+        {
+            layerRegistration.Release();
         }
     }
 
     public IReadOnlyDictionary<string, IHeadsetModule> Modules { get; }
+
+    /// <summary>The direct-mode layers, by kind.</summary>
+    public IReadOnlyDictionary<DirectModeKind, IDirectMode> DirectModes { get; }
+
+    /// <summary>The headset module and the direct-mode layer <paramref name="profile"/> uses; null for none.</summary>
+    public (IHeadsetModule? Module, IDirectMode? DirectMode) PartsOf(Profile profile)
+    {
+        var module = profile.ModuleId is { } id ? Modules.GetValueOrDefault(id) : null;
+        return (module, DirectModes.GetValueOrDefault(profile.DirectModeWith(module)));
+    }
+
+    /// <summary>
+    /// Runs a direct-mode check or fix for <paramref name="profile"/> while Monado is stopped (a Start waits for it),
+    /// once the profile's headset module has freed the headset's display.
+    /// </summary>
+    /// <exception cref="MiradorException">Monado isn't stopped, the profile uses no direct-mode layer, or the display couldn't be freed.</exception>
+    public Task<T> WithDisplayFreeAsync<T>(Profile profile, Func<IDirectMode, CancellationToken, Task<T>> work)
+    {
+        var (module, directMode) = PartsOf(profile);
+        if (directMode is null)
+        {
+            throw new MiradorException("This profile uses no direct-mode layer.");
+        }
+
+        return Session.RunWhileStoppedAsync(
+            module?.Id ?? "",
+            async (_, ct) =>
+            {
+                if (module is not null)
+                {
+                    await module.FreeDisplayAsync(Context, ct).ConfigureAwait(false);
+                }
+
+                return await work(directMode, ct).ConfigureAwait(false);
+            },
+            CancellationToken.None);
+    }
 
     public SessionController Session { get; }
 
@@ -750,6 +802,7 @@ public sealed class AppHost : IAsyncDisposable
 
         host.FirstRun = !File.Exists(paths.ProfilesFile);
         host.CheckStore("profiles", paths.ProfilesFile, () => host.Profiles.Load());
+        _ = Task.Run(host.MatchLayerRegistrationAsync);
 
         // A consent no profile uses (one an older installer's task recorded, or left after a failed take-back) goes.
         _ = Task.Run(async () =>

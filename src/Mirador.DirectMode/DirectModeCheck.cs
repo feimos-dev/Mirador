@@ -1,12 +1,13 @@
+using Mirador.Core;
 using Mirador.Core.Monado;
+using Mirador.Core.Native;
 
-namespace Mirador.Core.DirectMode;
+namespace Mirador.DirectMode;
 
 /// <summary>
-/// The re-check after an NVIDIA driver update (Mirador.md §4.11 item 52): when the driver isn't the last one direct mode
-/// passed with, the layer's display check runs before Monado starts, and a fail refuses the Start with what the check
-/// says to do. The headset's module calls it once it has freed the headset (its own software stopped), and keeps which
-/// driver passed.
+/// The re-check after an NVIDIA driver update: when the driver isn't the last one direct mode passed with, the layer's
+/// display check runs before Monado starts, and a fail refuses the Start with what the check says to do. The layer runs
+/// it once the headset's module has freed the headset, and keeps which driver passed.
 /// </summary>
 /// <param name="driverNow">The NVIDIA driver now (<see cref="NvidiaDriver"/>), or null when there is none.</param>
 /// <param name="startConsole">Starts the display check (<see cref="ConsoleProcess.Start"/>).</param>

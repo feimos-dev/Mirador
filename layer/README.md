@@ -6,9 +6,9 @@ frames to it through the driver's private calls, the ones Pimax and SteamVR use.
 headsets of a vendor in its table get the mode their EDID asks for, untested.
 
 It ships inside Mirador, in `{app}\layer`: `mirador_direct_mode.dll` and `.json`, and `mirador-display-check.exe`, which
-checks the driver and the headset without Monado. Mirador's installer registers the layer and Mirador's Start turns it
-on (`MIRADOR_DIRECT_MODE=1`) for Monado alone; its guard declines any other program, and it never belongs in the
-machine-wide environment. Its log is in `%LOCALAPPDATA%\Mirador\direct-mode`.
+checks the driver and the headset without Monado. Mirador's helper registers the layer while a profile uses it, and
+Mirador's Start turns it on (`MIRADOR_DIRECT_MODE=1`) for Monado alone; its guard declines any other program, and it
+never belongs in the machine-wide environment. Its log is in `%LOCALAPPDATA%\Mirador\direct-mode`.
 
 Build and test (Visual Studio's C++ x64 tools, vcpkg for Vulkan-Headers and Catch2):
 

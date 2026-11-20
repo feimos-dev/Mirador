@@ -1,5 +1,5 @@
-using Mirador.Core.DirectMode;
-namespace Mirador.Core.Tests.DirectMode;
+using Mirador.DirectMode;
+namespace Mirador.DirectMode.Tests;
 
 public class DisplayCheckTests
 {

@@ -63,7 +63,7 @@ public class ElevatedVariablesTests
     [Fact]
     public void The_fixed_tables_and_monados_settings_are_refused()
     {
-        Assert.All(DreamAirEnvironment.ModuleVariables, v => Assert.True(ElevatedVariables.IsRefused(v.Key), v.Key));
+        Assert.All(PimaxEnvironment.DreamAirVariables, v => Assert.True(ElevatedVariables.IsRefused(v.Key), v.Key));
         Assert.All(DirectModeEnvironment.Variables, v => Assert.True(ElevatedVariables.IsRefused(v.Key), v.Key));
         Assert.All(HeadlessEnvironment.Variables, v => Assert.True(ElevatedVariables.IsRefused(v.Key), v.Key));
         foreach (var name in new[]

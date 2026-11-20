@@ -86,7 +86,7 @@ public sealed record EnvVar(string Name, string Value);
 /// <paramref name="Lighthouse"/> is the user's choice whether Mirador switches the base stations with this profile
 /// (null: decide from the profile, see <see cref="UsesBaseStations"/>). <paramref name="RunAsAdministrator"/> is "Run as
 /// administrator" for a branch or build folder (Mirador.md §4.11 item 51): its approved build may run elevated and be the
-/// OpenXR runtime.
+/// OpenXR runtime. <paramref name="DirectMode"/> is the direct-mode layer (null: the headset module's default).
 /// </summary>
 public sealed record Profile(
     string Id,
@@ -96,7 +96,8 @@ public sealed record Profile(
     IReadOnlyList<EnvVar> ExtraEnvironment,
     IReadOnlyDictionary<string, string> ModuleOptions,
     bool? Lighthouse = null,
-    bool RunAsAdministrator = false)
+    bool RunAsAdministrator = false,
+    DirectModeKind? DirectMode = null)
 {
     /// <summary>A new id, unique among profiles.</summary>
     public static string NewId() => Guid.NewGuid().ToString("N");
@@ -108,4 +109,8 @@ public sealed record Profile(
     /// </summary>
     public bool UsesBaseStations(bool moduleUsesSteamVrLighthouse) =>
         Lighthouse ?? Mirador.Core.Lighthouse.LighthouseConflicts.UsesLighthouse(this, moduleUsesSteamVrLighthouse);
+
+    /// <summary>The direct-mode layer Monado uses with this profile and its headset <paramref name="module"/>.</summary>
+    public DirectModeKind DirectModeWith(Modules.IHeadsetModule? module) =>
+        DirectMode ?? module?.DefaultDirectMode ?? DirectModeKind.None;
 }
