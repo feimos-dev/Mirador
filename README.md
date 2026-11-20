@@ -4,9 +4,10 @@
 
 <h1 align="center">Mirador</h1>
 
-A Windows app for running [Monado](https://monado.freedesktop.org/), the open-source OpenXR runtime. Mirador installs
-Monado, starts and stops it, switches the active OpenXR runtime, starts Monado when a game needs it, and keeps
-headset vendor software out of the way while it runs. Its first supported headset is the Pimax Dream Air.
+A Windows app for running [Monado](https://monado.freedesktop.org/), the open-source OpenXR runtime, with the headsets
+it supports. Mirador installs Monado, starts and stops it, switches the active OpenXR runtime and starts Monado when a
+game needs it. A profile can add a headset module, which keeps the headset's own software out of the way (Pimax's),
+and a direct-mode layer for a headset the GPU's driver keeps off the desktop (NVIDIA's).
 
 Work in progress: nothing is released yet.
 
@@ -51,9 +52,10 @@ CI (`.github/workflows/`):
 | Project | What it is |
 |---|---|
 | `src\Mirador.App` | The WinUI 3 app (`Mirador.exe`) |
-| `src\Mirador.Core` | UI-free core: data paths, profiles, the Monado service and the session, builds and Verify, NVIDIA direct mode |
+| `src\Mirador.Core` | UI-free core: data paths, profiles, the Monado service and the session, builds and Verify |
+| `src\Mirador.DirectMode` | NVIDIA direct mode: the layer's checks, the display check, and the layer's part of a session |
 | `src\Mirador.Pimax` | The Pimax module: the P3C headsets (Crystal Light, Crystal Super, Dream Air SE, Dream Air), each with its own steps |
-| `layer\` | The direct-mode Vulkan layer (C++) |
+| `layer\` | The direct-mode Vulkan layer (C++), registered by the helper while a profile uses it |
 | `tools\xr-check\` | Verify's OpenXR test client (C++) |
 | `src\Mirador.Ipc` | Messages between the app and the helper service |
 | `src\Mirador.Helper` | The helper Windows service, which does the steps that need admin rights |
