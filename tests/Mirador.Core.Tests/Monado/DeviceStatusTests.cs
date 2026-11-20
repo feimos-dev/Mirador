@@ -82,6 +82,17 @@ public class DeviceStatusTests
     }
 
     [Fact]
+    public void An_empty_serial_matches_nothing()
+    {
+        var controllers = DeviceStatus.Controllers(
+            [new TrackedDevice(TrackedKind.Controller, "")], [Device(1, "left", "Index Controller", "")]);
+
+        Assert.Equal(
+            [new ControllerInfo(TrackedKind.Controller, null, ""), new ControllerInfo(TrackedKind.Controller, Hand.Left, null)],
+            controllers);
+    }
+
+    [Fact]
     public void Controllers_the_log_didnt_name_are_listed_without_hand_tracking_duplicates()
     {
         var controllers = DeviceStatus.Controllers(null, [

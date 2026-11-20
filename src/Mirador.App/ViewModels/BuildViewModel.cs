@@ -43,6 +43,11 @@ public sealed partial class BuildViewModel : ObservableObject
     public partial string Log { get; set; } = "";
 
     /// <summary>Whether the profile has unsaved changes: it is built as saved, so Build waits for Save.</summary>
+    /// <summary>Whether the new build's approval prompt is open: Build waits for it.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    public partial bool IsApproving { get; set; }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     public partial bool Unsaved { get; set; }
@@ -78,7 +83,7 @@ public sealed partial class BuildViewModel : ObservableObject
         }
     }
 
-    private bool CanBuild() => profile is not null && !IsBuilding && !Unsaved && !MonadoRuns;
+    private bool CanBuild() => profile is not null && !IsBuilding && !IsApproving && !Unsaved && !MonadoRuns;
 
     [RelayCommand(CanExecute = nameof(IsBuilding))]
     private void Cancel()
@@ -115,13 +120,14 @@ public sealed partial class BuildViewModel : ObservableObject
 
         var run = host.Builds.RunOf(profile.Id);
         IsBuilding = run is { Outcome: null, Cancelled: false };
+        IsApproving = run is { Approving: true };
         Log = run?.LastLine ?? "";
         var installDir = host.Locator.BranchInstallDir(profile.Id);
         var info = BuildInfo.Load(installDir);
         BuildLabel = info is null ? "Build" : "Pull and rebuild";
-        if (IsBuilding)
+        if (IsBuilding || IsApproving)
         {
-            Status = "Building…";
+            Status = IsBuilding ? "Building…" : "Approving…";
             return;
         }
 

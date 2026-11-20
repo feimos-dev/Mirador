@@ -55,12 +55,8 @@ public sealed record DeviceItem(string Kind, string Detail, string Glyph)
         var battery = device.Battery is { } percent
             ? string.Create(CultureInfo.InvariantCulture, $"{percent}%") + (device.Charging ? ", charging" : "")
             : null;
-        var detail = battery ?? (device.Hand is null ? device.Serial ?? "" : "");
-        if (battery is not null && device.Hand is null && device.Serial is { } serial)
-        {
-            detail = $"{serial}, {battery}";
-        }
-
+        // The serial only tells controllers apart when their hand doesn't.
+        var detail = string.Join(", ", new[] { device.Hand is null ? device.Serial : null, battery }.Where(s => !string.IsNullOrEmpty(s)));
         return new DeviceItem(kind, detail, device.Kind == TrackedKind.Controller ? "" : "");
     }
 }

@@ -871,8 +871,9 @@ public sealed class AppHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Runs <c>Mirador.exe --approve-build</c> through one UAC prompt for <paramref name="profile"/>'s build as it is now
-    /// and its variables; for a profile of the bundled Monado, its variables only. Variables that can't run as
+    /// Approves <paramref name="profile"/> through one UAC prompt: its build as it is now and its variables
+    /// (<c>--approve-build</c>), or its variables alone when its approved copy is that build and intact
+    /// (<c>--approve-variables</c>); for a profile of the bundled Monado, its variables only. Variables that can't run as
     /// administrator are refused before any prompt (<see cref="ElevatedChoice.ApprovalProblem"/>). Null when it is
     /// approved, else why not.
     /// </summary>

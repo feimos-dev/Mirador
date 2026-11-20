@@ -20,8 +20,14 @@ public sealed class BuildRun
     /// <summary>Whether it was cancelled.</summary>
     public bool Cancelled { get; internal set; }
 
+    private volatile bool approving;
+
     /// <summary>Whether the build is over but its approval isn't: another build of the profile waits for it.</summary>
-    public bool Approving { get; internal set; }
+    public bool Approving
+    {
+        get => approving;
+        internal set => approving = value;
+    }
 
     /// <summary>Whether it is building, or its approval is open.</summary>
     internal bool Busy => this is { Outcome: null, Cancelled: false } or { Approving: true };
@@ -94,9 +100,10 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
 
         _ = Task.Run(async () =>
         {
+            BuildOutcome? outcome = null;
             try
             {
-                run.Outcome = await builder.BuildAsync(profile, line =>
+                outcome = await builder.BuildAsync(profile, line =>
                 {
                     run.Add(line);
                     if (Interlocked.Exchange(ref linesPending, 1) == 0)
@@ -114,11 +121,13 @@ public sealed class Builds(MonadoBuilder builder, Func<string, Task>? afterBuilt
                 // Whatever went wrong, the build has ended: the page must not stay on "Building…".
                 AppLog.Write("A branch build failed", e);
                 run.Add(e.Message);
-                run.Outcome = new BuildOutcome(false, e.Message, null, null, builder.LastLog(profile.Id) ?? "");
+                outcome = new BuildOutcome(false, e.Message, null, null, builder.LastLog(profile.Id) ?? "");
             }
 
-            // Busy until the approval is done: a new build mustn't write the folder its approval copies.
-            run.Approving = run.Outcome is { Ok: true } && afterBuilt is not null;
+            // Busy until the approval is done, from before the outcome shows: a new build mustn't write the folder its
+            // approval copies.
+            run.Approving = outcome is { Ok: true } && afterBuilt is not null;
+            run.Outcome = outcome;
             Changed?.Invoke(profile.Id);
             if (run.Approving)
             {
