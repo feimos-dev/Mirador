@@ -97,9 +97,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>The "OpenLamina" card of About: the version and commit.</summary>
     public string OpenCompositeDescription =>
         host.OpenComposite.Source is { } source
-            ? $"{source.Describe()}. From GitHub."
-            : host.OpenComposite.IsInstalled ? "Installed, version unknown."
-            : "Not installed yet: Home has \"Get OpenLamina\".";
+            ? source.Describe()
+            : host.OpenComposite.IsInstalled ? "Version unknown"
+            : "Not installed";
 
     /// <summary>"today at 09:10" or "yesterday at 14:02", else "on 3 Nov at 14:02".</summary>
     internal static string DescribeLastCheck(DateTime last, DateTime now)

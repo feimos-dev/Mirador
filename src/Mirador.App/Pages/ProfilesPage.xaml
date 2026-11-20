@@ -232,7 +232,7 @@
 
                 <!-- What Mirador does on Windows for the headset: one choice turns all of it on, the layer included. -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="Windows tools" />
-                <toolkit:SettingsCard Description="{x:Bind ViewModel.HeadsetDescription, Mode=OneWay}" Header="Headset Type">
+                <toolkit:SettingsCard Header="Headset Type">
                     <ComboBox
                         MinWidth="200"
                         ItemsSource="{x:Bind ViewModel.Headsets}"

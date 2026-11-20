@@ -15,9 +15,6 @@ public interface IHeadsetModule
     /// <summary>The headset's name for the user.</summary>
     string DisplayName { get; }
 
-    /// <summary>What the module does on Windows around Monado, in a sentence or two for the profile editor.</summary>
-    string WindowsTools => "";
-
     /// <summary>Whether Monado tracks this headset through SteamVR's Lighthouse driver, which can't share the receiver with SteamVR.</summary>
     bool UsesSteamVrLighthouse { get; }
 

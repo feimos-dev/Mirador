@@ -25,7 +25,7 @@
             Grid.Row="1"
             SizeChanged="FitLogs"
             Spacing="4">
-            <toolkit:SettingsExpander Description="Mirador, Windows, Monado, OpenLamina and the profile." Header="Versions">
+            <toolkit:SettingsExpander Header="Versions">
                 <toolkit:SettingsExpander.Items>
                     <toolkit:SettingsCard ContentAlignment="Left">
                         <TextBlock
@@ -35,7 +35,7 @@
                     </toolkit:SettingsCard>
                 </toolkit:SettingsExpander.Items>
             </toolkit:SettingsExpander>
-            <toolkit:SettingsCard Description="A zip with the logs, settings and versions, for a bug report." Header="Diagnostics file">
+            <toolkit:SettingsCard Description="For a bug report." Header="Diagnostics file">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Command="{x:Bind ViewModel.OpenLogFolderCommand}" Content="Open log folder" />
                     <Button
@@ -45,7 +45,7 @@
                 </StackPanel>
             </toolkit:SettingsCard>
             <toolkit:SettingsCard
-                Description="Stops Pimax's software, checks that direct mode works with this NVIDIA driver (about 20 s), then starts Pimax's software again. Not while Monado runs."
+                Description="Checks direct mode. About 20 s, with Monado stopped."
                 Header="Display check"
                 Visibility="{x:Bind ViewModel.IsDreamAir, Mode=OneWay}">
                 <StackPanel Orientation="Horizontal" Spacing="12">

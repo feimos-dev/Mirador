@@ -14,8 +14,7 @@ using Mirador.Pimax;
 namespace Mirador.App.ViewModels;
 
 /// <summary>A headset choice in the profile editor's Windows tools; a null id is "None".</summary>
-/// <param name="WindowsTools">What its module does on Windows around Monado.</param>
-public sealed record HeadsetItem(string? Id, string Name, string WindowsTools = "")
+public sealed record HeadsetItem(string? Id, string Name)
 {
     public override string ToString() => Name;
 }
@@ -53,7 +52,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Headsets.Add(new HeadsetItem(null, "None"));
         foreach (var module in host.Modules.Values)
         {
-            Headsets.Insert(Headsets.Count - 1, new HeadsetItem(module.Id, module.DisplayName, module.WindowsTools));
+            Headsets.Insert(Headsets.Count - 1, new HeadsetItem(module.Id, module.DisplayName));
         }
 
         Extra.CollectionChanged += (_, e) =>
@@ -79,7 +78,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public static readonly ProfileItem AddItem = new("", "Add a profile…");
 
     /// <summary>The picker card's description.</summary>
-    public string PickerDescription => IsDirty ? "Save or revert your changes to pick another." : "The profile to change. Home picks the one Monado starts with.";
+    public string PickerDescription => IsDirty ? "Save or revert to pick another." : "";
 
     /// <summary>
     /// Whether the picked profile can be deleted: not with unsaved changes, not the last one, not the one Monado runs
@@ -117,7 +116,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public partial string Name { get; set; } = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HeadsetDescription))]
     public partial HeadsetItem? Headset { get; set; }
 
     /// <summary>
@@ -251,11 +249,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
     public partial string? Message { get; set; }
-
-    /// <summary>The Windows tools card's description: what the picked headset's module does around Monado.</summary>
-    public string HeadsetDescription => Headset?.WindowsTools is { Length: > 0 } tools
-        ? tools
-        : "";
 
     public bool MonadoFromFolder => MonadoSource == FolderSource;
 

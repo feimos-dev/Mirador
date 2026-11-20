@@ -58,10 +58,6 @@ public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 
     public string DisplayName => "Pimax";
 
-    public string WindowsTools =>
-        "Mirador stops Pimax's software while Monado runs, drives the headset's display through NVIDIA direct mode with Mirador's Vulkan layer, " +
-        "and for the Dream Air uploads the eye geometry.";
-
     /// <summary>The plugged-in model's tracking: SteamVR's Lighthouse driver for the Dream Airs, not for the Crystals.</summary>
     public bool UsesSteamVrLighthouse => Model().Lighthouse;
 
