@@ -6,7 +6,7 @@ namespace Mirador.Core.Diagnostics;
 /// <summary>A full release from GitHub's <c>releases/latest</c>.</summary>
 /// <param name="Tag">The release's tag, such as <c>v0.2.0</c>.</param>
 /// <param name="Url">The release's page.</param>
-/// <param name="InstallerUrl">The download of the asset <c>OpenLamina-Setup.exe</c>; null when the release has none or no digest.</param>
+/// <param name="InstallerUrl">The download of the asset <c>OpenLamina-Windows-Installer.exe</c>; null when the release has none or no digest.</param>
 /// <param name="InstallerSha256">That asset's SHA-256 from GitHub's <c>digest</c>, lower case without <c>sha256:</c>; null likewise.</param>
 public sealed record Release(string Tag, string Url, string? InstallerUrl, string? InstallerSha256);
 
@@ -17,7 +17,7 @@ public static class UpdateCheck
 
     public const string OpenCompositeRepository = "feimos-dev/OpenLamina";
 
-    private const string Installer = "OpenLamina-Setup.exe";
+    private const string Installer = "OpenLamina-Windows-Installer.exe";
 
     private const string DigestPrefix = "sha256:";
 

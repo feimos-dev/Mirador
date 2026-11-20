@@ -39,8 +39,8 @@ public class UpdateCheckTests
               "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
             },
             {
-              "name": "OpenLamina-Setup.exe",
-              "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
+              "name": "OpenLamina-Windows-Installer.exe",
+              "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Windows-Installer.exe",
               "digest": "sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789"
             }
           ]
@@ -56,7 +56,7 @@ public class UpdateCheckTests
             new Release(
                 "v2026.11.20",
                 "https://github.com/feimos-dev/OpenLamina/releases/tag/v2026.11.20",
-                "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Setup.exe",
+                "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/OpenLamina-Windows-Installer.exe",
                 "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"),
             release);
     }

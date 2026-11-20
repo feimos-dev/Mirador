@@ -18,7 +18,7 @@ public enum InstallOutcome
 /// <summary>
 /// OpenLamina as its own installer puts it for this user: <see cref="DefaultFolder"/>, with <c>bin\vrclient_x64.dll</c>
 /// and a <c>SOURCE.txt</c> whose first line names the release. Mirador gets and updates it by running the fork's
-/// <c>OpenLamina-Setup.exe</c> silently; OpenLamina's own uninstall entry removes it. Mirador keeps no copy.
+/// <c>OpenLamina-Windows-Installer.exe</c> silently; OpenLamina's own uninstall entry removes it. Mirador keeps no copy.
 /// </summary>
 /// <param name="folder">The installer's folder.</param>
 /// <param name="runner">Runs the installer; null: <see cref="CommandRunner"/>.</param>
@@ -172,7 +172,7 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         }
 
         Directory.CreateDirectory(downloadDir);
-        var setup = Path.Combine(downloadDir, $"OpenLamina-Setup-{version}.exe");
+        var setup = Path.Combine(downloadDir, $"OpenLamina-Windows-Installer-{version}.exe");
         var part = setup + ".tmp";
         try
         {
