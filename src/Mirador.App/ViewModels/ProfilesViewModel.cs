@@ -433,6 +433,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
             File.Delete(host.VerifyResultFile(profileId));
         }
+        catch (DirectoryNotFoundException)
+        {
+            // Already gone.
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
             AppLog.Write($"Couldn't remove what was left of a deleted profile's build ({profileId})", e);
