@@ -102,6 +102,13 @@ internal static unsafe class ControllerModels
             var directory = Path.Combine(AppContext.BaseDirectory, Program.AssetsFolder, "controllers", folder);
             var file = new[] { $"{side}.glb", "none.glb" }.Select(f => Path.Combine(directory, f)).FirstOrDefault(File.Exists);
             model = file is null ? null : Model.FromFile(file);
+            // StereoKit turns a glTF half a turn about +Y as it loads it, for glTF's +Z forward. These models are in
+            // grip space as they are, so the same turn again undoes it.
+            for (var node = model?.RootNode; node is not null; node = node.Sibling)
+            {
+                node.LocalTransform *= Matrix.R(0, 180, 0);
+            }
+
             Loaded[key] = model;
         }
 
