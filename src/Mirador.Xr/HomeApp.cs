@@ -17,6 +17,7 @@ internal static class HomeApp
             return 1;
         }
 
+        ControllerModels.Follow();
         var scene = new HomeScene();
         link.Send(XrLink.Running);
         bool? shown = null;

@@ -95,6 +95,7 @@ Remove-Item -LiteralPath $xrOut -Recurse -Force
 Need (Join-Path $Out 'Mirador.Xr.exe') 'the home and dashboard''s publish'
 Need (Join-Path $Out 'xr\grid.hlsl.sks') 'the home''s shaders'
 Need (Join-Path $Out 'xr\power.png') 'the dashboard''s icons'
+Need (Join-Path $Out 'xr\controllers\valve-index\left.glb') 'the controllers'' models'
 Copy-Item -LiteralPath $standin -Destination (New-Item -ItemType Directory -Force -Path (Join-Path $Out 'standin')).FullName -Force
 # The bundled Monado's build recipe and its vcpkg pin, which the app runs to build a profile's branch.
 $toolsDir = New-Item -ItemType Directory -Force -Path (Join-Path $Out 'tools')

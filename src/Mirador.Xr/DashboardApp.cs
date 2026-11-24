@@ -83,6 +83,7 @@ internal sealed class DashboardApp
             return 4;
         }
 
+        ControllerModels.Follow();
         var app = new DashboardApp(link);
         link.Send(XrLink.Running);
         SK.Run(app.Step);

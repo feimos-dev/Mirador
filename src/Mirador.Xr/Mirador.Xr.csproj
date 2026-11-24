@@ -18,6 +18,8 @@
   <ItemGroup>
     <!-- The icons (tools\make-xr-icons.py draws them). The package compiles the shaders into xr\ by itself. -->
     <Content Include="Assets\*.png" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The controllers' models, from the WebXR Input Profiles. -->
+    <Content Include="Assets\controllers\**\*.glb" Link="xr\controllers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The libraries' licences travel with their DLLs. -->
     <Content Include="Assets\THIRD-PARTY-NOTICES.txt" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

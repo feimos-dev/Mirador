@@ -103,7 +103,8 @@ StereoKit.
 
 [Boost Software License 1.0](LICENSE).
 
-The home and the dashboard are built on StereoKit, Vortice.Windows and SharpGen.Runtime, all under the MIT license:
+The home and the dashboard are built on StereoKit, Vortice.Windows and SharpGen.Runtime, and draw the controllers with
+the WebXR Input Profiles' models, all under the MIT license:
 [their notices](src/Mirador.Xr/Assets/THIRD-PARTY-NOTICES.txt).
 
 The icons contain Monado's logo, from Monado's Android launcher icon, Copyright 2023, Collabora, Ltd.,
