@@ -15,7 +15,7 @@
 namespace {
 
 // The EDID value Windows keeps for the Dream Air (HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\PVR1019\...\Device
-// Parameters\EDID, design 6.3): three blocks, 384 bytes, read from Finn's machine. It starts 00FFFFFFFFFFFF0042D21910.
+// Parameters\EDID): three blocks, 384 bytes, read from a real machine. It starts 00FFFFFFFFFFFF0042D21910.
 constexpr const char* kDreamAirEdidHex =
     "00FFFFFFFFFFFF0042D2191001000000FF230104A50000780030FDAE503BB2230C474A00000001010101010101010101"
     "010101010101000000100000000000000000000000000000000000100000000000000000000000000000000000FC0050"

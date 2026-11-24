@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The check tool's pure parts (design 7): its arguments, the holder findings, the verdict, the lines it prints for the
+// The check tool's pure parts: its arguments, the holder findings, the verdict, the lines it prints for the
 // display session's result, and the advice for a failed step. Nothing here touches NVAPI, the board or Vulkan.
 
 #include <catch2/catch_test_macros.hpp>
@@ -161,7 +161,7 @@ TEST_CASE("pi_server holds the display and the board, and both are named")
     const dvl::HolderFindings f = dvl::holder_findings({"explorer.exe", "PI_SERVER.EXE", "vrss_gaze_provider.exe"});
     CHECK(f.blocked());
     REQUIRE(f.blockers.size() == 2);
-    // The display line (design 4: pi_server.exe, vrcompositor.exe) and the board line (the launcher's six).
+    // The display line and the board line (the launcher's six).
     CHECK(any_line_contains(f.blockers, "display"));
     CHECK(any_line_contains(f.blockers, "board"));
     for (const std::string& line : f.blockers) {
@@ -225,7 +225,7 @@ TEST_CASE("Monado holds all three")
 
 TEST_CASE("the Lighthouse receiver's holders do not block this tool")
 {
-    // Only the start script needs the receiver (design 4).
+    // Only the start script needs the receiver.
     CHECK_FALSE(dvl::holder_findings({"vrserver.exe", "vrmonitor.exe", "OVRLighthouseManager.exe"}).blocked());
 }
 

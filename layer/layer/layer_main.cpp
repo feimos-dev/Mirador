@@ -60,9 +60,9 @@ std::string process_name()
     return dvl::to_utf8(dvl::current_process_basename());
 }
 
-// Keeps this DLL mapped until the process ends. The loader unloads a layer at every vkDestroyInstance (design 5), but
+// Keeps this DLL mapped until the process ends. The loader unloads a layer at every vkDestroyInstance, but
 // the layer's state is per process by design: one log file, one start line, the console handler, and later the display
-// session (design 6.10: "the DLL is pinned"). A process that declined never gets here, so the loader still unloads it.
+// session. A process that declined never gets here, so the loader still unloads it.
 void pin_this_dll()
 {
     if (g_pinned.exchange(true)) {
@@ -92,7 +92,7 @@ VkLayerInstanceCreateInfo* find_instance_link(const VkInstanceCreateInfo* ci)
     return nullptr;
 }
 
-// The first vkCreateInstance of the process: the one start line (design 8) and the console handler (design 6.10).
+// The first vkCreateInstance of the process: the one start line and the console handler.
 void on_first_instance() noexcept
 {
     if (g_started.exchange(true)) {
@@ -287,7 +287,7 @@ extern "C" VKAPI_ATTR VkResult VKAPI_CALL vkNegotiateLoaderLayerInterfaceVersion
         }
         const uint32_t offered = negotiate->loaderLayerInterfaceVersion;
 
-        // The process guard (design 5): a safety net for a machine-wide MIRADOR_DIRECT_MODE=1. The loader skips a layer
+        // The process guard: a safety net for a machine-wide MIRADOR_DIRECT_MODE=1. The loader skips a layer
         // that fails here (its DLL stays loaded until vkDestroyInstance, and the layer's extension names stay listed,
         // which is why the guard cannot keep goal 4 by itself). One line, and no new log file: see log_append.
         if (!dvl::current_process_allowed()) {
@@ -335,7 +335,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
         DisableThreadLibraryCalls(instance);
         break;
     case DLL_PROCESS_DETACH:
-        // lpReserved non-NULL: the process is exiting, and nothing happens (design 6.10). NULL is FreeLibrary, which
+        // lpReserved non-NULL: the process is exiting, and nothing happens. NULL is FreeLibrary, which
         // only reaches a DLL that never accepted the process (see pin_this_dll).
         dvl::on_process_detach(reserved);
         break;

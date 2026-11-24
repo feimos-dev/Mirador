@@ -30,8 +30,8 @@ public interface IConsentValues
 }
 
 /// <summary>
-/// Which users have allowed Monado to run as administrator (Mirador.md section 4.10 item 44), and for each the SteamVR
-/// Lighthouse DLLs not signed by Valve that they allowed with it (item 46: name and SHA-256). Only an administrator can
+/// Which users have allowed Monado to run as administrator, and for each the SteamVR
+/// Lighthouse DLLs not signed by Valve that they allowed with it. Only an administrator can
 /// write the keys, so a program running as the user can't give itself consent or approve a DLL: <see cref="Allow"/>
 /// runs in the elevated <c>--allow-elevated-monado</c> step (or the installer), and the helper service only ever calls
 /// <see cref="Revoke"/>, <see cref="IsAllowed"/> and <see cref="ApprovedFiles"/>.

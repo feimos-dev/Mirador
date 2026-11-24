@@ -5,7 +5,7 @@ using Mirador.Ipc;
 namespace Mirador.Core.Build;
 
 /// <summary>
-/// Installs Mirador's own build tools under <c>%LOCALAPPDATA%\Mirador\tools</c> (Mirador.md §4.11 item 49): each pinned
+/// Installs Mirador's own build tools under <c>%LOCALAPPDATA%\Mirador\tools</c>: each pinned
 /// zip from its GitHub release, checked by its SHA-256 before anything is unpacked, no entry leaving its folder; and
 /// vcpkg, cloned whole over https and checked out at Mirador's pinned commit. A failure leaves the old copy as it was.
 /// </summary>

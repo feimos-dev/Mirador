@@ -7,7 +7,7 @@ namespace Mirador.Pimax;
 /// <summary>
 /// What the Dream Air needs on this PC, checked before each Start and for the first-run checks and Home: Pimax Play's
 /// eye tracking runtime and eye geometry, SteamVR's Lighthouse driver and the headset itself. Each
-/// run looks again, so a moved or missing file after an update is found (Mirador.md §4.4 item 12).
+/// run looks again, so a moved or missing file after an update is found.
 /// </summary>
 /// <param name="reg">The registry, to find Pimax Play.</param>
 /// <param name="usb">The USB devices, to find the headset's parts.</param>

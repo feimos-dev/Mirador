@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// VK_EXT_display_control (design 6.9), the layer's own extension, and the fence commands that answer for its display
+// VK_EXT_display_control, the layer's own extension, and the fence commands that answer for its display
 // events. vkRegisterDisplayEventEXT hands out a real driver fence that is never submitted; vkWaitForFences,
 // vkGetFenceStatus and vkResetFences answer for it from the event table (dvl::EventTable), which the display thread
 // sets at the first refresh after the registration; lists that mix event and ordinary fences are split, and ordinary
@@ -72,7 +72,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, Vk
                 static_cast<int>(info->displayEvent));
         }
         DeviceData& d = device_data(device);
-        // A real driver fence, never submitted: the layer answers for it (design 6.9).
+        // A real driver fence, never submitted: the layer answers for it.
         VkFenceCreateInfo create{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         VkFence made = VK_NULL_HANDLE;
         const VkResult r = call_down(d.CreateFence, "vkCreateFence", device, &create, alloc, &made);
@@ -117,9 +117,9 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_DisplayPowerControlEXT(VkDevice, VkDisplayK
     return guarded("vkDisplayPowerControlEXT", [&] {
         if (!is_our_display(display)) {
             log(Level::Error, "vkDisplayPowerControlEXT: display %p is not the layer's", static_cast<void*>(display));
-            return VK_ERROR_UNKNOWN; // design 6.1
+            return VK_ERROR_UNKNOWN;
         }
-        // Success, a no-op (design 6.9): the headset's power is the board's business.
+        // Success, a no-op: the headset's power is the board's business.
         log(Level::Debug, "vkDisplayPowerControlEXT: power state %d on the layer's display: nothing to do",
             info != nullptr ? static_cast<int>(info->powerState) : -1);
         return VK_SUCCESS;
@@ -136,7 +136,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetSwapchainCounterEXT(VkDevice device, VkS
                     static_cast<unsigned>(counter));
                 return VK_ERROR_UNKNOWN;
             }
-            // The 64-bit flip count (design 6.9): every counter increment, continued across link drops.
+            // The 64-bit flip count: every counter increment, continued across link drops.
             Presenter& p = presenter();
             Locked lk(p);
             *value = p.model.counters().refreshes;
@@ -170,7 +170,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_WaitForFences(VkDevice device, uint32_t cou
         const EventWait w =
             wait_for_fences(p->events, lk.hold, device, fences, count, wait_all == VK_TRUE, timeout, host);
         if (w.result == VK_SUCCESS && w.set_ns) {
-            // The stats' display-event wake time: when the wait returns minus NVAPI's refresh time (design 6.8).
+            // The stats' display-event wake time: when the wait returns minus NVAPI's refresh time.
             const int64_t woke = p->clock.now_ns();
             p->stats.on_wake(woke - *w.set_ns);
             if (p->trace) {
@@ -237,7 +237,7 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyFence(VkDevice device, VkFence fence, co
                 p->warnings.on_event_gone(handle_key(fence));
             }
         }
-        // The real fence goes down either way (design 6.9).
+        // The real fence goes down either way.
         if (d.DestroyFence == nullptr) {
             missing_below("vkDestroyFence");
             return;

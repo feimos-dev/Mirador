@@ -18,7 +18,7 @@ target_compile_definitions(dvl_check_lib PUBLIC VK_NO_PROTOTYPES)
 target_link_libraries(dvl_check_lib PUBLIC nvdm Vulkan::Headers setupapi hid)
 
 # mirador-display-check.exe: the name matters. The layer's process guard lets exactly this executable name (and
-# monado-service.exe) load it (design 5).
+# monado-service.exe) load it.
 add_executable(mirador-display-check main.cpp)
 target_link_libraries(mirador-display-check PRIVATE dvl_check_lib)
 target_compile_definitions(mirador-display-check PRIVATE "DVL_CHECK_VERSION=\"${PROJECT_VERSION}\"")

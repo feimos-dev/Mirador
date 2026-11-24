@@ -66,7 +66,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The first run's question (Mirador.md §4.11 item 55): where the profiles' Monado comes from, Mirador's Monado
+    /// The first run's question: where the profiles' Monado comes from, Mirador's Monado
     /// first. The answer goes into every first-run profile and is saved, so it is asked once; building from a link or
     /// picking a build folder continues on the Profiles page.
     /// </summary>

@@ -5,7 +5,7 @@ namespace Mirador.Core.Build;
 
 /// <summary>
 /// What a Monado build came from, as <c>tools\build-monado.ps1</c> writes it into the install folder
-/// (<c>build-info.json</c>): shown on the profile and in the diagnostics zip (Mirador.md §4.11 item 49).
+/// (<c>build-info.json</c>): shown on the profile and in the diagnostics zip.
 /// </summary>
 public sealed record BuildInfo(
     string? SourceUrl,

@@ -41,7 +41,7 @@ struct Registry {
 };
 
 // Made at first use and never destroyed: a static would run its destructor at process exit, when a killed thread may
-// hold the lock (design 6.10).
+// hold the lock.
 Registry& registry()
 {
     static Registry* const r = new Registry;

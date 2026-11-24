@@ -8,7 +8,7 @@
 
 namespace nvdm {
 
-// The Dream Air's board (design 7): USB vendor 0x34A4, product 0x0044. The display only appears while the board gets
+// The Dream Air's board: USB vendor 0x34A4, product 0x0044. The display only appears while the board gets
 // its heartbeat, so a connected Dream Air always has it.
 inline constexpr uint16_t kBoardVendorId = 0x34A4;
 inline constexpr uint16_t kBoardProductId = 0x0044;

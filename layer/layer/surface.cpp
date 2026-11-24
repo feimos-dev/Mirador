@@ -50,7 +50,7 @@ struct SurfaceRegistry {
     std::unordered_map<const void*, std::unique_ptr<SurfaceRecord>> records;
 };
 
-// Made at first use and never destroyed (design 6.10).
+// Made at first use and never destroyed.
 SurfaceRegistry& registry()
 {
     static SurfaceRegistry* const r = new SurfaceRegistry;

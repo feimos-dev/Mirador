@@ -2,7 +2,7 @@ using Mirador.Core.Modules;
 
 namespace Mirador.Pimax;
 
-/// <summary>A Pimax headset of the P3C platform and what Mirador does for it (Mirador.md §4.11 item 53).</summary>
+/// <summary>A Pimax headset of the P3C platform and what Mirador does for it.</summary>
 /// <param name="Board">The USB id of its board, by which it is told apart.</param>
 /// <param name="Name">Its name.</param>
 /// <param name="EyeSteps">

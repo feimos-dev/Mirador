@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The decisions of the back-buffer import that need no driver (design 6.3, 6.4): the two image configurations, the
+// The decisions of the back-buffer import that need no driver: the two image configurations, the
 // view-format list, what a format query must say, and which memory type an import gets.
 
 #include <catch2/catch_test_macros.hpp>
@@ -97,7 +97,7 @@ TEST_CASE("view_formats_unorm_only_with_storage")
 
 TEST_CASE("view_formats_refuse_srgb_with_storage_and_other_formats")
 {
-    // The one combination the driver cannot make (design 6.4): refused before any driver call.
+    // The one combination the driver cannot make: refused before any driver call.
     CHECK_FALSE(dvl::view_formats(VK_FORMAT_R8G8B8A8_SRGB, kStorage).has_value());
     CHECK_FALSE(dvl::view_formats(VK_FORMAT_R8G8B8A8_SRGB, kStorage | kSampledTransfer).has_value());
     // The back-buffer is R8G8B8A8_TYPELESS: nothing else can be imported from it.
@@ -192,7 +192,7 @@ TEST_CASE("memory_type_none_when_handle_and_image_disagree")
 TEST_CASE("memory_type_falls_back_to_image_bits")
 {
     // vkGetMemoryWin32HandlePropertiesKHR failed (nullopt) or gave no bits: the image's memoryTypeBits alone, as the
-    // target did, flagged so that the caller logs it once (design 6.4).
+    // target did, flagged so that the caller logs it once.
     const VkPhysicalDeviceMemoryProperties memory = memory_types({kHost, kLocal, kLocal});
     for (const std::optional<uint32_t> handle : {std::optional<uint32_t>{}, std::optional<uint32_t>{0u}}) {
         INFO("handle bits " << (handle ? "0" : "none"));

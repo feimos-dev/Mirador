@@ -22,15 +22,15 @@
 
 namespace nvdm {
 
-// The display thread's wait (design 6.7 step 1): the "frame queued" event, or a time on the injected clock.
+// The display thread's wait: the "frame queued" event, or a time on the injected clock.
 class Waiter {
 public:
     virtual ~Waiter() = default;
     // True as soon as signal_frame_queued() has been called since the last wait that returned true (the event is
     // auto-reset: one signal ends one wait), false once the clock reaches deadline_ns. A deadline at or before now only
-    // looks at the event. Never waits much past the deadline (design invariant 6).
+    // looks at the event. Never waits much past the deadline.
     virtual bool wait_frame_or_until(int64_t deadline_ns) = 0;
-    // The same wait, for the idle poll (design 6.7, Idle), which need not end on time: it never arms the
+    // The same wait, for the idle poll, which need not end on time: it never arms the
     // high-resolution timer, and may end up to about two timer ticks of the process after deadline_ns: a Win32
     // timeout can end a little early, and the wait then goes on for at least 1 ms more (a tick is 1 ms while Monado
     // sleeps for its next frame, 15.6 ms by default). Never before the deadline, unless the event ends it.
@@ -70,7 +70,7 @@ private:
 };
 
 // The frame fences, by slot (vkWaitForFences and vkGetFenceStatus on the device's VkFence for the slot). The display
-// loop calls both without holding any lock (design invariant 7).
+// loop calls both without holding any lock.
 class FenceOps {
 public:
     virtual ~FenceOps() = default;
@@ -89,23 +89,23 @@ struct DisplayLoopConfig {
     int64_t poll_after_ns = 2'000'000; // step 3 polls until the predicted refresh plus this
     int64_t poll_step_ns = 100'000;    // between two reads of step 3
     int64_t idle_poll_ns = 3'000'000;  // idle: a read this often (a coarse wait: up to about two timer ticks late)
-    int64_t stopped_poll_ns = 4'000'000; // flips stopped: a read this often (design 6.7 step 5)
+    int64_t stopped_poll_ns = 4'000'000; // flips stopped: a read this often
 
     // The loop's own lines (stats lines, failing reads), one call per line, outside the lock. Unset: dropped. The
     // frame model logs its events itself, through FrameModel::set_log().
     std::function<void(const std::string&)> log;
     // Each counter increment the loop sees: the stats' QPC time of the read's last refresh, oldest first. The layer
-    // sets the CPU event of every display event registered before that time (design 6.7 step 4, 6.9). Called under
+    // sets the CPU event of every display event registered before that time. Called under
     // the lock.
     std::function<void(int64_t qpc_ns)> refresh_seen;
     // True while a display event is registered and not yet set: the loop then polls near each refresh instead of
-    // coarsely (design 6.7, Idle). Called under the lock. Unset: none.
+    // coarsely. Called under the lock. Unset: none.
     std::function<bool()> events_pending;
     // Per-frame timing records (TraceKind), or none. Not owned; it must outlive the loop.
     Trace* trace = nullptr;
 };
 
-// One pass of the display thread (design 6.7): the thread that makes every per-frame NVAPI call. It owns no thread;
+// One pass of the display thread: the thread that makes every per-frame NVAPI call. It owns no thread;
 // DisplayThread runs it, and tests call pass() with fakes.
 //
 // Each pass checks the stop request first, then:
@@ -129,9 +129,9 @@ struct DisplayLoopConfig {
 // The prediction is the next refresh period after now, counted from the model's last refresh; but a predicted refresh
 // that has passed unread while its poll window (+ 2 ms) is still open (a wait that ended late) is polled at once.
 //
-// Locking (design invariants 5-8): every model and stats call is made under `lock` (the display-session lock); no
+// Locking: every model and stats call is made under `lock` (the display-session lock); no
 // NVAPI call, fence wait or timer wait is. The loop's lines go to `log` outside the lock, and never between a frame's
-// fence seen signalled and its Present: the stats line a Present closes is written after it (design 6.7). A fence is
+// fence seen signalled and its Present: the stats line a Present closes is written after it. A fence is
 // marked waited under the lock before the loop lets go of it to wait on it or read its status, and is seen and unmarked
 // in one lock hold after (the fence protocol, frame_model.hpp).
 // Only the display thread calls pass(); only one epoch's loop calls NVAPI at a time (DisplayThread's baton).
@@ -155,10 +155,10 @@ public:
     void request_stop();
     bool stop_requested() const;
 
-    // The last pass found nothing to do but watch the refreshes: the coarse polling of design 6.7, Idle.
+    // The last pass found nothing to do but watch the refreshes: the coarse polling, Idle.
     bool idle() const;
 
-    // The thread running this loop was left behind by a join that timed out (design 6.7, thread epochs). Requests a stop
+    // The thread running this loop was left behind by a join that timed out. Requests a stop
     // and, under the lock, marks the loop so that it touches nothing more: whatever NVAPI call it is in, it returns from
     // it to make no model or stats call, not even its Present's return time (that Present then becomes reserved after
     // three increments, FrameModel::on_counter). Any thread but the loop's own, not holding the lock.

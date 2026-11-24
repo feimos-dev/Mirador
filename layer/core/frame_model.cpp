@@ -14,9 +14,9 @@
 namespace nvdm {
 namespace {
 
-// Between two frames shown, a gap longer than this is idle (no app session), not missed (design 6.8).
+// Between two frames shown, a gap longer than this is idle (no app session), not missed.
 constexpr int64_t kIdleGapNs = 1'000'000'000;
-// A failed Present is logged at most this often (design 6.7 step 2).
+// A failed Present is logged at most this often.
 constexpr int64_t kFailedLogNs = 1'000'000'000;
 // How many ended frames frame_end() remembers, and how many refresh times wait for drain_refreshes().
 constexpr size_t kEndedKept = 4096;
@@ -211,7 +211,7 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
     if (now_ns < acquire_bound_ns()) {
         return std::nullopt;
     }
-    // After the bound (design 6.6): 1. the oldest queued frame's back-buffer.
+    // After the bound: 1. the oldest queued frame's back-buffer.
     for (const auto& [seq, frame] : frames_) {
         if (frame.state == FrameState::Queued) {
             const uint32_t b = frame.buffer;
@@ -233,8 +233,9 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
         return take(*reserved, gen, Acquired::Via::Reserved);
     }
     // 3. Only while flips have stopped: the presented one. Acquire does not wait for the display thread's tick() to
-    //    notice (invariant 6); if it has not yet, flips stop here (no frame is queued to drop, step 1 found none). The
-    //    Present it takes counts as the one Present of the stopped period, so none follows until the counter moves.
+    //    notice (every wait is bounded); if it has not yet, flips stop here (no frame is queued to drop, step 1 found
+    //    none). The Present it takes counts as the one Present of the stopped period, so none follows until the
+    //    counter moves.
     if (stopped_at(now_ns)) {
         if (const std::optional<uint32_t> p = presented_buffer()) {
             if (!stopped_) {
@@ -381,7 +382,7 @@ bool FrameModel::present_started(FrameSeq seq, int64_t qpc_ns)
             break;
         }
         if (frame.state == FrameState::Queued && !shown_at_next_flip(frame)) {
-            return false; // held back, itself or by an older queued frame (design 6.11)
+            return false; // held back, itself or by an older queued frame
         }
     }
     std::vector<FrameSeq> older;
@@ -420,7 +421,7 @@ bool FrameModel::present_started(FrameSeq seq, int64_t qpc_ns)
 void FrameModel::present_returned(FrameSeq seq, int code, int64_t qpc_ns)
 {
     if (code != 0) {
-        // The next Present waits for a counter increment after this one (design 6.7 step 2).
+        // The next Present waits for a counter increment after this one.
         wait_increment_ = true;
         wait_after_ns_ = qpc_ns;
     }
@@ -564,7 +565,7 @@ void FrameModel::credit(uint32_t buffer, int64_t qpc_ns)
     if (prev_credit_valid_ && qpc_ns - prev_credit_ns_ <= kIdleGapNs && refresh_count_ - prev_credit_count_ > 1) {
         const uint64_t gap = refresh_count_ - prev_credit_count_;
         counters_.missed += gap - 1;
-        // Of those, the flips before the first one its target allowed (design 6.11; the target of this frame or of
+        // Of those, the flips before the first one its target allowed (the target of this frame or of
         // one it took the place of): asked for, not late.
         const int64_t period = std::max<int64_t>(config_.refresh_ns, 1);
         if (buf.not_before_ns > prev_credit_ns_ + period) {
@@ -822,7 +823,7 @@ uint64_t FrameModel::ids_completed() const
     return ids_completed_;
 }
 
-// --- Invariants (design 6.5) ---------------------------------------------------------------------------------------
+// --- Invariants ---------------------------------------------------------------------------------------
 
 void FrameModel::check_invariants() const
 {

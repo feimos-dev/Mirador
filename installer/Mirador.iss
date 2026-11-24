@@ -2,7 +2,7 @@
 ;   ISCC /DAppVersion=<version> installer\Mirador.iss
 ;
 ; {app} is Program Files\Mirador, admin-only: the helper service runs from it as LocalSystem and makes its Monado the
-; OpenXR runtime of every app (Mirador.md section 7.4), so there is no folder choice. If one ever comes back, {app} needs
+; OpenXR runtime of every app, so there is no folder choice. If one ever comes back, {app} needs
 ; a protected DACL (Administrators and SYSTEM full control, Users read and execute).
 
 #ifndef AppVersion
@@ -48,8 +48,8 @@ Type: filesandordirs; Name: "{app}\standin"
 Type: filesandordirs; Name: "{app}\tools"
 
 [UninstallDelete]
-; Mirador's Monado, which the helper installed (Mirador.md section 4.11 item 55), and its download folder; and the
-; builds users approved to run as administrator (item 51), which the elevated approval step copied.
+; Mirador's Monado, which the helper installed, and its download folder; and the
+; builds users approved to run as administrator, which the elevated approval step copied.
 Type: filesandordirs; Name: "{app}\monado"
 Type: filesandordirs; Name: "{app}\builds"
 
@@ -65,7 +65,7 @@ Root: HKLM64; Subkey: "SOFTWARE\Mirador"; ValueType: string; ValueName: "AppPath
 
 [Run]
 ; No consent for Monado as administrator here: a profile's "Run as administrator" asks for it when it is saved
-; (Mirador.md section 4.10 item 44), and it goes once no profile has it on.
+;, and it goes once no profile has it on.
 Filename: "{app}\Mirador.exe"; Description: "Start Mirador"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
@@ -146,7 +146,7 @@ begin
   Result := '';
 end;
 
-{ The standalone layer's registration (its own install, Mirador.md section 4.1 item 1) goes: Mirador's replaces it. }
+{ The standalone layer's registration (its own install) goes: Mirador's replaces it. }
 function HasSuffix(const Text, Suffix: String): Boolean;
 begin
   Result := (Length(Text) >= Length(Suffix))
@@ -235,7 +235,7 @@ begin
   if CurUninstallStep <> usUninstall then
     Exit;
 
-  { Mirador no longer starts at sign-in (Mirador.md section 4.8 item 33): the Run value is the uninstalling user's. }
+  { Mirador no longer starts at sign-in: the Run value is the uninstalling user's. }
   if not Exec(ExpandConstant('{app}\Mirador.exe'), '--remove-sign-in', '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Log('Mirador.exe --remove-sign-in could not be started.')
   else if Code <> 0 then
@@ -268,10 +268,10 @@ begin
   RegDeleteValue(HKLM64, ImplicitLayers, ExpandConstant('{app}\layer\mirador_direct_mode.json'));
   Sc('delete {#ServiceName}');
   RegDeleteValue(HKLM64, MiradorKey, 'PreviousActiveRuntime');
-  { Everyone's consent to run Monado as administrator goes with Mirador (Mirador.md section 4.10 item 44), and with it
-    the SteamVR files each user allowed (item 46). }
+  { Everyone's consent to run Monado as administrator goes with Mirador, and with it
+    the SteamVR files each user allowed. }
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ElevatedMonado');
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ElevatedMonadoFiles');
-  { And every user's approved builds (item 51): an approval isn't carried over to a reinstall. }
+  { And every user's approved builds: an approval isn't carried over to a reinstall. }
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ApprovedBuilds');
 end;

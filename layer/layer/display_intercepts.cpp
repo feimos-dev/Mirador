@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display, plane and mode commands (design 6.3). Our display is listed first on the physical device whose adapter
+// The display, plane and mode commands. Our display is listed first on the physical device whose adapter
 // drives the headset, our plane is index 0 there and the driver's planes follow; every command on our display or mode
 // is answered here, and anything else goes down unchanged (plane indices shifted back where our plane is listed).
 // Also the display session the intercepts use, and its test seam.
@@ -29,8 +29,8 @@ namespace {
 
 std::atomic<nvdm::DisplaySession*> g_test_session{nullptr};
 
-// The session's own lines (design 6.3: it names the failing step and its return value itself), into the layer's log:
-// a step's failure at Error, so MIRADOR_DIRECT_MODE_LOG=warn still shows it (design 8), warnings at Warn.
+// The session's own lines, into the layer's log:
+// a step's failure at Error, so MIRADOR_DIRECT_MODE_LOG=warn still shows it, warnings at Warn.
 void log_session_line(const std::string& line)
 {
     const SessionLine s = session_line(line);
@@ -54,7 +54,7 @@ struct Decision {
     VkImageUsageFlags usage = 0;
 };
 
-// The first display query on a physical device (design 6.3). Not NVIDIA: no NVAPI at all. Otherwise its adapter LUID
+// The first display query on a physical device. Not NVIDIA: no NVAPI at all. Otherwise its adapter LUID
 // goes to the display session, which runs the holder check, opens (or picks up where it stopped), and says whether
 // that adapter drives the display; it logs every failure and success itself. Then the import: the format queries and
 // the trial import on the physical device's devices (import_verdict()).
@@ -129,7 +129,7 @@ VkDisplayPlaneCapabilitiesKHR no_capabilities()
 }
 
 // The answer to vkGetDisplayPlaneCapabilitiesKHR and ...2KHR, or nullopt if the call goes down with the plane index
-// in `down_plane` (design 6.3: pairs with no valid call down are answered here).
+// in `down_plane`.
 std::optional<VkDisplayPlaneCapabilitiesKHR> our_plane_answer(InstanceData& instance, VkPhysicalDevice physical_device,
                                                               VkDisplayModeKHR mode, uint32_t plane,
                                                               uint32_t& down_plane)
@@ -375,7 +375,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDisplayModeKHR(VkPhysicalDevice physi
 {
     return guarded("vkCreateDisplayModeKHR", [&] {
         if (is_our_display(display)) {
-            // One mode (design 6.3). Asking for it again gives it; anything else fails.
+            // One mode. Asking for it again gives it; anything else fails.
             const nvdm::Product& product = open_product();
             if (is_product_mode(product, ci->parameters)) {
                 *out = our_mode();

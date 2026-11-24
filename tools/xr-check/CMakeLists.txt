@@ -1,7 +1,7 @@
 # Copyright 2026, Finn Zeruhn
 # SPDX-License-Identifier: BSL-1.0
 #
-# xr-check: Mirador's small OpenXR test client for "Verify build for Windows" (Mirador.md §4.11 item 49). Built with
+# xr-check: Mirador's small OpenXR test client for "Verify build for Windows". Built with
 # tools\build-cmake.ps1 (vcpkg x64-windows-static: the OpenXR loader is linked in, the CRT is static).
 
 cmake_minimum_required(VERSION 3.21)

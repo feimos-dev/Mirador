@@ -3,10 +3,10 @@
 
 #pragma once
 
-// The swapchain on the layer's surface and the presentation state behind it (design 6.4-6.10), shared by the
+// The swapchain on the layer's surface and the presentation state behind it, shared by the
 // intercepts of swapchain.cpp, present.cpp, events.cpp and misc_intercepts.cpp, and by vkDestroyDevice (device.cpp).
 //
-// Lock order (design 6.5 invariant 7):
+// Lock order:
 //   Presenter::lifecycle -> DeviceData::queue_mutex -> the display-session lock -> leaf locks
 // The leaf locks are the swapchain registry's, PendingLines', LayerFenceOps', the log's and the surface registry's:
 // nothing else is taken while one is held. The display-session lock is never held while taking the private-queue
@@ -44,7 +44,7 @@ namespace dvl {
 
 inline constexpr uint32_t kImageCount = nvdm::kBackBufferCount;
 
-// A swapchain of the layer's on its surface (design 6.4). Its handle is the record's address. Image i is back-buffer
+// A swapchain of the layer's on its surface. Its handle is the record's address. Image i is back-buffer
 // i of the display session: the map image index -> back-buffer is the identity, and back-buffer state lives in the
 // frame model, not here, so every swapchain wraps the same three. Completed present ids are kept per generation in the
 // frame model.
@@ -57,7 +57,7 @@ struct SwapchainRecord {
     DeviceData* device = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-    bool present_at = true; // present at a time (design 6.11), read once at creation: MIRADOR_DIRECT_MODE_NO_PRESENT_AT
+    bool present_at = true; // present at a time, read once at creation: MIRADOR_DIRECT_MODE_NO_PRESENT_AT
 
     // Under the display-session lock.
     bool alive = true;         // until vkDestroySwapchainKHR
@@ -97,7 +97,7 @@ private:
     std::vector<std::pair<Level, std::string>> lines_;
 };
 
-// The display loop's wait (design 6.7 step 1) as the layer runs it: Win32Waiter, writing pending lines before a wait
+// The display loop's wait as the layer runs it: Win32Waiter, writing pending lines before a wait
 // long enough not to matter (never inside step 3's polling window).
 class LayerWaiter : public nvdm::Waiter {
 public:
@@ -114,7 +114,7 @@ private:
 };
 
 // The display loop's frame fences (vkWaitForFences and vkGetFenceStatus on a slot's VkFence), on the one device of an
-// epoch. With vkDestroyDevice's handshake (design 6.10): leave() makes every later call fail at
+// epoch. With vkDestroyDevice's handshake: leave() makes every later call fail at
 // once without touching the device, and waits for a call in progress, which ends by its deadline (~1 ms before the
 // predicted refresh, so within a refresh period).
 class LayerFenceOps : public nvdm::FenceOps {
@@ -139,10 +139,10 @@ private:
     nvdm::Clock& clock_;
 };
 
-// The presentation state of the process (design 6.5-6.9, 6.11), one per display session: the frame model (back-buffers
+// The presentation state of the process, one per display session: the frame model (back-buffers
 // and the frames of the presenting device), the stats, the display events, the present timings, the warnings and the
 // display thread. Made at
-// the first swapchain or display event and never destroyed (design 6.10); a test that puts another display session in
+// the first swapchain or display event and never destroyed; a test that puts another display session in
 // place gets a new one (reset_presenter_for_tests).
 class Presenter {
 public:
@@ -160,9 +160,9 @@ public:
     nvdm::FrameModel model;
     nvdm::StatsWindow stats;
     EventTable events;
-    PresentTimings timings; // fed by the model's reports (design 6.11)
+    PresentTimings timings; // fed by the model's reports
     Warnings warnings;
-    DeviceData* device = nullptr; // the device whose fence pool the model has (one presents at a time, design 6.4)
+    DeviceData* device = nullptr; // the device whose fence pool the model has (one presents at a time)
     uint32_t swapchains = 0;      // the layer's live swapchains
 
     std::atomic<size_t> event_count{0}; // events.size(), for the fence intercepts' look without the lock
@@ -176,7 +176,7 @@ public:
 
     // Swapchain creation and destruction, and vkDestroyDevice, one at a time; never under `lock`.
     std::mutex lifecycle;
-    nvdm::DisplayThread* thread;              // never destroyed (design 6.10)
+    nvdm::DisplayThread* thread;              // never destroyed
     LayerWaiter waiter;                       // every epoch's; signal_frame_queued() from any thread
     std::shared_ptr<LayerFenceOps> fence_ops; // the running epoch's
     std::vector<std::shared_ptr<LayerFenceOps>> past_ops; // kept: a loop left behind still refers to its own
@@ -233,7 +233,7 @@ private:
 // A Vulkan timeout from now, as a deadline on `clock`: INT64_MAX for UINT64_MAX (or anything that does not fit).
 int64_t deadline_after(nvdm::Clock& clock, uint64_t timeout_ns);
 
-// vkDestroyDevice (design 6.10), before the call down and in this order:
+// vkDestroyDevice, before the call down and in this order:
 //  - before_device_destroyed(): the device's swapchains still alive (an application error) are destroyed, as
 //    vkDestroySwapchainKHR would; the display thread leaves the device (the handshake, at most one refresh); frame
 //    fences still outstanding are waited for, up to 100 ms. Takes Presenter::lifecycle.

@@ -1,7 +1,7 @@
 namespace Mirador.Ipc;
 
 /// <summary>
-/// The one test for "this is the installed Mirador" (Mirador.md section 4.10 item 46), shared by the helper, which
+/// The one test for "this is the installed Mirador", shared by the helper, which
 /// starts Monado as administrator only for that caller, and by Mirador, which picks the elevated path (and Home's
 /// "Runs as you" line) with it, so the two can't disagree.
 /// </summary>

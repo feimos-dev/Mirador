@@ -3,7 +3,7 @@
 .SYNOPSIS
     Builds Mirador's install bundle (artifacts\bundle): the app, the helper, the stand-in, the direct-mode layer and the
     tools a branch build needs. Monado and OpenLamina aren't in it: the helper downloads the bundled Monado, and
-    "Get OpenLamina" the fork's release (Mirador.md §4.11 items 55 and 56).
+    "Get OpenLamina" the fork's release.
 .DESCRIPTION
     The bundle is the install layout of the plan's Global Constraints, which the installer (installer\Mirador.iss)
     copies to {app}:
@@ -58,7 +58,7 @@ foreach ($file in $layerFiles) {
     Need $file 'The layer''s build'
 }
 
-# xr-check, Verify's OpenXR test client (Mirador.md §4.11 item 49), from tools\xr-check.
+# xr-check, Verify's OpenXR test client, from tools\xr-check.
 $xrCheckBuild = Join-Path $repo 'artifacts\xr-check-build'
 Invoke-Checked { & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo 'tools\build-cmake.ps1') -Source (Join-Path $repo 'tools\xr-check') -BuildDir $xrCheckBuild -Configure -Build } 'Building xr-check'
 $xrCheck = Join-Path $xrCheckBuild 'xr-check.exe'
@@ -79,8 +79,7 @@ if ($clash) { throw "The helper and the app ship different copies of: $(($clash 
 Copy-Item -Path (Join-Path $helperOut '*') -Destination $Out -Recurse -Force
 Remove-Item -LiteralPath $helperOut -Recurse -Force
 Copy-Item -LiteralPath $standin -Destination (New-Item -ItemType Directory -Force -Path (Join-Path $Out 'standin')).FullName -Force
-# The bundled Monado's build recipe and its vcpkg pin, which the app runs to build a profile's branch (Mirador.md §4.11
-# item 49).
+# The bundled Monado's build recipe and its vcpkg pin, which the app runs to build a profile's branch.
 $toolsDir = New-Item -ItemType Directory -Force -Path (Join-Path $Out 'tools')
 Copy-Item -LiteralPath (Join-Path $repo 'tools\build-monado.ps1'), (Join-Path $repo 'tools\vcpkg-commit.txt'), $xrCheck -Destination $toolsDir.FullName
 

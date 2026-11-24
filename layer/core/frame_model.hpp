@@ -14,7 +14,7 @@
 
 namespace nvdm {
 
-// A back-buffer's NVAPI state (design 6.5). It lives in the display session: it outlasts frames, swapchains and
+// A back-buffer's NVAPI state. It lives in the display session: it outlasts frames, swapchains and
 // devices.
 enum class BufferState {
     Idle,
@@ -23,10 +23,10 @@ enum class BufferState {
     Reserved,  // a Present whose outcome is unknown; NVAPI might still flip to it
 };
 
-// A frame's state (design 6.5), per device.
+// A frame's state, per device.
 enum class FrameState { Acquired, Queued, Presented, OnScreen };
 
-// The six ways a frame ends (design 6.5).
+// The six ways a frame ends.
 enum class FrameEnd {
     Replaced,    // it was on screen and a later frame was credited
     Retired,     // it was queued when a newer frame was Presented instead
@@ -42,9 +42,9 @@ using FrameSeq = uint64_t;
 struct FrameModelConfig {
     uint32_t buffers = 3;
     int64_t refresh_ns = 11'111'111;
-    int64_t bound_ns = 600'000'000;   // acquire's bound (design 6.6)
-    int64_t stopped_ns = 600'000'000; // "flips stopped" (design 6.7 step 5); keep it <= bound_ns (see acquire())
-    uint32_t unconfirmed_after = 3;   // increments without a credit (design 6.7 step 4)
+    int64_t bound_ns = 600'000'000;   // acquire's bound
+    int64_t stopped_ns = 600'000'000; // "flips stopped"; keep it <= bound_ns (see acquire())
+    uint32_t unconfirmed_after = 3;   // increments without a credit
 };
 
 struct Acquired {
@@ -65,7 +65,7 @@ struct Candidate {
     FenceSlot fence; // kNoFence: the present was submitted with vkQueueWaitIdle instead, its GPU work is done
 };
 
-// When a frame reached each stage of its presentation (design 6.11), on the model's timeline (QPC nanoseconds); 0 for a
+// When a frame reached each stage of its presentation, on the model's timeline (QPC nanoseconds); 0 for a
 // stage it has not reached.
 struct FrameTimes {
     // Its GPU work seen done: its fence seen signalled, which the display thread does in the lock hold that starts its
@@ -75,27 +75,28 @@ struct FrameTimes {
     int64_t on_screen_ns = 0; // the refresh that put it on screen: the stats' QPC time of the read that credited it
 };
 
-// A frame whose times are final: it went on screen, or it ended without (design 6.11).
+// A frame whose times are final: it went on screen, or it ended without.
 struct FrameReport {
     SwapchainGen gen;
     FrameSeq seq;
     FrameTimes times;
 };
 
-// The frame model of design 6.5-6.8: three back-buffers, the frames of the current device, the Present outstanding
+// The frame model: three back-buffers, the frames of the current device, the Present outstanding
 // with NVAPI, refresh crediting and the acquire bound. Pure and single-threaded: no Vulkan, no NVAPI, no clock of its
 // own. Every call is made under DisplaySession::lock(); times are QPC nanoseconds (Clock::now_ns,
 // RefreshStats::qpc_ns).
 //
 // Design rules it keeps, by call:
-// - acquire(): invariant 1 and design 6.6 (the bound and the order of fallbacks after it).
-// - queue(), candidate(), present_started(), present_returned(): design 6.6 and 6.7 step 2, invariant 4.
-// - fence_waiting(), fence_seen(): invariants 2 and 5, through the fence protocol (below, at the calls).
-// - on_counter(): design 6.7 step 4 (credit, unconfirmed, link drop), invariant 4.
-// - tick(): design 6.7 step 5 (flips stopped).
-// - completed_present_id(): design 6.8 and invariant 3.
-// - frame_times(), set_report(): design 6.11 (present timing), each queued frame reported once.
-// - hold(): design 6.11 (present at a time): a frame is not shown at a flip before its target's.
+// - acquire(): invariant 1 (the bound and the order of fallbacks after it).
+// - queue(), candidate(), present_started(), present_returned(): invariant 4.
+// - fence_waiting(), fence_seen(): invariant 2 and the re-check after a fence wait, through the fence protocol
+//   (below, at the calls).
+// - on_counter(): credit, unconfirmed, link drop; invariant 4.
+// - tick(): flips stopped.
+// - completed_present_id(): invariant 3.
+// - frame_times(), set_report(): present timing, each queued frame reported once.
+// - hold(): present at a time: a frame is not shown at a flip before its target's.
 // It logs, through set_log(), every event the design says is logged and only the model sees: a failed Present (at most
 // once a second), an unconfirmed Present, a second reserved back-buffer and the older one made idle, two non-zero
 // Presents in a row, the acquire fallbacks that take a reserved or presented back-buffer, a link drop, flips stopped
@@ -112,7 +113,7 @@ public:
         uint64_t unconfirmed = 0; // frames ended Unconfirmed
         uint64_t reserved = 0;    // back-buffers that became reserved (with or without a live frame)
         uint64_t held = 0;        // frames held back for a target time they would otherwise have been shown before
-        uint64_t target_skips = 0; // of missed, the flips before the first one a frame's target allowed (design 6.11)
+        uint64_t target_skips = 0; // of missed, the flips before the first one a frame's target allowed
     };
 
     explicit FrameModel(FrameModelConfig config, FencePool* pool);
@@ -155,10 +156,10 @@ public:
     void release(FrameSeq seq);
 
     // vkQueuePresentKHR: the acquired frame `seq` is queued with its present id (0: none) and fence, at `qpc_ns`. While
-    // flips are stopped it is dropped at once, unless it is the one frame still allowed a Present (design 6.7 step 5).
+    // flips are stopped it is dropped at once, unless it is the one frame still allowed a Present.
     // False if `seq` is not an acquired frame (nothing queued, nothing reported).
     bool queue(FrameSeq seq, uint64_t present_id, FenceSlot fence, int64_t qpc_ns);
-    // Present at a time (design 6.11): the queued frame `seq` must not be shown at a flip earlier than
+    // Present at a time: the queued frame `seq` must not be shown at a flip earlier than
     // `not_before_flip_ns` (0: no limit). A Present made after flip F lands on the flip after it, at about F + the refresh
     // period, so the frame stays out of candidate() until a flip F with F + period >= not_before_flip_ns has been seen,
     // and so does every newer queued frame (none is shown before it). F is the last flip seen, its stats time kept from
@@ -168,7 +169,7 @@ public:
     // not queued is left alone.
     void hold(FrameSeq seq, int64_t not_before_flip_ns);
 
-    // The fence protocol (design 6.5 invariants 2 and 5), for every wait on or status read of a frame fence made
+    // The fence protocol, for every wait on or status read of a frame fence made
     // outside the lock: the display thread's fence wait and its status checks (step 2 and 3), and the present path's
     // wait on the oldest left-over fence (invariant 2).
     //  1. Under the lock, fence_waiting(fence, true), and read pool_serial(). From then on the pool never hands the
@@ -176,7 +177,7 @@ public:
     //  2. Let go of the lock; wait on, or read the status of, the VkFence.
     //  3. Under the lock again, in ONE lock hold, if pool_serial() is unchanged: fence_seen(fence) if it signalled, then
     //     fence_waiting(fence, false). Then re-check the frame (sequence number, state) before acting on it
-    //     (invariant 5; present_started() does that for a Present).
+    //     (the re-check after a fence wait; present_started() does that for a Present).
     // fence_seen() counts only while the fence is marked waited. Outside that window a call is stale: the slot may
     // have been handed out and attached to a new frame since, or be left over again from one, and marking it seen
     // would let an unsignalled fence back into the pool (invariant 2). Such a call does nothing.
@@ -187,30 +188,30 @@ public:
 
     // The newest queued frame that may be shown at the next flip, if a Present may be made now: none outstanding, not
     // waiting for the increment after a non-zero Present, and while flips are stopped, no Present made since they
-    // stopped (design 6.7 steps 2 and 5). Queued frames are taken oldest first up to the first one hold() keeps back
-    // (design 6.11); the newest of those is the candidate.
+    // stopped. Queued frames are taken oldest first up to the first one hold() keeps back
+    //; the newest of those is the candidate.
     std::optional<Candidate> candidate(int64_t now_ns) const;
     // Before the NVAPI call: true and the frame and its back-buffer are presented (older queued frames retired), or
     // false and nothing changed, if `seq` is not queued, is held back (itself or by an older queued frame), or a Present
-    // may not be made now (invariant 5's re-check: do not call NVAPI then).
+    // may not be made now (the re-check after a fence wait: do not call NVAPI then).
     bool present_started(FrameSeq seq, int64_t qpc_ns);
     // After the NVAPI call returned `code` at `qpc_ns`. Non-zero: the frame fails (its id completes), the back-buffer
     // is reserved, and the next Present waits for a counter increment after `qpc_ns`. Also works after the frame was
     // destroyed with its device (the back-buffer state is kept). A left-behind thread does not call it.
     void present_returned(FrameSeq seq, int code, int64_t qpc_ns);
 
-    // Every read whose counter differs from the last one (design 6.7 step 4). The first read after construction or
+    // Every read whose counter differs from the last one. The first read after construction or
     // thread_started() only sets the baseline. Lower than the last value: a link drop, not a refresh. Higher: that
     // many refreshes, at `qpc_ns` (the stats' QPC time of the last one).
     void on_counter(uint32_t counter, int64_t qpc_ns);
     // The display thread starts (a new epoch): both clocks are set to now, the next read is a new baseline, flips are
-    // not stopped (design 6.7, Start).
+    // not stopped.
     void thread_started(int64_t now_ns);
     // Flips stopped: no refresh for stopped_ns. Queued frames are then dropped except the one a Present is still
-    // allowed for (design 6.7 step 5). The next increment ends it.
+    // allowed for. The next increment ends it.
     void tick(int64_t now_ns);
     bool flips_stopped() const;
-    // A frame is queued. With present_outstanding(), what the display thread's idle rule asks (design 6.7, Idle).
+    // A frame is queued. With present_outstanding(), what the display thread's idle rule asks.
     bool has_queued() const;
     // A back-buffer is presented: a Present not yet credited (invariant 4).
     bool present_outstanding() const;
@@ -233,7 +234,7 @@ public:
     std::optional<FrameTimes> frame_times(FrameSeq seq) const; // a live frame's times so far
     uint64_t ids_completed() const; // how many frames have had their present id completed (written or not)
 
-    // Throws std::logic_error("invariant N: ...") if design 6.5 invariant N (1-4) does not hold.
+    // Throws std::logic_error("invariant N: ...") if invariant N (1-4) does not hold.
     void check_invariants() const;
 
 private:

@@ -4,7 +4,7 @@
 
     python -I tools/gen_handle_commands.py <vk.xml> <handle_commands.inc>
 
-The layer makes its own VkDisplayKHR, VkDisplayModeKHR, VkSurfaceKHR and VkSwapchainKHR (design 6.3). Every command
+The layer makes its own VkDisplayKHR, VkDisplayModeKHR, VkSurfaceKHR and VkSwapchainKHR. Every command
 that takes one of them must be answered by the layer, so none reaches the loader's terminators or the driver. This reads
 vk.xml and writes one DVL_HANDLE_COMMAND("<command>", "<extension>") line for each command, in all extensions (not only
 the ones today's driver has), that

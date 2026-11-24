@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 namespace Mirador.Ipc;
 
 /// <summary>
-/// Finds SteamVR as Monado does, then checks and holds its Lighthouse driver DLLs (Mirador.md section 4.10 item 46).
+/// Finds SteamVR as Monado does, then checks and holds its Lighthouse driver DLLs.
 /// Steam's folder is writable by every user, so before Monado loads <c>driver_lighthouse.dll</c> and the DLLs beside
 /// it, the helper opens each without write or delete sharing (so none can be swapped or its folder renamed) and accepts
 /// each that is signed by Valve Corp. or is the very copy the user allowed: its SHA-256, taken from the held handle,

@@ -65,7 +65,7 @@ TEST_CASE("QpcClock is on the timebase of QueryPerformanceCounter, like present_
 
 TEST_CASE("read_edid_from_registry returns a base-block EDID or nothing")
 {
-    // Whether a PVR monitor is known to Windows depends on the machine (design 6.3), so both outcomes are valid;
+    // Whether a PVR monitor is known to Windows depends on the machine, so both outcomes are valid;
     // what must hold is that a result is an EDID and a failure leaves nothing behind.
     std::vector<uint8_t> edid{0xaa, 0xbb};
     if (nvdm::read_edid_from_registry(edid)) {

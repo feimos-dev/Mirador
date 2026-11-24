@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Mirador.Core.Profiles;
 
-/// <summary>Where a profile's Monado comes from (Mirador.md §4.11 item 55).</summary>
+/// <summary>Where a profile's Monado comes from.</summary>
 public enum SourceKind
 {
     /// <summary>A build in a folder the user chose: a CMake build folder or an install folder.</summary>
@@ -16,7 +16,7 @@ public enum SourceKind
 
     /// <summary>
     /// A branch or merge request Mirador builds itself: <see cref="BuildSource.Url"/>, <see cref="BuildSource.Ref"/> and
-    /// the extra <see cref="BuildSource.CMakeOptions"/> (Mirador.md §4.11 item 49).
+    /// the extra <see cref="BuildSource.CMakeOptions"/>.
     /// </summary>
     Branch,
 }
@@ -85,7 +85,7 @@ public sealed record EnvVar(string Name, string Value);
 /// <paramref name="ModuleOptions"/> holds that module's own settings by key.
 /// <paramref name="Lighthouse"/> is the user's choice whether Mirador switches the base stations with this profile
 /// (null: decide from the profile, see <see cref="UsesBaseStations"/>). <paramref name="RunAsAdministrator"/> is "Run as
-/// administrator" for a branch or build folder (Mirador.md §4.11 item 51): its approved build may run elevated and be the
+/// administrator" for a branch or build folder: its approved build may run elevated and be the
 /// OpenXR runtime. <paramref name="DirectMode"/> is the direct-mode layer (null: the headset module's default).
 /// </summary>
 public sealed record Profile(

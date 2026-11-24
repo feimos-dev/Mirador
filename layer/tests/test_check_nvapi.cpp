@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// mirador-display-check, default mode (design 7), run against a display session on a fake NVAPI whose clock runs at
+// mirador-display-check, default mode, run against a display session on a fake NVAPI whose clock runs at
 // the real rate: the tool's frame loop drives the real frame model, display loop and display thread, and the fake's
 // counter flips every 1/90 s. Nothing here reaches the real NVAPI, the real D3D11 device or the real display session
 // (Pimax runs on this machine).
@@ -31,7 +31,7 @@ struct NvapiRig {
     nvdm::RunningClock clock;
     nvdm::FakeApi api{clock};
     std::vector<std::string> running; // what the session's holder check sees
-    bool board = false;               // what the session's board check sees (design 6.3's last route)
+    bool board = false;               // what the session's board check sees
     std::vector<std::string> session_log;
     std::unique_ptr<nvdm::DisplaySession> session;
     dvl::CaptureOutput out;
@@ -359,7 +359,7 @@ TEST_CASE("closing_the_console_runs_the_stop_hook_and_waits_at_most_100_ms")
 TEST_CASE("nvapi_mode_stops_the_display_thread_when_the_console_is_closed")
 {
     // Closing the console ends the process as soon as the console handler returns. The NVAPI mode's display thread is
-    // stopped by then (waited for up to 100 ms, as the layer does in Monado, design 6.10), so it is not killed inside
+    // stopped by then (waited for up to 100 ms, as the layer does in Monado), so it is not killed inside
     // NVAPI, and the run winds down as on Ctrl+C.
     using namespace std::chrono_literals;
     using Clock = std::chrono::steady_clock;

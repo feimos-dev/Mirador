@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Device setup (design 6.2): the plan alone (plan_device), then vkCreateDevice, vkDeviceWaitIdle and vkDestroyDevice
+// Device setup: the plan alone (plan_device), then vkCreateDevice, vkDeviceWaitIdle and vkDestroyDevice
 // through the layer's chain to a fake driver.
 
 #include <catch2/catch_test_macros.hpp>

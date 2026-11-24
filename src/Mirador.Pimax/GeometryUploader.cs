@@ -16,7 +16,7 @@ public sealed record GeometryResult(bool Ok, string? TrackerSerial, string Messa
 
 /// <summary>
 /// Uploads the eye geometry to the Dream Air's eye tracker, which forgets it at power-off; without it gaze is about
-/// 10° off (Mirador.md §4.5 item 14). It runs the owner's own copy of Tobii's runtime from Pimax Play, unmodified, with
+/// 10° off. It runs the owner's own copy of Tobii's runtime from Pimax Play, unmodified, with
 /// the variant's geometry file: the runtime opens the tracker, passes its licence check, sends the geometry and stops
 /// at ENTER. A port of <c>DreamAirWin\tools\upload_geometry.ps1</c>.
 /// </summary>

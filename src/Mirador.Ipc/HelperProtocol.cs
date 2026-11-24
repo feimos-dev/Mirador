@@ -5,7 +5,7 @@ namespace Mirador.Ipc;
 /// <summary>What the helper service can be asked to do. The list is the whole interface: a request carries one of these
 /// and, for <see cref="HelperCommand.StartMonadoElevated"/> only, the typed, range-checked values of
 /// <see cref="ElevatedStart"/> — nothing else. The helper never acts on a path, a command line or any other free data a
-/// caller supplies (Mirador.md section 4.10 item 46).</summary>
+/// caller supplies.</summary>
 [JsonConverter(typeof(HelperCommandConverter))]
 public enum HelperCommand
 {
@@ -29,8 +29,8 @@ public enum HelperCommand
     GetPimaxEyeBlob,
 
     /// <summary>
-    /// Takes back the consent to run Monado as administrator of the user who sent this request (Mirador.md section 4.10
-    /// item 44). The user is the pipe's client, as Windows reports it: the request names no one, and there is no way to
+    /// Takes back the consent to run Monado as administrator of the user who sent this request. The user
+    /// is the pipe's client, as Windows reports it: the request names no one, and there is no way to
     /// revoke another user's consent. Giving consent is not a command: only an administrator can, through UAC.
     /// </summary>
     RevokeElevatedMonado,
@@ -38,7 +38,7 @@ public enum HelperCommand
     /// <summary>
     /// Starts the bundled <c>monado-service.exe</c> as administrator in the caller's session, with the caller's linked
     /// (elevated) token, once the checks of <see cref="ElevatedConsent"/>, the caller's image, SteamVR's driver and the
-    /// rest pass (Mirador.md section 4.10 item 46). The request carries an <see cref="ElevatedStart"/> and nothing more:
+    /// rest pass. The request carries an <see cref="ElevatedStart"/> and nothing more:
     /// the SteamVR files the caller allowed are read from the caller's own consent, never from a request. The reply's
     /// <see cref="HelperReply.Value"/> is the service's process id; a refusal because those files changed carries
     /// <see cref="HelperRefusal.SteamVrChanged"/>.
@@ -59,13 +59,13 @@ public enum HelperCommand
     /// Answers with the folder the helper starts Monado as administrator for: its own install folder, where the
     /// installed <c>Mirador.exe</c> is beside it (<see cref="HelperReply.Value"/>). Mirador compares its own
     /// path with it through <see cref="InstalledMirador.IsInstalledCopy"/>, the test the helper applies to the caller,
-    /// so a copy the helper would refuse runs Monado as the user instead (Mirador.md section 4.10 item 46).
+    /// so a copy the helper would refuse runs Monado as the user instead.
     /// </summary>
     GetInstallFolder,
 
     /// <summary>
     /// Installs the version of Mirador's Monado named by <see cref="HelperRequest.Version"/> and makes it current
-    /// (Mirador.md §4.11 item 55). The helper fetches the list of Mirador's releases itself and takes the download and
+    ///. The helper fetches the list of Mirador's releases itself and takes the download and
     /// its SHA-256 only from there: the request carries the version's name and nothing else. The reply's
     /// <see cref="HelperReply.Value"/> is the version now current.
     /// </summary>
@@ -76,12 +76,12 @@ public enum HelperCommand
 
     /// <summary>
     /// Makes the approved copy of the build of the profile named by <see cref="HelperRequest.Build"/> the active OpenXR
-    /// runtime (Mirador.md §4.11 item 51), once every file is checked against the hashes recorded at the approval.
+    /// runtime, once every file is checked against the hashes recorded at the approval.
     /// </summary>
     SetRuntimeApproved,
 
     /// <summary>
-    /// Answers with the profiles the caller has an approved build for (Mirador.md §4.11 item 51), as
+    /// Answers with the profiles the caller has an approved build for, as
     /// <see cref="HelperReply.Value"/>: their ids separated by commas (an id has none), empty for none. With
     /// <see cref="ForgetApprovedBuild"/>, Mirador takes back what no profile asks for any more: a request never carries
     /// a list, a reply may.
@@ -111,7 +111,7 @@ public enum HelperCommand
 /// The typed values of a <see cref="HelperCommand.StartMonadoElevated"/>: Mirador's shared Monado settings (with the
 /// ranges of <see cref="MonadoSettingsEnvironment"/>) and the headset module's name. The helper range-checks the
 /// settings and adds the module's own fixed variables from its table; the request carries no path and no free
-/// environment (Mirador.md section 4.10 item 46).
+/// environment.
 /// </summary>
 /// <param name="LighthouseWaitMs">Lighthouse discovery wait; <see cref="MonadoSettingsEnvironment.LighthouseWaitRange"/>.</param>
 /// <param name="RenderScalePercent">Compositor render scale; <see cref="MonadoSettingsEnvironment.RenderScaleRange"/>.</param>
@@ -119,11 +119,11 @@ public enum HelperCommand
 /// <param name="ExitOnDisconnect">Whether Monado exits when the last app disconnects.</param>
 /// <param name="Module">The headset module's table: <c>""</c> for none, or <c>"pimax"</c> (a Dream Air plugged in).</param>
 /// <param name="Build">
-/// <c>""</c> for Mirador's Monado; else the id of the profile whose approved build runs (Mirador.md §4.11 item 51). The
+/// <c>""</c> for Mirador's Monado; else the id of the profile whose approved build runs. The
 /// helper finds that build in its own record and checks every file's hash; the request names no path.
 /// </param>
 /// <param name="Headless">
-/// For "Verify build for Windows" (Mirador.md §4.11 item 49): Monado's null compositor and its simulated headset
+/// For "Verify build for Windows": Monado's null compositor and its simulated headset
 /// (<c>XRT_COMPOSITOR_NULL=1</c>, <c>SIMULATED_ENABLE=1</c>), so it opens sessions without touching a headset or a
 /// display. Only with no module.
 /// </param>
@@ -176,8 +176,8 @@ public enum HelperRefusal
     /// <summary>
     /// <see cref="HelperCommand.StartMonadoElevated"/>: a DLL in SteamVR's Lighthouse driver folder is neither signed by
     /// Valve nor the copy this user allowed (its SHA-256 isn't the one recorded at the consent), as after a SteamVR
-    /// update. Mirador then runs the same Start as the user and offers to allow it again (Mirador.md section 4.10 item
-    /// 46). <see cref="HelperReply.Error"/> names the files.
+    /// update. Mirador then runs the same Start as the user and offers to allow it again.
+    /// <see cref="HelperReply.Error"/> names the files.
     /// </summary>
     SteamVrChanged,
 }

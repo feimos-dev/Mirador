@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The surface on the layer's display (design 6.4): the answers alone, then the surface commands through the layer's
+// The surface on the layer's display: the answers alone, then the surface commands through the layer's
 // chain to a fake driver. No surface query on our surface fails or reaches the driver; any other surface (Monado's
 // peek window) goes down unchanged.
 
@@ -215,7 +215,7 @@ TEST_CASE("capabilities_chain_offers_present_ids_and_timing_and_nothing_else_opt
     CHECK(id2.presentId2Supported == VK_TRUE);
     CHECK(wait2.presentWait2Supported == VK_TRUE);
     CHECK(timing.presentTimingSupported == VK_TRUE);
-    CHECK(timing.presentAtAbsoluteTimeSupported == VK_TRUE); // design 6.11: present at a time
+    CHECK(timing.presentAtAbsoluteTimeSupported == VK_TRUE); // present at a time
     CHECK(timing.presentAtRelativeTimeSupported == VK_FALSE);
     CHECK(timing.presentStageQueries == (VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT |
                                          VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |

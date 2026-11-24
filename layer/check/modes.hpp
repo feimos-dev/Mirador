@@ -40,7 +40,7 @@ void set_interrupt_stop_hook(std::function<void()> hook);
 // Tests: the flag a handled event set is cleared again.
 void clear_interrupted_for_tests();
 
-// --- The check: NVAPI only (design 7) --------------------------------------------------------------------------------
+// --- The check: NVAPI only --------------------------------------------------------------------------------
 //
 // Opens the process's display session (driver version, every private id, display, EnableDirectMode, BindDevice,
 // back-buffers, mode) on the DXGI adapter that drives the headset, then presents solid colours for options.seconds

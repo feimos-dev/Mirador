@@ -12,12 +12,12 @@
 
 namespace dvl {
 
-// What vkCreateDevice changes before the call down (design 6.2). Pure: the layer's vkCreateDevice (device.cpp) asks the
+// What vkCreateDevice changes before the call down. Pure: the layer's vkCreateDevice (device.cpp) asks the
 // layer below for the inputs and applies the plan.
 
 inline constexpr uint32_t kNvidiaVendorId = 0x10de;
 
-// The device extensions the back-buffer import needs (design 6.2). Monado asks for the first four itself, the fifth is
+// The device extensions the back-buffer import needs. Monado asks for the first four itself, the fifth is
 // optional for it; the layer adds whichever are missing.
 inline constexpr const char* kImportExtensions[] = {
     VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
@@ -56,7 +56,7 @@ struct DevicePlan {
 
 // The plan for a device whose physical device has vendor `vendor_id`, queue families `families` and device extensions
 // `available_ext` (as the layer below lists them). nullopt unless the vendor is NVIDIA: that device is passed down
-// untouched. Otherwise (design 6.2):
+// untouched. Otherwise:
 //   - the private queue: pQueueCreateInfos[0] gets one more queue if its flags are 0 and its family has room, with the
 //     highest priority the info already has and its pNext (Monado's global priority) kept; else a new info (flags 0,
 //     one queue, priority 1.0) for the first family that is not listed, has queues and does graphics, compute or

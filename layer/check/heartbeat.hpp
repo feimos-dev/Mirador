@@ -14,7 +14,7 @@
 
 namespace dvl {
 
-// The Dream Air's board (design 7): USB vendor 0x34A4, product 0x0044, interface 0.
+// The Dream Air's board: USB vendor 0x34A4, product 0x0044, interface 0.
 inline constexpr uint16_t kBoardVendorId = nvdm::kBoardVendorId;
 inline constexpr uint16_t kBoardProductId = nvdm::kBoardProductId;
 

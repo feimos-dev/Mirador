@@ -16,9 +16,6 @@ Build and test (Visual Studio's C++ x64 tools, vcpkg for Vulkan-Headers and Catc
 tools\build-cmake.ps1 -Source layer -BuildDir artifacts\layer-build -Configure -Build -Test
 ```
 
-The design, the tested drivers and how the private calls were worked out are in the project's notes
-(`DreamAir_Windows_VkLayer.md`).
-
 ## Legal note
 
 This project exists so that you can use hardware you own with software you choose. The NVIDIA driver calls it uses are

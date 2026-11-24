@@ -13,7 +13,7 @@ public readonly record struct SettingRange(int Min, int Max, int Step)
 }
 
 /// <summary>
-/// The one mapping from Mirador's shared Monado settings (Mirador.md section 4.3 item 10) to the environment variables
+/// The one mapping from Mirador's shared Monado settings to the environment variables
 /// <c>monado-service</c> reads, with their ranges. Both the unelevated path (<c>Mirador.Core</c>'s
 /// <c>MonadoEnvironment</c>) and the elevated one (the helper) write them through here, so the names, the formatting
 /// and the ranges can't drift between them.

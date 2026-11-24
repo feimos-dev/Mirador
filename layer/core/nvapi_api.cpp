@@ -388,7 +388,7 @@ std::unique_ptr<Api> make_nvapi()
 
 namespace {
 
-// The Dream Air's model key: manufacturer "PVR", product 0x1019 (design 6.3).
+// The Dream Air's model key: manufacturer "PVR", product 0x1019.
 constexpr wchar_t kDreamAirModelKey[] = L"PVR1019";
 
 // The first instance under `model_name` (a key of Enum\DISPLAY) that has a valid EDID.

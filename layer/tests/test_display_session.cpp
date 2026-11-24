@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display session (design 6.3) against FakeApi in strict-bind mode. process_session() and make_nvapi() are never
+// The display session against FakeApi in strict-bind mode. process_session() and make_nvapi() are never
 // used here: they would talk to the real driver, and Pimax may be running.
 
 #include <catch2/catch_test_macros.hpp>
@@ -230,7 +230,7 @@ TEST_CASE("an open session answers for the display")
 
 TEST_CASE("open holds no display-session lock while it calls the driver")
 {
-    // Design invariant 7: no layer lock is held during an NVAPI call.
+    // No layer lock is held during an NVAPI call.
     Rig rig;
     nvdm::DisplaySession session(rig.deps());
     int calls = 0;

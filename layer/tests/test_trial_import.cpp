@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The trial import (design 6.3) and the import it runs (design 6.4), through the layer's chain to a fake driver that
+// The trial import and the import it runs, through the layer's chain to a fake driver that
 // records every import call and can fail any of them, with the display session on a fake NVAPI.
 
 #include <catch2/catch_test_macros.hpp>
@@ -80,7 +80,7 @@ VkImageUsageFlags surface_usage(ChainRig& rig)
     return caps.supportedUsageFlags;
 }
 
-// The import calls of one configuration in the trial: three imports (design 6.4's four checks each), then the three
+// The import calls of one configuration in the trial: three imports, then the three
 // images and their memory released, before the next configuration starts.
 std::vector<std::string> one_config()
 {
@@ -184,7 +184,7 @@ TEST_CASE("trial_import_at_the_display_query_both_configs_three_buffers")
     expected.insert(expected.end(), trial.begin(), trial.end());
     CHECK(g_driver.import_calls() == expected);
 
-    // The format queries: design 6.4's first check, with the image's format, flags, usage and view formats.
+    // The format queries: the first check, with the image's format, flags, usage and view formats.
     REQUIRE(g_driver.format_queries.size() == 8);
     check_query(g_driver.format_queries[0], dvl::kComputeConfig);
     check_query(g_driver.format_queries[1], dvl::kGraphicsConfig);
@@ -520,7 +520,7 @@ TEST_CASE("no_device_at_the_display_query_defers_the_trial_to_the_swapchain")
     CHECK(rig.trial_import_at_swapchain(late) == 1);
     CHECK(g_driver.import_calls().empty());
 
-    // Another late device whose import fails: the swapchain is refused (a design 6.10 exception), once.
+    // Another late device whose import fails: the swapchain is refused (a failure Monado never hits), once.
     const VkDevice failing = monado_device(rig);
     g_driver.fail_call("vkCreateImage", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY);
     CHECK(rig.trial_import_at_swapchain(failing) == 0);
@@ -546,7 +546,7 @@ TEST_CASE("no_device_and_a_format_query_refused_hides_the_display")
 
 TEST_CASE("a_retry_trials_its_new_device_on_the_open_session")
 {
-    // Monado's retry (design 6.3): a new instance and device in a process whose display session is open.
+    // Monado's retry: a new instance and device in a process whose display session is open.
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkDevice first = monado_device(rig);

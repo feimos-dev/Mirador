@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display thread (design 6.7). DisplayLoop::pass() runs against fakes in fake time: the clock moves only inside the
+// The display thread. DisplayLoop::pass() runs against fakes in fake time: the clock moves only inside the
 // fake Waiter and FenceOps, FakeApi's counter goes up every 11.111 ms of it, and scripted actions (Monado queueing a
 // frame, the display stopping) run at their fake times inside those waits, taking the session lock as Monado would.
 // The last tests run the real DisplayThread and Win32Waiter, briefly.
@@ -584,7 +584,7 @@ TEST_CASE("display loop: with a display event pending, each refresh is seen with
     REQUIRE(r.refreshes_seen.size() >= 85);
     for (size_t i = 1; i < r.refreshes_seen.size(); ++i) { // the first comes before the phase is known
         CHECK(r.refreshes_seen[i].qpc == r.refreshes_seen[i - 1].qpc + kDisplay); // none missed
-        CHECK(r.refreshes_seen[i].at - r.refreshes_seen[i].qpc <= 300 * kUs);     // design 6.9's requirement
+        CHECK(r.refreshes_seen[i].at - r.refreshes_seen[i].qpc <= 300 * kUs);     // the display events' bound
     }
 }
 
@@ -682,7 +682,7 @@ TEST_CASE("nvapi_called_without_lock")
     r.model.check_invariants();
 }
 
-TEST_CASE("display loop: every wait is bounded (invariant 6)")
+TEST_CASE("display loop: every wait is bounded")
 {
     Rig r;
     mixed_run(r);
@@ -744,11 +744,11 @@ TEST_CASE("display loop: flips stopped, a frame whose fence has not signalled do
 
     r.run_until(queue_at + 100 * kMs, 10'000);
     const std::vector<FakeApi::Call> presents = r.calls("present");
-    REQUIRE(presents.size() == 1);                   // Presented once (design 6.7 step 5)...
+    REQUIRE(presents.size() == 1);                   // Presented once...
     CHECK(presents[0].at_ns == r.queued[0].ready);   // ...as soon as its fence signalled
 }
 
-TEST_CASE("display loop: a last refresh in the future does not hold its wait (invariant 6)")
+TEST_CASE("display loop: a last refresh in the future does not hold its wait")
 {
     Rig r;
     r.event_pending = true; // active: step 1 waits for the predicted refresh
@@ -815,7 +815,7 @@ TEST_CASE("display loop: a frame whose GPU work ends in the poll window is Prese
     CHECK(r.model.completed_present_id(r.gen) == 1); // and credited at that flip
 }
 
-TEST_CASE("display loop: a frame gone during its fence wait is not Presented (invariant 5)")
+TEST_CASE("display loop: a frame gone during its fence wait is not Presented")
 {
     Rig r;
     r.run_until(kT0 + 5 * kP);

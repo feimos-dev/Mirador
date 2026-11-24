@@ -109,7 +109,7 @@ void Warnings::on_event_waited(uint64_t key)
 
 void Warnings::on_event_gone(uint64_t)
 {
-    // Not forgotten if no wait reached the layer first: Monado always waits before it destroys (design 6.9), so a
+    // Not forgotten if no wait reached the layer first: Monado always waits before it destroys, so a
     // destroy alone means its wait went past the layer. check() warns about it at 2 s, and then forgets it.
 }
 

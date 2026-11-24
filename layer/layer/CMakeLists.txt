@@ -1,7 +1,7 @@
 # Copyright 2026, Finn Zeruhn
 # SPDX-License-Identifier: BSL-1.0
 
-# The commands of vk.xml that can be handed one of the layer's own objects (design 6.3, last bullet), as a generated
+# The commands of vk.xml that can be handed one of the layer's own objects, as a generated
 # include. vk.xml comes with the Vulkan headers (vcpkg's vulkan-headers port installs it next to them); DVL_VK_XML
 # overrides the search.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -86,7 +86,7 @@ set_target_properties(dvl_layer_for_tests PROPERTIES
 )
 
 # The system DLLs only an open display session uses are delay-loaded (delayimp): a process the layer declines (the
-# guard, design 5) maps none of them, and the display session's first call loads each from its usual place. d3d11 and
+# guard) maps none of them, and the display session's first call loads each from its usual place. d3d11 and
 # dxgi: the session's D3D11 device; avrt: the display thread's MMCSS priority; setupapi: the board check of the last
 # EDID route.
 foreach(target mirador_direct_mode dvl_layer_for_tests)

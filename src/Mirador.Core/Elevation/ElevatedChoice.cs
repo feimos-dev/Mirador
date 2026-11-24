@@ -5,7 +5,7 @@ using Mirador.Ipc;
 namespace Mirador.Core.Elevation;
 
 /// <summary>
-/// Whether a Start may run Monado as administrator, for a user who allowed it (Mirador.md section 4.10 items 45 and 46):
+/// Whether a Start may run Monado as administrator, for a user who allowed it:
 /// the one test behind both the session's choice of launcher and Home's "Runs as you" line, so the two can't drift.
 /// </summary>
 public static class ElevatedChoice
@@ -52,7 +52,7 @@ public static class ElevatedChoice
             return NotInstalledCopy;
         }
 
-        // The bundled Monado lives in the admin-only install folder (Mirador.md §4.11 item 55); a branch built here or
+        // The bundled Monado lives in the admin-only install folder; a branch built here or
         // a build folder is where the user can write, until it is approved.
         if (profile.Monado.Kind != SourceKind.Mirador && !(profile.RunAsAdministrator && approvedBuild))
         {

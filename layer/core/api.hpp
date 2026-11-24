@@ -24,7 +24,7 @@ inline constexpr int kNotBound = -10004;  // A call that takes the bound display
 inline constexpr int kBadArgument = -10005; // A pointer the call needs was NULL; the driver was not called.
 
 // Where the display's product came from: the route that read its EDID (Api::read_edid, in this order), or the
-// session's last route, which reads none (DisplaySession, design 6.3).
+// session's last route, which reads none (DisplaySession).
 enum class EdidRoute {
     None,        // No EDID could be read.
     Nvapi,       // NvAPI_GPU_GetEDID on the display's GPU with the display id itself: answers in direct mode.
@@ -63,7 +63,7 @@ struct RefreshStats {
 // The NVAPI calls behind one interface, so everything above can be tested against a fake.
 //
 // Statuses are NVAPI's: 0 is success, anything else a failure to report with the step's name. The exceptions are
-// noted per call. Not thread-safe: only one thread calls NVAPI at a time (design invariant 8), and the caller keeps
+// noted per call. Not thread-safe: only one thread calls NVAPI at a time, and the caller keeps
 // it that way.
 class Api {
 public:
@@ -121,7 +121,7 @@ std::unique_ptr<Api> make_nvapi();
 // The EDID Windows kept for a monitor of manufacturer "PVR": the EDID value under
 // HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\PVR*\<instance>\Device Parameters. The Dream Air's own model key
 // (PVR1019) is tried first, then any other PVR* key; the first instance with a valid EDID wins. It is there on
-// machines where the display has been a monitor once (design 6.3), so it is only the fallback of Api::read_edid.
+// machines where the display has been a monitor once, so it is only the fallback of Api::read_edid.
 // False if there is none; `out` is empty then.
 bool read_edid_from_registry(std::vector<uint8_t>& out);
 

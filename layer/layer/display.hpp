@@ -12,7 +12,7 @@
 
 namespace dvl {
 
-// The layer's display, its mode and its plane (design 6.3): the answers, without any call. The intercepts that give
+// The layer's display, its mode and its plane: the answers, without any call. The intercepts that give
 // them are in display_intercepts.cpp.
 
 // The layer's VkDisplayKHR and its one VkDisplayModeKHR. Each is a process-wide object of the layer's, and its

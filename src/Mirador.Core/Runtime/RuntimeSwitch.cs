@@ -8,13 +8,13 @@ public static class RuntimeSwitch
 {
     /// <summary>
     /// Sets <paramref name="install"/> as the active runtime, always through the helper service: Mirador's Monado (or an
-    /// older install's bundled one), or the approved copy of a branch or build folder (Mirador.md §4.11 item 51). A build
+    /// older install's bundled one), or the approved copy of a branch or build folder. A build
     /// in a folder the user can write is never made the runtime itself: every OpenXR program, elevated ones and other
     /// users' included, loads it. Afterwards <paramref name="runtime"/> is read for Mirador's Monado: success means its
     /// manifest is active now.
     /// </summary>
     /// <param name="approvedProfileId">
-    /// For a branch or build folder: the profile whose approved copy becomes the runtime (Mirador.md §4.11 item 51), or
+    /// For a branch or build folder: the profile whose approved copy becomes the runtime, or
     /// null when it has none. Without one, a build in a folder the user can write is never made the runtime.
     /// </param>
     /// <param name="hadApproval">Whether the profile has an approval of an earlier build: then this build changed since.</param>

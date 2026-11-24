@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The surface commands (design 6.4). vkCreateDisplayPlaneSurfaceKHR on our mode makes a surface of the layer's, and
+// The surface commands. vkCreateDisplayPlaneSurfaceKHR on our mode makes a surface of the layer's, and
 // every query on it is answered here and never fails. Any other surface (Monado's peek window, a driver display's
 // surface) goes down unchanged, ...Capabilities2EXT included: the loader's terminator emulates it for the driver.
 
@@ -48,7 +48,7 @@ VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInf
         return VK_ERROR_UNKNOWN;
     }
     // The surface offers what the import allows on the physical device that lists the display in this instance
-    // (design 6.4). An instance that lists it nowhere (the mode handle came from another instance) has no such answer.
+    //. An instance that lists it nowhere (the mode handle came from another instance) has no such answer.
     InstanceData& data = instance_data(instance);
     const std::optional<VkPhysicalDevice> listing = listing_physical_device(data);
     if (!listing) {
@@ -63,7 +63,7 @@ VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInf
     record->info = *ci;
     record->info.pNext = nullptr;
     record->spec = SurfaceSpec{VkExtent2D{product.width, product.height}, surface_usage(data, *listing)};
-    // Every alpha mode is accepted and shown opaque (design 6.3). An extent other than the mode's is answered with the
+    // Every alpha mode is accepted and shown opaque. An extent other than the mode's is answered with the
     // mode's in the surface caps.
     log(Level::Info,
         "vkCreateDisplayPlaneSurfaceKHR: a surface on the %s, plane 0 stack %u, alpha %s (shown opaque), extent "
@@ -98,7 +98,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDisplayPlaneSurfaceKHR(VkInstance ins
                                                                   const VkAllocationCallbacks* alloc,
                                                                   VkSurfaceKHR* out)
 {
-    // With display queries, the only place the layer may fail (design 6.10).
+    // With display queries, the only place the layer may fail.
     return guarded("vkCreateDisplayPlaneSurfaceKHR", [&] {
         if (is_our_mode(ci->displayMode)) {
             return create_our_surface(instance, ci, out);
@@ -284,7 +284,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPhysicalDeviceSurfaceCapabilities2EXT(Vk
             },
             [&] {
                 // The driver lacks VK_EXT_display_surface_counter; the loader's terminator emulates the query from
-                // the plain one, with no counters (design 6.1).
+                // the plain one, with no counters.
                 InstanceData& instance = instance_data(physical_device);
                 return call_down(instance.GetPhysicalDeviceSurfaceCapabilities2EXT,
                                  "vkGetPhysicalDeviceSurfaceCapabilities2EXT", physical_device, surface, caps);

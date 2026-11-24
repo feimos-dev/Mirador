@@ -8,7 +8,7 @@ using Mirador.Core.Session;
 namespace Mirador.App.ViewModels;
 
 /// <summary>
-/// The Monado settings every profile shares (Mirador.md §4.3 item 10). A change is saved once the slider is let go
+/// The Monado settings every profile shares. A change is saved once the slider is let go
 /// (or a moment after the last change, whichever comes first), never at every step.
 /// </summary>
 public sealed partial class MonadoSettingsViewModel : ObservableObject

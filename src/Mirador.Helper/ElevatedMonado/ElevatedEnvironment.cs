@@ -43,7 +43,7 @@ public sealed record UserFolders(string UserProfile, string AppData, string Loca
 }
 
 /// <summary>
-/// Builds the environment the elevated <c>monado-service</c> is started with (Mirador.md section 4.10 item 46). The
+/// Builds the environment the elevated <c>monado-service</c> is started with. The
 /// helper builds it from scratch: Windows' machine-wide variables (from the helper's own SYSTEM environment), the
 /// caller's own folders and temp, a <c>PATH</c> of System32, Windows and the server folder only, <c>STEAMVR_PATH</c>,
 /// <c>IPC_RELAXED_CONNECTION_SECURITY</c> (only when needed: <see cref="ElevatedStart.ElevationFix"/>), the

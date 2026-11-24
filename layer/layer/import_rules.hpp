@@ -12,7 +12,7 @@
 
 namespace dvl {
 
-// The decisions of the back-buffer import that need no driver (design 6.3, 6.4). Pure: import.hpp makes the calls.
+// The decisions of the back-buffer import that need no driver. Pure: import.hpp makes the calls.
 
 // One way of importing a back-buffer: the image's format and usage. The view-format list and the create flags follow
 // from them (view_formats(), MUTABLE_FORMAT always).
@@ -21,7 +21,7 @@ struct ImportConfig {
     VkImageUsageFlags usage;
 };
 
-// The two configurations the surface offers and the trial import proves (design 6.3): Monado's compute compositor
+// The two configurations the surface offers and the trial import proves: Monado's compute compositor
 // (the default on Windows), which writes the image as storage, and its graphics compositor (XRT_COMPOSITOR_COMPUTE=0),
 // which renders into SRGB. Both are sampled and both transfer source and destination.
 inline constexpr ImportConfig kComputeConfig{VK_FORMAT_R8G8B8A8_UNORM,
@@ -50,7 +50,7 @@ std::optional<std::vector<VkFormat>> view_formats(VkFormat format, VkImageUsageF
 std::string format_name(VkFormat format);
 
 // What vkGetPhysicalDeviceImageFormatProperties2KHR said about a configuration with the back-buffer's handle type
-// (design 6.4's first check). `ok` needs VK_SUCCESS, IMPORTABLE among the external memory features, and a maxExtent
+//. `ok` needs VK_SUCCESS, IMPORTABLE among the external memory features, and a maxExtent
 // that holds the back-buffer. `dedicated_only` is DEDICATED_ONLY: the import always allocates dedicated memory, so it
 // is honoured either way, and only logged. `reason` says why not, for the log line, when not ok.
 struct ImportSupport {
@@ -61,7 +61,7 @@ struct ImportSupport {
 ImportSupport import_support(VkResult result, const VkImageFormatProperties& properties,
                              const VkExternalMemoryProperties& external, VkExtent2D extent);
 
-// The memory type an imported back-buffer is allocated with (design 6.4). `handle_bits` is
+// The memory type an imported back-buffer is allocated with. `handle_bits` is
 // VkMemoryWin32HandlePropertiesKHR::memoryTypeBits, nullopt if vkGetMemoryWin32HandlePropertiesKHR failed;
 // `image_bits` the image's VkMemoryRequirements::memoryTypeBits. A type must be in both (the import, and the bind to
 // the image): the first device-local one, else the first. If the handle gave no bits (failed, or 0), the image's bits

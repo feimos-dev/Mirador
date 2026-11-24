@@ -17,7 +17,7 @@ namespace {
 
 // Waits shorter than this poll the event instead of setting the timer, whose granularity is about half a millisecond.
 constexpr int64_t kSpinBelowNs = 1'000'000;
-// A timer wait also ends this long after its deadline should the timer not fire (design invariant 6).
+// A timer wait also ends this long after its deadline should the timer not fire.
 constexpr DWORD kTimerSlackMs = 5;
 // A failing GetPresentStats is logged at most this often.
 constexpr int64_t kReadFailLogNs = 1'000'000'000;
@@ -48,7 +48,7 @@ DWORD ceil_ms(int64_t ns)
 
 Win32Waiter::Win32Waiter(Clock& clock) : clock_(clock)
 {
-    event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr); // auto-reset (design 6.7)
+    event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr); // auto-reset
     timer_ = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     high_resolution_ = timer_ != nullptr;
     if (timer_ == nullptr) {
@@ -96,7 +96,7 @@ bool Win32Waiter::wait_frame_or_until(int64_t deadline_ns)
             return true;
         }
         if (result == WAIT_FAILED) {
-            // A broken handle: still wait out the time, so the caller does not spin (design invariant 6).
+            // A broken handle: still wait out the time, so the caller does not spin.
             Sleep(ceil_ms(left));
             return false;
         }
@@ -117,7 +117,7 @@ bool Win32Waiter::wait_frame_or_until_coarse(int64_t deadline_ns)
             return true;
         }
         if (result == WAIT_FAILED) {
-            Sleep(ceil_ms(left)); // a broken handle: still wait out the time (design invariant 6)
+            Sleep(ceil_ms(left)); // a broken handle: still wait out the time
             return false;
         }
     }
@@ -197,7 +197,7 @@ void DisplayLoop::pass()
     // Step 2: Present the newest queued frame once its fence has signalled, waiting until ~1 ms before the refresh.
     // While flips are stopped there is no refresh to keep clear of (the prediction runs on a stale phase): the fence
     // wait is the stopped mode's wait instead, and a pass that made no Present still waits that long before its read
-    // (design 6.7 step 5: no spinning).
+    //.
     if (p.ready) {
         const bool stopped = p.mode == Mode::Stopped;
         const int64_t until = stopped ? p.now + config_.stopped_poll_ns : p.target - config_.lead_ns;
@@ -221,7 +221,7 @@ void DisplayLoop::pass()
     }
 }
 
-// The epoch's start (design 6.7, Start): both clocks to now, so a restart is not taken for stopped flips, and the
+// The epoch's start: both clocks to now, so a restart is not taken for stopped flips, and the
 // first read as the counter's baseline. The read comes first, so both go to the model in one lock hold.
 void DisplayLoop::begin()
 {
@@ -251,7 +251,7 @@ DisplayLoop::Plan DisplayLoop::plan()
         p.target = predict(model_.last_refresh_ns(), p.now);
         // A predicted refresh that has passed unread, its poll window (until it + 2 ms) still open: the wait before
         // it ended late (the thread was not run). Its poll is still due, now, instead of the next refresh's a period
-        // later; that refresh may show the outstanding Present and set display events (design 6.7 step 3). Once its
+        // later; that refresh may show the outstanding Present and set display events. Once its
         // window has closed, the next refresh's poll as usual, so a display that stops is not polled any more often.
         const int64_t period = std::max<int64_t>(config_.refresh_ns, 1);
         const int64_t overdue = p.target - period;
@@ -275,7 +275,7 @@ DisplayLoop::Plan DisplayLoop::plan()
 // The next refresh period after now, counted from the last refresh: always in (now, now + period]. Never a time in the
 // past, however stale the last refresh is, and never more than one period ahead, however wrong it is: a stats QPC
 // time in the future keeps its phase but is counted back to the period after now, so step 1's wait stays within a
-// period (design invariant 6). Stable while now moves within the period, so the re-plan after step 1's wait still
+// period. Stable while now moves within the period, so the re-plan after step 1's wait still
 // lands in the poll window. Overflow-free for any two times.
 int64_t DisplayLoop::predict(int64_t last_refresh_ns, int64_t now_ns) const
 {
@@ -335,7 +335,7 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
         }
         if (ready && !stop_requested()) {
             const int64_t now = clock_.now_ns();
-            started = model_.present_started(c->seq, now); // invariant 5's re-check: false, no NVAPI call
+            started = model_.present_started(c->seq, now); // the re-check after the fence wait: false, no NVAPI call
             if (started) {
                 stats_.on_counters(model_.counters());
                 stats_.on_present(now);
@@ -348,7 +348,7 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
     if (!started) {
         flush_log(); // no Present follows
         // A fence wait that gave up before its deadline (an error such as a lost device, or a timeout rounded short):
-        // wait out the rest here, so the pass does not come straight back and spin (design invariant 6). A frame
+        // wait out the rest here, so the pass does not come straight back and spin. A frame
         // queued meanwhile still ends the wait.
         if (wait && !ready && !stop_requested() && clock_.now_ns() < deadline_ns) {
             waiter_.wait_frame_or_until(deadline_ns);
@@ -356,7 +356,7 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
         return false;
     }
 
-    // No log line is written from here to the Present (design 6.7): the frame's fence has signalled, and a file,
+    // No log line is written from here to the Present: the frame's fence has signalled, and a file,
     // console or debugger write could cost it its refresh. The stats line this Present closed is written after it.
     int code = kBadArgument;
     if (c->buffer < config_.tags.size()) {
@@ -383,7 +383,7 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
 }
 
 // Step 3: reads until the counter moves or the predicted refresh + 2 ms, looking at the newest queued fence between
-// reads, then back to step 1 (design invariant 6: every spin ends by a deadline).
+// reads, then back to step 1.
 void DisplayLoop::poll(int64_t target_ns)
 {
     const int64_t until = target_ns + config_.poll_after_ns;

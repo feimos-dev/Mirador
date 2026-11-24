@@ -5,7 +5,7 @@
 
 // The layer's intercepts outside layer_main.cpp, for its proc-address tables: device.cpp, display_intercepts.cpp,
 // surface_intercepts.cpp, swapchain.cpp, present.cpp, events.cpp and misc_intercepts.cpp, and
-// present_timing_intercepts.cpp (design 6.11). Each is declared from its Vulkan PFN type, so a definition whose
+// present_timing_intercepts.cpp. Each is declared from its Vulkan PFN type, so a definition whose
 // signature differs from the command's does not link.
 
 #include <vulkan/vulkan.h>
@@ -124,17 +124,17 @@ nvdm::DisplaySession& display_session();
 // (test_hooks.cpp), so no test reaches the real NVAPI. The caller keeps `session` alive while it is in place.
 void set_display_session_for_tests(nvdm::DisplaySession* session);
 
-// Whether our display is listed on `physical_device` (design 6.3). The first call for a physical device of the
+// Whether our display is listed on `physical_device`. The first call for a physical device of the
 // instance decides it and keeps the answer: not NVIDIA, no LUID, the display session failing to open for its LUID (it
 // logs the line itself), or the import failing (the format queries, or the trial import on a device of the physical
 // device that exists now: import_verdict()) is no. The only place, with vkCreateDisplayPlaneSurfaceKHR, where the
-// layer can fail (design 6.10). May wait for the session's open (MIRADOR_DIRECT_MODE_WAIT_MS and the NVAPI calls) and
+// layer can fail. May wait for the session's open (MIRADOR_DIRECT_MODE_WAIT_MS and the NVAPI calls) and
 // the trial import.
 bool display_listed(InstanceData& instance, VkPhysicalDevice physical_device);
 // The decided answer, without deciding: false if not decided yet.
 bool display_listed_now(InstanceData& instance, VkPhysicalDevice physical_device);
-// The usage our surface offers on a physical device that lists the display (from the format queries of the decision,
-// design 6.4); 0 on one that does not, or is not decided yet.
+// The usage our surface offers on a physical device that lists the display (from the format queries of the
+// decision); 0 on one that does not, or is not decided yet.
 VkImageUsageFlags surface_usage(InstanceData& instance, VkPhysicalDevice physical_device);
 // The instance's physical device that lists our display, if one does (decided ones only).
 std::optional<VkPhysicalDevice> listing_physical_device(InstanceData& instance);

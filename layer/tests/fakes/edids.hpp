@@ -11,7 +11,7 @@
 
 namespace nvdm::edids {
 
-// The Dream Air's EDID as Windows kept it on Finn's PC (HKLM\...\Enum\DISPLAY\PVR1019\...\EDID, 2026-10): three blocks,
+// The Dream Air's EDID as Windows kept it (HKLM\...\Enum\DISPLAY\PVR1019\...\EDID, 2026-10): three blocks,
 // a CTA-861 extension carrying Microsoft's HMD block (5C-12-CA, added for a WDDC try), and a DisplayID 1.2 extension
 // whose preferred Type I timing is 7104x3840 at 90 Hz.
 inline const std::string kDreamAirRegistry =
@@ -35,7 +35,7 @@ inline const std::string kDreamAir =
     "BF1BBF01C7802F00FF0E2F001C800000DD00000000000000000000000000000000000000000000000000000000000000"
     "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090";
 
-// A Pimax 5K Super (PVR 0x101b, vr-docs captures\p2_edids_2026-11-04): a base-block timing of 2880x2560 at 64 Hz and
+// A Pimax 5K Super (PVR 0x101b, a captured EDID): a base-block timing of 2880x2560 at 64 Hz and
 // DisplayID timings, none marked preferred.
 inline const std::string kPimax5kSuper =
     "00FFFFFFFFFFFF0042D21B1000000000121B0104B50000783E7225AC5033B7260B505400000001010101010101010101"

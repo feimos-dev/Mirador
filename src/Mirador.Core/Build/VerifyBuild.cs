@@ -19,7 +19,7 @@ public sealed record VerifyStep(string Name, VerifyOutcome Outcome, string Detai
 
 /// <summary>A verify run of one build (its <see cref="Key"/>: the commit, else the service's hash).</summary>
 /// <param name="HasElevationFix">
-/// What the elevated step said about the elevation fix (Mirador.md §10.4): true when an unelevated game connected to the
+/// What the elevated step said about the elevation fix: true when an unelevated game connected to the
 /// build running as administrator, false when it couldn't although the same game ran with the build as the user; null
 /// when the step didn't run or couldn't tell.
 /// </param>
@@ -217,10 +217,10 @@ public sealed class StandInWait(MonadoInstall install, Func<CancellationToken, T
 }
 
 /// <summary>
-/// "Verify build for Windows" (Mirador.md §4.11 item 49): what opens sessions or needs an administrator, which the
+/// "Verify build for Windows": what opens sessions or needs an administrator, which the
 /// checks after every build can't do. With <c>xr-check</c>, Mirador's small OpenXR client: a session in D3D11 and one in
 /// Vulkan against the service with Monado's null compositor; a game's start through the stand-in; and the service as
-/// administrator with the client as the user, which tells whether the build has the elevation fix (§10.4). One step
+/// administrator with the client as the user, which tells whether the build has the elevation fix. One step
 /// failing doesn't stop the others. The results are kept by the build's commit.
 /// </summary>
 public sealed class VerifyBuild(ICommandRunner runner, string xrCheck, TimeProvider time)

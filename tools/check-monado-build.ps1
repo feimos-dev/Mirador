@@ -1,7 +1,7 @@
 #Requires -Version 7.3
 <#
 .SYNOPSIS
-    Checks a Monado build made by tools\build-monado.ps1, as Mirador does after every build (Mirador_Plan.md Task 59),
+    Checks a Monado build made by tools\build-monado.ps1, as Mirador does after every build,
     and writes checks.json into the install folder. Exits 1 when a check failed.
 .DESCRIPTION
     The same checks, and the same checks.json, as src\Mirador.Core\Build\BuildChecks.cs: the install's files

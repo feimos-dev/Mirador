@@ -5,8 +5,8 @@ namespace Mirador.Core.Elevation;
 
 /// <summary>
 /// <c>Mirador.exe --allow-elevated-monado</c>: the elevated step that records the running user's consent to run Monado
-/// as administrator, with SteamVR's Lighthouse DLLs that Valve didn't sign as they are now (Mirador.md section 4.10
-/// item 46). It runs through UAC (an administrator approved it) as the user themselves, so the SID it records is the
+/// as administrator, with SteamVR's Lighthouse DLLs that Valve didn't sign as they are now. It runs
+/// through UAC (an administrator approved it) as the user themselves, so the SID it records is the
 /// user's own and nothing is taken from the command line.
 /// </summary>
 public static class AllowElevatedCommand

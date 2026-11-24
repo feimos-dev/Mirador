@@ -274,7 +274,7 @@ public sealed class AppHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed (Mirador.md §4.10 item 46).</summary>
+    /// <summary>Home's line when an elevated Start ran as the user because SteamVR changed.</summary>
     public const string SteamVrChangedReason =
         "Runs as you: SteamVR's Lighthouse driver changed since you allowed Monado as administrator.";
 
@@ -287,7 +287,7 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>
     /// Whether Mirador started with no profiles file (its first run for this user): the window then asks where Monado
-    /// comes from (Mirador.md §4.11 item 55). Taken before the launch's migrations, which may save the file.
+    /// comes from. Taken before the launch's migrations, which may save the file.
     /// </summary>
     public bool FirstRun { get; private set; }
 
@@ -532,7 +532,7 @@ public sealed class AppHost : IAsyncDisposable
 
     public SessionController Session { get; }
 
-    /// <summary>Which users allowed Monado to run as administrator (Mirador.md §4.10 item 44).</summary>
+    /// <summary>Which users allowed Monado to run as administrator.</summary>
     public ElevatedConsent ElevatedConsent { get; }
 
     /// <summary>Whether the signed-in user allowed Monado to run as administrator; false when the registry can't be read.</summary>
@@ -691,7 +691,7 @@ public sealed class AppHost : IAsyncDisposable
     /// sets extra environment variables (<see cref="ElevatedChoice.RunsAsYouReason"/>, the session's own test), or
     /// because SteamVR's Lighthouse driver
     /// changed since the user allowed it (<see cref="SteamVrChangedReason"/>). Null when the profile runs as
-    /// administrator, or doesn't ask to (Mirador.md §4.10 items 45 and 46).
+    /// administrator, or doesn't ask to.
     /// </summary>
     public string? RunsAsYouReason()
     {
@@ -776,7 +776,7 @@ public sealed class AppHost : IAsyncDisposable
     /// <summary>What went wrong while Mirador started that the user should read on Home: settings reset, files it couldn't read.</summary>
     public IReadOnlyList<string> StartupNotices => notices;
 
-    /// <summary>Home's "OpenVR runtime" row and its "Set OpenLamina" (Mirador.md §4.6).</summary>
+    /// <summary>Home's "OpenVR runtime" row and its "Set OpenLamina".</summary>
     public OpenVrGames OpenVr { get; }
 
     /// <summary>
@@ -1131,8 +1131,8 @@ public sealed class AppHost : IAsyncDisposable
         (profile.Monado.Kind == SourceKind.Mirador || ApprovedBuildCurrent(profile)) && VariablesApproved(profile);
 
     /// <summary>
-    /// When a profile runs Mirador's Monado and none is installed: the helper installs the newest weekly build (Mirador.md
-    /// §4.11 item 55: the first run). What happened, for Home; null when
+    /// When a profile runs Mirador's Monado and none is installed: the helper installs the newest weekly build (the
+    /// first run). What happened, for Home; null when
     /// nothing was needed.
     /// </summary>
     public async Task<(string Message, bool Ok)?> InstallMiradorsMonadoIfNeededAsync()
@@ -1216,7 +1216,7 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>
     /// At Mirador's start, whatever started it: looks at the PC's Bluetooth, then scans for the base stations and, with
-    /// "Power on when Mirador starts", switches the selected ones on (Mirador.md §4.7). The window doesn't wait for it.
+    /// "Power on when Mirador starts", switches the selected ones on. The window doesn't wait for it.
     /// </summary>
     private async Task StartStationsAsync()
     {

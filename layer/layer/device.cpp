@@ -1,10 +1,10 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// vkCreateDevice, vkDestroyDevice and vkDeviceWaitIdle (design 6.2). An NVIDIA device gets the private queue that
+// vkCreateDevice, vkDestroyDevice and vkDeviceWaitIdle. An NVIDIA device gets the private queue that
 // signals acquire and the extensions the back-buffer import needs, before NVAPI is ever loaded: Monado creates its
 // device before it asks for displays. vkDestroyDevice tears the device's part of the presentation down first, in
-// design 6.10's order (swapchain.hpp: before_device_destroyed, device_destroyed).
+// this order (swapchain.hpp: before_device_destroyed, device_destroyed).
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_layer.h>
@@ -82,7 +82,7 @@ std::string joined(const std::vector<const char*>& names)
 }
 
 // The driver's device, until the layer has registered it: destroyed again, and the application's handle cleared, if
-// anything after the call down fails or throws, so a failed vkCreateDevice leaves nothing behind (design 6.2).
+// anything after the call down fails or throws, so a failed vkCreateDevice leaves nothing behind.
 class CreatedDevice {
 public:
     CreatedDevice(VkDevice* out, PFN_vkDestroyDevice destroy, const VkAllocationCallbacks* alloc)
@@ -159,7 +159,7 @@ VkResult create_device(VkPhysicalDevice physical_device, const VkDeviceCreateInf
 
     std::unique_ptr<DeviceData> data = make_device_data(device, physical_device, instance, next_gdpa);
     if (plan && plan->private_family != VK_QUEUE_FAMILY_IGNORED) {
-        // The private queue (design 6.2): vkGetDeviceQueue (Vulkan 1.0), then the loader's callback, without which a
+        // The private queue: vkGetDeviceQueue (Vulkan 1.0), then the loader's callback, without which a
         // layer below would crash on the queue.
         const VkLayerDeviceCreateInfo* callback = find_loader_struct(ci, VK_LOADER_DATA_CALLBACK);
         if (callback == nullptr || callback->u.pfnSetDeviceLoaderData == nullptr || data->GetDeviceQueue == nullptr) {
@@ -247,7 +247,7 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyDevice(VkDevice device, const VkAllocati
         // device (at most a refresh), frame fences still outstanding are waited for (at most 100 ms) ...
         before_device_destroyed(*data);
         // ... the private queue goes idle under its mutex, which stays held: every queue of the device must be
-        // externally synchronised for the call down, the private one too (design 6.2) ...
+        // externally synchronised for the call down, the private one too ...
         std::lock_guard<std::mutex> lock(data->queue_mutex);
         if (data->private_queue != VK_NULL_HANDLE && data->QueueWaitIdle != nullptr) {
             const VkResult idle = data->QueueWaitIdle(data->private_queue);

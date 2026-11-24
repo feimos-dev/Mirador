@@ -13,7 +13,7 @@ namespace {
 using Hook = std::function<void()>;
 
 // The hook, shared so the helper thread keeps its copy alive if the hook is replaced meanwhile. Made at first use
-// and never destroyed: nothing here runs at process exit (design 6.10).
+// and never destroyed: nothing here runs at process exit.
 struct HookSlot {
     std::mutex mutex;
     std::shared_ptr<const Hook> hook;

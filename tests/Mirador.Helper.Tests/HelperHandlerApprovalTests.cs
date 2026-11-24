@@ -3,7 +3,7 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>The helper's side of approved builds: as the runtime, and taken back (Mirador.md §4.11 item 51).</summary>
+/// <summary>The helper's side of approved builds: as the runtime, and taken back.</summary>
 public sealed class HelperHandlerApprovalTests : IDisposable
 {
     private const string Commit = "0123456789abcdef0123456789abcdef01234567";

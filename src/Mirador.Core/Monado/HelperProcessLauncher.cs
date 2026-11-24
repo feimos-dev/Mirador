@@ -11,7 +11,7 @@ namespace Mirador.Core.Monado;
 /// session's lines, learns the exit code by polling <see cref="HelperCommand.WaitMonadoElevated"/>, and stops Monado
 /// with <see cref="HelperCommand.StopMonadoElevated"/>. When the helper refuses because SteamVR's Lighthouse driver
 /// changed since the user allowed it (<see cref="HelperRefusal.SteamVrChanged"/>), the same Start runs as the user
-/// through <paramref name="asUser"/> instead (Mirador.md section 4.10 item 46).
+/// through <paramref name="asUser"/> instead.
 /// </summary>
 /// <param name="asUser">The job launcher, which runs Monado as the user: what every Start that isn't elevated uses.</param>
 public sealed class HelperProcessLauncher(IHelperClient client, ElevatedStart start, string logPath, IProcessLauncher asUser) : IProcessLauncher

@@ -80,7 +80,7 @@ public:
 
     std::string driver = "621.01";               // driver_version()
     std::string missing_id;                      // first_missing_id(); empty means none is missing
-    std::vector<uint32_t> display_ids{0x80061086}; // enumerate(kVendorPvr); the id Finn's machine has
+    std::vector<uint32_t> display_ids{0x80061086}; // enumerate(kVendorPvr); the id a real machine had
     int64_t appears_at_ns = 0;                   // enumerate() finds nothing before this clock time
     uint32_t enables_needed = 0;                 // enumerate() finds nothing until enable_direct_mode() was called this often
     LUID luid = {0x1234, 0x56};                  // adapter_luid()

@@ -67,7 +67,7 @@ public sealed record BuildCheckResult(int Format, string? Commit, DateTimeOffset
 }
 
 /// <summary>
-/// The checks that run after every Monado build, with no window opened (Mirador.md §4.11 item 49): the install's files
+/// The checks that run after every Monado build, with no window opened: the install's files
 /// and runtime manifest, every DLL they need found, the service setting in the configure cache, and Monado's unit tests
 /// (<c>ctest</c>). A failure warns; it doesn't block (upstream <c>main</c> is sometimes red).
 /// </summary>

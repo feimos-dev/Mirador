@@ -1536,7 +1536,7 @@ public:
         create_instance();
     }
 
-    // Monado's retry (design 6.3): the instance destroyed and a new one made, in a process whose display session
+    // Monado's retry: the instance destroyed and a new one made, in a process whose display session
     // stays open. The new instance decides the display again.
     void new_instance()
     {
@@ -1642,7 +1642,7 @@ public:
     }
 
     // What vkCreateSwapchainKHR on our surface asks first: the trial import of a device that
-    // did not exist at the display query, once (design 6.3). Through the test DLL's export; -1 without it.
+    // did not exist at the display query, once. Through the test DLL's export; -1 without it.
     int trial_import_at_swapchain(VkDevice device) const
     {
         return swapchain_trial != nullptr ? swapchain_trial(device) : -1;

@@ -156,7 +156,7 @@ public sealed partial class HomeViewModel : ObservableObject
     /// <summary>
     /// Whether the "Runs as you" line offers "Allow" (again): the profile has "Run as administrator" on but the consent
     /// isn't recorded, or the last Start ran as the user because SteamVR's Lighthouse driver changed since the user
-    /// allowed Monado as administrator (Mirador.md §4.10 item 46).
+    /// allowed Monado as administrator.
     /// </summary>
     [ObservableProperty]
     public partial bool OffersAllowAgain { get; set; }
@@ -851,7 +851,7 @@ public sealed partial class HomeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The "OpenVR runtime" row (Mirador.md §4.6 item 21), read from the paths file each time, and what needs a look.
+    /// The "OpenVR runtime" row, read from the paths file each time, and what needs a look.
     /// </summary>
     private void RefreshOpenVr(bool openXrIsMonado, string? activeOpenXr)
     {

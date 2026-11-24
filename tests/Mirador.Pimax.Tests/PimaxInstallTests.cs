@@ -8,7 +8,7 @@ public class PimaxInstallTests
     private const string Uninstall = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
     private const string Uninstall32 = @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
 
-    // As Pimax Play 2.0.4 writes them (vr-docs\captures\windows-2026-10-20\raw\w0_inventory.txt).
+    // As Pimax Play 2.0.4 writes them.
     private const string ImagePath = "\"C:\\Program Files\\Pimax\\Runtime\\PiServiceLauncher.exe\"";
     private const string Runtime = @"C:\Program Files\Pimax\Runtime";
 

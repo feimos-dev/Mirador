@@ -5,7 +5,7 @@ using Mirador.Core.OpenVr;
 namespace Mirador.App.Services;
 
 /// <summary>
-/// What a check for updates found (Mirador.md §4.8 item 37).
+/// What a check for updates found.
 /// </summary>
 /// <param name="At">When it was made.</param>
 /// <param name="Reached">Whether GitHub answered for both repositories.</param>
@@ -14,7 +14,7 @@ namespace Mirador.App.Services;
 /// <param name="OpenComposite">The OpenLamina in use: its release version (or commit); null when this build has none.</param>
 /// <param name="NewerOpenComposite">OpenLamina's latest full release when it is newer; null otherwise.</param>
 /// <param name="NewerMonado">
-/// Mirador's Monado's newest weekly build when it isn't the one installed (Mirador.md §4.11 item 50); null otherwise, and when
+/// Mirador's Monado's newest weekly build when it isn't the one installed; null otherwise, and when
 /// no profile runs Mirador's Monado.
 /// </param>
 public sealed record UpdateReport(
@@ -61,7 +61,7 @@ public sealed record UpdateReport(
 }
 
 /// <summary>
-/// The check for newer releases of Mirador and of OpenLamina (Mirador.md §4.8 items 37–38): once a day at most at
+/// The check for newer releases of Mirador and of OpenLamina: once a day at most at
 /// launch when it is on, and "Check now". It only asks and reports; Mirador installs nothing by itself.
 /// </summary>
 public sealed class Updates(AppHost host)
@@ -106,7 +106,7 @@ public sealed class Updates(AppHost host)
     }
 
     /// <summary>
-    /// "Get OpenLamina" (Mirador.md §4.11 item 56): the fork's latest release, downloaded and checked like an update.
+    /// "Get OpenLamina": the fork's latest release, downloaded and checked like an update.
     /// </summary>
     /// <returns>What happened, in words for the user.</returns>
     /// <exception cref="MiradorException">Why nothing changed.</exception>
@@ -126,7 +126,7 @@ public sealed class Updates(AppHost host)
 
     /// <summary>
     /// The newest weekly build of Mirador's Monado when a profile runs Mirador's Monado and a newer one than the installed is
-    /// out; never installed from here (Mirador.md §4.11 item 50: "Never installed by itself").
+    /// out; never installed from here.
     /// </summary>
     private async Task<string?> NewerMonadoAsync(HttpClient http)
     {
