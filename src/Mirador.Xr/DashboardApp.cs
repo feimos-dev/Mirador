@@ -74,7 +74,8 @@ internal sealed class DashboardApp
             return 1;
         }
 
-        if (!SK.System.overlayApp)
+        // StereoKit leaves SK.System.overlayApp unset; the session is an overlay only if the extension was enabled.
+        if (!Backend.OpenXR.ExtEnabled("XR_EXTX_overlay"))
         {
             // As a scene app it would take the view from every game.
             Console.Error.WriteLine("This OpenXR runtime has no overlay sessions.");

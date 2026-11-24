@@ -44,7 +44,7 @@ internal static class HomeApp
     }
 }
 
-/// <summary>What the home draws: the floor grid at the stage's floor and the sky around the head, and nothing else.</summary>
+/// <summary>What the home draws: the floor grid at the stage's floor, the sky around the head, and the controllers.</summary>
 internal sealed class HomeScene
 {
     /// <summary>The floor's edge length; it has faded into the horizon long before its edge.</summary>
@@ -60,8 +60,8 @@ internal sealed class HomeScene
 
     public HomeScene()
     {
-        // No hands, no controllers, no rays, and no skybox behind the scene's own sky.
-        Input.HandVisible(Handed.Max, false);
+        // The controllers, but no rays, and no skybox behind the scene's own sky.
+        Input.HandVisible(Handed.Max, true);
         Interaction.DefaultInteractors = DefaultInteractors.None;
         Interaction.DefaultDraw = false;
         Renderer.SkyboxVisible = false;
