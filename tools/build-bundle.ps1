@@ -10,6 +10,7 @@
 
       Mirador.exe and the app        dotnet publish, self-contained, win-x64
       Mirador.Helper.exe             the helper service, beside the app on the same .NET runtime
+      Mirador.Xr.exe, xr\            the home and the dashboard in the headset, beside the app on the same .NET runtime
       standin\mirador-standin.exe    the stand-in again, copied into build folders by Mirador
       layer\                         mirador_direct_mode.json, .dll, mirador-display-check.exe (built from layer\)
       tools\                         build-monado.ps1, vcpkg-commit.txt, xr-check.exe
@@ -64,7 +65,7 @@ Invoke-Checked { & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo
 $xrCheck = Join-Path $xrCheckBuild 'xr-check.exe'
 Need $xrCheck 'xr-check''s build'
 
-# 3. The app (with the stand-in copied in by its project) and the helper.
+# 3. The app (with the stand-in copied in by its project), the helper, and the home and dashboard.
 Invoke-Checked { dotnet publish (Join-Path $repo 'src\Mirador.App\Mirador.App.csproj') -c Release -r win-x64 --self-contained true -p:Platform=x64 -o $Out } 'Publishing the app'
 # The helper shares the app's folder and .NET runtime: published apart, it may only add files or bring the same bytes,
 # so neither program ever runs on a DLL built for the other.
@@ -78,6 +79,22 @@ $clash = Get-ChildItem -LiteralPath $helperOut -Recurse -File | Where-Object {
 if ($clash) { throw "The helper and the app ship different copies of: $(($clash | ForEach-Object Name) -join ', ')." }
 Copy-Item -Path (Join-Path $helperOut '*') -Destination $Out -Recurse -Force
 Remove-Item -LiteralPath $helperOut -Recurse -Force
+# The home and the dashboard share the folder and the runtime the same way.
+$xrOut = "$Out.xr"
+if (Test-Path -LiteralPath $xrOut) { Remove-Item -LiteralPath $xrOut -Recurse -Force }
+Invoke-Checked { dotnet publish (Join-Path $repo 'src\Mirador.Xr\Mirador.Xr.csproj') -c Release -r win-x64 --self-contained true -p:Platform=x64 -o $xrOut } 'Publishing the home and the dashboard'
+# StereoKit's 18 MB of native debug symbols stay out of the install.
+Remove-Item -LiteralPath (Join-Path $xrOut 'StereoKitC.pdb') -Force -ErrorAction SilentlyContinue
+$clash = Get-ChildItem -LiteralPath $xrOut -Recurse -File | Where-Object {
+    $app = Join-Path $Out ([IO.Path]::GetRelativePath($xrOut, $_.FullName))
+    (Test-Path -LiteralPath $app) -and (Get-FileHash -LiteralPath $app).Hash -ne (Get-FileHash -LiteralPath $_.FullName).Hash
+}
+if ($clash) { throw "The home and dashboard and the app ship different copies of: $(($clash | ForEach-Object Name) -join ', ')." }
+Copy-Item -Path (Join-Path $xrOut '*') -Destination $Out -Recurse -Force
+Remove-Item -LiteralPath $xrOut -Recurse -Force
+Need (Join-Path $Out 'Mirador.Xr.exe') 'the home and dashboard''s publish'
+Need (Join-Path $Out 'xr\grid.hlsl.sks') 'the home''s shaders'
+Need (Join-Path $Out 'xr\power.png') 'the dashboard''s icons'
 Copy-Item -LiteralPath $standin -Destination (New-Item -ItemType Directory -Force -Path (Join-Path $Out 'standin')).FullName -Force
 # The bundled Monado's build recipe and its vcpkg pin, which the app runs to build a profile's branch.
 $toolsDir = New-Item -ItemType Directory -Force -Path (Join-Path $Out 'tools')

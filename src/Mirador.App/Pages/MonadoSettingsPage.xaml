@@ -80,11 +80,7 @@
                 </StackPanel>
             </toolkit:SettingsCard>
 
-            <TextBlock Style="{StaticResource SectionHeader}" Text="Session" />
-            <toolkit:SettingsCard Header="Stop Monado once all apps are closed">
-                <ToggleSwitch IsOn="{x:Bind ViewModel.StopWhenLastAppCloses, Mode=TwoWay}" />
-            </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Reset to defaults">
+            <toolkit:SettingsCard Margin="0,30,0,0" Header="Reset to defaults">
                 <Button Click="OnReset" Content="Reset" />
             </toolkit:SettingsCard>
         </StackPanel>

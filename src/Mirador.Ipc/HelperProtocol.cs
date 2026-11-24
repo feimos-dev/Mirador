@@ -116,7 +116,6 @@ public enum HelperCommand
 /// <param name="LighthouseWaitMs">Lighthouse discovery wait; <see cref="MonadoSettingsEnvironment.LighthouseWaitRange"/>.</param>
 /// <param name="RenderScalePercent">Compositor render scale; <see cref="MonadoSettingsEnvironment.RenderScaleRange"/>.</param>
 /// <param name="CompositorMinTimeMs">Compositor minimum frame time; <see cref="MonadoSettingsEnvironment.CompositorMinTimeRange"/>.</param>
-/// <param name="ExitOnDisconnect">Whether Monado exits when the last app disconnects.</param>
 /// <param name="Module">The headset module's table: <c>""</c> for none, or <c>"pimax"</c> (a Dream Air plugged in).</param>
 /// <param name="Build">
 /// <c>""</c> for Mirador's Monado; else the id of the profile whose approved build runs. The
@@ -144,7 +143,6 @@ public sealed record ElevatedStart(
     [property: JsonRequired] int LighthouseWaitMs,
     [property: JsonRequired] int RenderScalePercent,
     [property: JsonRequired] int CompositorMinTimeMs,
-    [property: JsonRequired] bool ExitOnDisconnect,
     [property: JsonRequired] string Module,
     string Build = "",
     bool Headless = false,

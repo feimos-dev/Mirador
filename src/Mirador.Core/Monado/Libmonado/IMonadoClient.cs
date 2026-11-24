@@ -21,6 +21,15 @@ public readonly record struct MonadoPose(float Qx, float Qy, float Qz, float Qw,
     public static MonadoPose Identity { get; } = new(0, 0, 0, 1, 0, 0, 0);
 }
 
+/// <summary>An app connected to Monado, as libmonado describes it.</summary>
+/// <param name="Id">Monado's id for the app, for <see cref="IMonadoClient.ShowApp"/> and <see cref="IMonadoClient.BlockInputs"/>.</param>
+/// <param name="Name">The application name the app gave OpenXR.</param>
+/// <param name="Shown">Whether it is the app Monado shows, its primary app.</param>
+/// <param name="SessionRunning">Whether the app has begun its session.</param>
+/// <param name="Overlay">Whether its session is an overlay, drawn above the app shown.</param>
+/// <param name="InputsBlocked">Whether Monado keeps its inputs from it.</param>
+public sealed record MonadoApp(uint Id, string Name, bool Shown, bool SessionRunning, bool Overlay, bool InputsBlocked);
+
 /// <summary>
 /// One open connection to a running Monado through libmonado. Monado's device and tracking-origin lists are read when
 /// the connection opens. Calls after <see cref="IDisposable.Dispose"/> throw <see cref="ObjectDisposedException"/>;
@@ -46,4 +55,38 @@ public interface IMonadoClient : IDisposable
 
     /// <summary>Moves tracking origin <paramref name="origin"/> to <paramref name="offset"/>.</summary>
     void SetOriginOffset(uint origin, MonadoPose offset);
+
+    /// <summary>
+    /// Whether this libmonado lists Monado's apps and picks the one shown: <see cref="Apps"/> is empty and
+    /// <see cref="ShowApp"/> throws <see cref="NotSupportedException"/> when not.
+    /// </summary>
+    bool OffersApps => false;
+
+    /// <summary>The apps connected to Monado now, in its client list's order; this connection itself is among them.</summary>
+    /// <exception cref="MiradorException">Monado didn't answer.</exception>
+    IReadOnlyList<MonadoApp> Apps() => [];
+
+    /// <summary>Makes app <paramref name="id"/> the one Monado shows.</summary>
+    void ShowApp(uint id) => throw new NotSupportedException("This libmonado doesn't pick the app shown.");
+
+    /// <summary>Whether this libmonado blocks an app's inputs: <see cref="BlockInputs"/> throws <see cref="NotSupportedException"/> when not.</summary>
+    bool OffersInputBlocks => false;
+
+    /// <summary>
+    /// Keeps the inputs (buttons, triggers, sticks) from app <paramref name="id"/>, or gives them back. Its poses, hand
+    /// tracking and haptics are never blocked here: any block on them is lifted.
+    /// </summary>
+    void BlockInputs(uint id, bool blocked) => throw new NotSupportedException("This libmonado doesn't block an app's inputs.");
+
+    /// <summary>
+    /// Whether this libmonado reads and moves the stage, the reference space every app's floor and forward come from:
+    /// <see cref="GetStageOffset"/> and <see cref="SetStageOffset"/> throw <see cref="NotSupportedException"/> when not.
+    /// </summary>
+    bool OffersStageOffset => false;
+
+    /// <summary>The stage's offset.</summary>
+    MonadoPose GetStageOffset() => throw new NotSupportedException("This libmonado doesn't move the stage.");
+
+    /// <summary>Moves the stage to <paramref name="offset"/>.</summary>
+    void SetStageOffset(MonadoPose offset) => throw new NotSupportedException("This libmonado doesn't move the stage.");
 }

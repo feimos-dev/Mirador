@@ -41,7 +41,6 @@ public static class MonadoEnvironment
             settings.LighthouseWaitMs,
             settings.RenderScalePercent,
             settings.CompositorMinTimeMs,
-            settings.StopWhenLastAppCloses,
             controllersOffAtStop);
 
         foreach (var v in moduleFixed)

@@ -42,7 +42,7 @@ public static class AppPipeClient
     }
 
     /// <summary>Whether the pipe's owner is the user this process runs as (also when elevated); always true off Windows.</summary>
-    private static bool OwnedByThisUser(NamedPipeClientStream pipe)
+    internal static bool OwnedByThisUser(NamedPipeClientStream pipe)
     {
         if (!OperatingSystem.IsWindows())
         {

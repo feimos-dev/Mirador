@@ -38,22 +38,16 @@ public static class MonadoSettingsEnvironment
     /// <summary>
     /// Writes the settings' variables through <paramref name="set"/> (name, value — the value is never empty here), so
     /// each side keeps its own dictionary rules while the names, formatting and which variables are written stay here.
-    /// <see cref="ExitOnDisconnect"/> is written only when <paramref name="exitOnDisconnect"/> is on, the way the setting
-    /// works (default off), and <see cref="StandbyOnExit"/> only when <paramref name="standbyOnExit"/> is (the Lighthouse
-    /// page's "Turn off controllers and trackers when Monado stops").
+    /// <see cref="StandbyOnExit"/> is written only when <paramref name="standbyOnExit"/> is on (the Lighthouse page's
+    /// "Turn off controllers and trackers when Monado stops").
     /// </summary>
     public static void Write(
-        Action<string, string> set, int lighthouseWaitMs, int renderScalePercent, int compositorMinTimeMs, bool exitOnDisconnect,
+        Action<string, string> set, int lighthouseWaitMs, int renderScalePercent, int compositorMinTimeMs,
         bool standbyOnExit = false)
     {
         set(LighthouseWait, Number(lighthouseWaitMs));
         set(RenderScale, Number(renderScalePercent));
         set(CompositorMinTime, Number(compositorMinTimeMs));
-        if (exitOnDisconnect)
-        {
-            set(ExitOnDisconnect, "1");
-        }
-
         if (standbyOnExit)
         {
             set(StandbyOnExit, "1");

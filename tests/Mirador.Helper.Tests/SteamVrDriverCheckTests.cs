@@ -329,7 +329,7 @@ public class SteamVrDriverCheckTests
 
             // And that is the folder Monado is told.
             var env = Mirador.Helper.ElevatedMonado.ElevatedEnvironment.Build(
-                new ElevatedStart(3000, 100, 6, false, "pimax"),
+                new ElevatedStart(3000, 100, 6, "pimax"),
                 new Mirador.Helper.ElevatedMonado.UserFolders(@"C:\Users\u", @"C:\Users\u\AppData\Roaming", @"C:\Users\u\AppData\Local", @"C:\Users\u\AppData\Local\Temp"),
                 @"C:\Program Files\Mirador\monado\server",
                 check.SteamVrPath);

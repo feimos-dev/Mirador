@@ -4,13 +4,13 @@ namespace Mirador.Core.Monado;
 
 /// <summary>
 /// Follows Monado's log to see which applications are connected. A client's name arrives on a later line than its
-/// "connected" line, so a name goes to the most recent connected client that has none yet. Libmonado's own client,
-/// which Mirador keeps connected while Monado runs, is no app.
+/// "connected" line, so a name goes to the most recent connected client that has none yet. Mirador's own clients are
+/// no apps: libmonado's, which it keeps connected while Monado runs, and its home and dashboard.
 /// </summary>
 public sealed partial class ClientLogParser
 {
-    /// <summary>The name libmonado's client gives Monado.</summary>
-    private const string LibmonadoName = "libmonado";
+    /// <summary>The names Mirador's own clients give Monado; "libmonado" is libmonado's.</summary>
+    private static readonly string[] Own = ["libmonado", Mirador.Ipc.XrLink.HomeAppName, Mirador.Ipc.XrLink.DashboardAppName];
 
     private readonly List<Client> clients = [];
     private volatile IReadOnlyList<string> connectedApps = [];
@@ -48,7 +48,7 @@ public sealed partial class ClientLogParser
             return false;
         }
 
-        var now = clients.Where(c => !string.IsNullOrEmpty(c.Name) && c.Name != LibmonadoName).Select(c => c.Name!).ToArray();
+        var now = clients.Where(c => !string.IsNullOrEmpty(c.Name) && !Own.Contains(c.Name)).Select(c => c.Name!).ToArray();
         if (connectedApps.SequenceEqual(now))
         {
             return false;
