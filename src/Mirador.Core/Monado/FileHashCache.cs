@@ -4,7 +4,7 @@ namespace Mirador.Core.Monado;
 
 /// <summary>
 /// The SHA-256 of files, kept while a file's size and last write time stay the same: Home asks whether a profile's build
-/// is the approved one at every refresh, on the UI thread, and a build's DLL and service are megabytes each.
+/// is the approved one at every refresh, on the UI thread, by hashing every file of the build.
 /// </summary>
 /// <param name="hashOf">The real hash of a file (lower case).</param>
 public sealed class FileHashCache(Func<string, string> hashOf)

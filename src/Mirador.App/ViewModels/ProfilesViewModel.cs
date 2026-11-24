@@ -233,6 +233,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
                 return blocked;
             }
 
+            if (BuildChanged)
+            {
+                return "This build changed since it was approved. Press Start to approve it.";
+            }
+
             var text = MonadoSource == MiradorSource
                 ? "Gives Monado realtime GPU priority."
                 : "Only for a branch you trust: it gets full control of your PC.";
@@ -255,6 +260,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// <summary>Whether the saved profile is approved as it is (its build and its variables): the toggle shows a check.</summary>
     [ObservableProperty]
     public partial bool IsApproved { get; set; }
+
+    /// <summary>Whether the saved profile, run as administrator, has an approval of its build, and the build differs from it now.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RunAsAdministratorDescription))]
+    public partial bool BuildChanged { get; set; }
 
     /// <summary>Why the saved profile, run as administrator, can't be approved; null when it can, or needs no approval.</summary>
     [ObservableProperty]
@@ -774,6 +784,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
         var approvable = editing is not null && Approvable(editing);
         IsApproved = approvable && host.FullyApproved(editing!);
         ApprovalBlocked = approvable && editing!.RunAsAdministrator ? ElevatedChoice.ApprovalProblem(editing!) : null;
+        BuildChanged = !IsApproved && approvable && editing!.RunAsAdministrator && editing.Monado.Kind is SourceKind.Branch or SourceKind.Folder
+            && host.HasApproval(editing) && !host.ApprovedBuildCurrent(editing);
     }
 
     partial void OnMonadoOptionsChanged(string value) => Changed();
