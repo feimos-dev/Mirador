@@ -171,4 +171,18 @@ public class ClientLogParserTests
 
         Assert.Equal(["HelloXR"], p.ConnectedApps);
     }
+
+    [Fact]
+    public void Miradors_home_and_dashboard_are_not_apps()
+    {
+        var p = new ClientLogParser();
+        p.Feed(Connected(1));
+        Assert.False(p.Feed(Named("Mirador Home")));
+        p.Feed(Connected(2));
+        Assert.False(p.Feed(Named("Mirador Dashboard")));
+        p.Feed(Connected(3));
+        p.Feed(Named("HelloXR"));
+
+        Assert.Equal(["HelloXR"], p.ConnectedApps);
+    }
 }
