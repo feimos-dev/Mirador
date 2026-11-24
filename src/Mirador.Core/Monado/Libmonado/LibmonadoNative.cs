@@ -61,6 +61,33 @@ internal sealed unsafe class LibmonadoExports
     public delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int> GetTrackingOriginOffset;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int> SetTrackingOriginOffset;
 
+    /// <summary>The app functions; null when the library lacks any of them.</summary>
+    public delegate* unmanaged[Cdecl]<IntPtr, int> UpdateClientList;
+    public delegate* unmanaged[Cdecl]<IntPtr, uint*, int> GetNumberClients;
+    public delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int> GetClientIdAtIndex;
+    public delegate* unmanaged[Cdecl]<IntPtr, uint, byte**, int> GetClientName;
+    public delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int> GetClientState;
+    public delegate* unmanaged[Cdecl]<IntPtr, uint, int> SetClientPrimary;
+
+    /// <summary><c>mnd_root_set_client_io_blocks</c> (API 1.6); null when the library lacks it.</summary>
+    public delegate* unmanaged[Cdecl]<IntPtr, uint, uint, int> SetClientIoBlocks;
+
+    /// <summary>The reference-space offset functions; null when the library lacks either.</summary>
+    public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> GetReferenceSpaceOffset;
+    public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> SetReferenceSpaceOffset;
+
+    /// <summary><c>mnd_client_flags_t</c>.</summary>
+    public const uint ClientPrimaryApp = 1u << 0;
+    public const uint ClientSessionActive = 1u << 1;
+    public const uint ClientSessionOverlay = 1u << 4;
+    public const uint ClientInputsBlocked = 1u << 8;
+
+    /// <summary><c>MND_IO_BLOCK_INPUTS</c>.</summary>
+    public const uint IoBlockInputs = 1u << 2;
+
+    /// <summary><c>MND_SPACE_REFERENCE_TYPE_STAGE</c>.</summary>
+    public const int ReferenceSpaceStage = 3;
+
     private LibmonadoExports() { }
 
     /// <summary>For tests: no functions yet; the test sets the ones it needs.</summary>
@@ -68,6 +95,14 @@ internal sealed unsafe class LibmonadoExports
 
     /// <summary>Whether the tracking-origin functions were all found.</summary>
     public bool OffersOriginOffsets => GetTrackingOriginCount != null;
+
+    /// <summary>Whether the app functions were all found.</summary>
+    public bool OffersApps => UpdateClientList != null;
+
+    public bool OffersInputBlocks => SetClientIoBlocks != null;
+
+    /// <summary>Whether the reference-space offset functions were both found.</summary>
+    public bool OffersReferenceSpaceOffsets => GetReferenceSpaceOffset != null;
 
     /// <summary>The functions of <paramref name="module"/>; null when it lacks one every client needs.</summary>
     public static LibmonadoExports? Resolve(IntPtr module)
@@ -108,6 +143,33 @@ internal sealed unsafe class LibmonadoExports
             exports.GetTrackingOriginName = (delegate* unmanaged[Cdecl]<IntPtr, uint, byte**, int>)originName;
             exports.GetTrackingOriginOffset = (delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int>)getOriginOffset;
             exports.SetTrackingOriginOffset = (delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int>)setOriginOffset;
+        }
+
+        var updateClients = LibmonadoNative.GetProcAddress(module, "mnd_root_update_client_list");
+        var numberClients = LibmonadoNative.GetProcAddress(module, "mnd_root_get_number_clients");
+        var clientIdAtIndex = LibmonadoNative.GetProcAddress(module, "mnd_root_get_client_id_at_index");
+        var clientName = LibmonadoNative.GetProcAddress(module, "mnd_root_get_client_name");
+        var clientState = LibmonadoNative.GetProcAddress(module, "mnd_root_get_client_state");
+        var setClientPrimary = LibmonadoNative.GetProcAddress(module, "mnd_root_set_client_primary");
+        if (updateClients != 0 && numberClients != 0 && clientIdAtIndex != 0 && clientName != 0 && clientState != 0 && setClientPrimary != 0)
+        {
+            exports.UpdateClientList = (delegate* unmanaged[Cdecl]<IntPtr, int>)updateClients;
+            exports.GetNumberClients = (delegate* unmanaged[Cdecl]<IntPtr, uint*, int>)numberClients;
+            exports.GetClientIdAtIndex = (delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int>)clientIdAtIndex;
+            exports.GetClientName = (delegate* unmanaged[Cdecl]<IntPtr, uint, byte**, int>)clientName;
+            exports.GetClientState = (delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int>)clientState;
+            exports.SetClientPrimary = (delegate* unmanaged[Cdecl]<IntPtr, uint, int>)setClientPrimary;
+        }
+
+        exports.SetClientIoBlocks =
+            (delegate* unmanaged[Cdecl]<IntPtr, uint, uint, int>)LibmonadoNative.GetProcAddress(module, "mnd_root_set_client_io_blocks");
+
+        var getSpaceOffset = LibmonadoNative.GetProcAddress(module, "mnd_root_get_reference_space_offset");
+        var setSpaceOffset = LibmonadoNative.GetProcAddress(module, "mnd_root_set_reference_space_offset");
+        if (getSpaceOffset != 0 && setSpaceOffset != 0)
+        {
+            exports.GetReferenceSpaceOffset = (delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int>)getSpaceOffset;
+            exports.SetReferenceSpaceOffset = (delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int>)setSpaceOffset;
         }
 
         return exports;

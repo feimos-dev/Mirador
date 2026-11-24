@@ -201,6 +201,114 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
         }
     }
 
+    public bool OffersApps => exports.OffersApps;
+
+    public bool OffersInputBlocks => exports.OffersInputBlocks;
+
+    public bool OffersStageOffset => exports.OffersReferenceSpaceOffsets;
+
+    /// <summary>More apps than Monado serves at once (its client table has 8 places): a count over this is a broken answer.</summary>
+    private const uint MaxApps = 64;
+
+    public IReadOnlyList<MonadoApp> Apps()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!exports.OffersApps)
+            {
+                return [];
+            }
+
+            Check(exports.UpdateClientList(root));
+            uint count;
+            Check(exports.GetNumberClients(root, &count));
+            if (count > MaxApps)
+            {
+                throw new MiradorException($"Monado gave libmonado an app count it can't have ({count}).");
+            }
+
+            var apps = new List<MonadoApp>((int)count);
+            for (uint i = 0; i < count; i++)
+            {
+                // An app that left since the list was read fails these calls: it is skipped.
+                uint id, flags;
+                byte* name = null;
+                if (exports.GetClientIdAtIndex(root, i, &id) < 0 || exports.GetClientName(root, id, &name) < 0)
+                {
+                    continue;
+                }
+
+                // The name lives in libmonado's one buffer, which the next call overwrites.
+                var text = Marshal.PtrToStringUTF8((IntPtr)name) ?? "";
+                if (exports.GetClientState(root, id, &flags) < 0)
+                {
+                    continue;
+                }
+
+                apps.Add(new MonadoApp(
+                    id, text,
+                    (flags & LibmonadoExports.ClientPrimaryApp) != 0,
+                    (flags & LibmonadoExports.ClientSessionActive) != 0,
+                    (flags & LibmonadoExports.ClientSessionOverlay) != 0,
+                    (flags & LibmonadoExports.ClientInputsBlocked) != 0));
+            }
+
+            return apps;
+        }
+    }
+
+    public void ShowApp(uint id)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!exports.OffersApps)
+            {
+                throw new NotSupportedException("This libmonado doesn't pick the app shown.");
+            }
+
+            Check(exports.SetClientPrimary(root, id));
+        }
+    }
+
+    public void BlockInputs(uint id, bool blocked)
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!exports.OffersInputBlocks)
+            {
+                throw new NotSupportedException("This libmonado doesn't block an app's inputs.");
+            }
+
+            Check(exports.SetClientIoBlocks(root, id, blocked ? LibmonadoExports.IoBlockInputs : 0));
+        }
+    }
+
+    public MonadoPose GetStageOffset()
+    {
+        lock (gate)
+        {
+            ThrowUnlessStageOffset();
+
+            MndPose pose;
+            Check(exports.GetReferenceSpaceOffset(root, LibmonadoExports.ReferenceSpaceStage, &pose));
+            return pose.ToPose();
+        }
+    }
+
+    public void SetStageOffset(MonadoPose offset)
+    {
+        lock (gate)
+        {
+            ThrowUnlessStageOffset();
+
+            var pose = new MndPose(offset);
+            Check(exports.SetReferenceSpaceOffset(root, LibmonadoExports.ReferenceSpaceStage, &pose));
+        }
+    }
+
     public void Dispose()
     {
         lock (gate)
@@ -231,6 +339,15 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
         if (!exports.OffersOriginOffsets)
         {
             throw new NotSupportedException("This libmonado doesn't move tracking origins.");
+        }
+    }
+
+    private void ThrowUnlessStageOffset()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (!exports.OffersReferenceSpaceOffsets)
+        {
+            throw new NotSupportedException("This libmonado doesn't move the stage.");
         }
     }
 

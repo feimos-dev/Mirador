@@ -76,4 +76,156 @@ public unsafe class LibmonadoClientTests
 
         Assert.Contains("4294967295", e.Message);
     }
+
+    // A libmonado with three apps: a game (shown), an overlay, and one that leaves before its name is read.
+    private static readonly IntPtr[] AppNames =
+        [Marshal.StringToCoTaskMemUTF8("Game"), Marshal.StringToCoTaskMemUTF8("Bar"), Marshal.StringToCoTaskMemUTF8("Gone")];
+
+    private static uint lastBlocks = uint.MaxValue;
+    private static uint lastBlocked;
+    private static uint lastShown;
+    private static int lastSpace = -1;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int Ok(IntPtr root) => 0;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int ThreeApps(IntPtr root, uint* count)
+    {
+        *count = 3;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int IdAt(IntPtr root, uint index, uint* id)
+    {
+        *id = 10 + index;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int NameOf(IntPtr root, uint id, byte** name)
+    {
+        if (id == 12)
+        {
+            return -3;
+        }
+
+        *name = (byte*)AppNames[id - 10];
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int StateOf(IntPtr root, uint id, uint* flags)
+    {
+        // The game: shown, session running, inputs blocked. The bar: session running, overlay.
+        *flags = id == 10 ? (1u << 0) | (1u << 1) | (1u << 8) : (1u << 1) | (1u << 4);
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int Show(IntPtr root, uint id)
+    {
+        lastShown = id;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int Blocks(IntPtr root, uint id, uint flags)
+    {
+        lastBlocked = id;
+        lastBlocks = flags;
+        return 0;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int SpaceOffset(IntPtr root, int space, MndPose* pose)
+    {
+        lastSpace = space;
+        *pose = new MndPose(new MonadoPose(0, 0, 0, 1, 1, 2, 3));
+        return 0;
+    }
+
+    private static LibmonadoExports WithApps()
+    {
+        var exports = LibmonadoExports.ForTests();
+        exports.RootDestroy = &Destroy;
+        exports.UpdateClientList = &Ok;
+        exports.GetNumberClients = &ThreeApps;
+        exports.GetClientIdAtIndex = &IdAt;
+        exports.GetClientName = &NameOf;
+        exports.GetClientState = &StateOf;
+        exports.SetClientPrimary = &Show;
+        return exports;
+    }
+
+    [Fact]
+    public void Apps_are_listed_with_their_flags_and_one_that_left_is_skipped()
+    {
+        using var client = new LibmonadoClient(IntPtr.Zero, WithApps(), new IntPtr(1));
+
+        var apps = client.Apps();
+
+        Assert.Equal(
+            [
+                new MonadoApp(10, "Game", Shown: true, SessionRunning: true, Overlay: false, InputsBlocked: true),
+                new MonadoApp(11, "Bar", Shown: false, SessionRunning: true, Overlay: true, InputsBlocked: false),
+            ],
+            apps);
+    }
+
+    [Fact]
+    public void Showing_an_app_names_it_to_monado()
+    {
+        using var client = new LibmonadoClient(IntPtr.Zero, WithApps(), new IntPtr(1));
+
+        client.ShowApp(11);
+
+        Assert.Equal(11u, lastShown);
+    }
+
+    [Fact]
+    public void Blocking_inputs_sets_only_the_inputs_block_and_unblocking_clears_every_block()
+    {
+        var exports = WithApps();
+        exports.SetClientIoBlocks = &Blocks;
+        using var client = new LibmonadoClient(IntPtr.Zero, exports, new IntPtr(1));
+
+        client.BlockInputs(10, blocked: true);
+        Assert.Equal((10u, 4u), (lastBlocked, lastBlocks));
+
+        client.BlockInputs(10, blocked: false);
+        Assert.Equal((10u, 0u), (lastBlocked, lastBlocks));
+    }
+
+    [Fact]
+    public void The_stage_offset_is_the_stage_reference_space()
+    {
+        var exports = LibmonadoExports.ForTests();
+        exports.RootDestroy = &Destroy;
+        exports.GetReferenceSpaceOffset = &SpaceOffset;
+        exports.SetReferenceSpaceOffset = &SpaceOffset;
+        using var client = new LibmonadoClient(IntPtr.Zero, exports, new IntPtr(1));
+
+        var offset = client.GetStageOffset();
+
+        Assert.Equal(3, lastSpace);
+        Assert.Equal(new MonadoPose(0, 0, 0, 1, 1, 2, 3), offset);
+    }
+
+    [Fact]
+    public void A_libmonado_without_the_newer_functions_offers_none_of_them()
+    {
+        var exports = LibmonadoExports.ForTests();
+        exports.RootDestroy = &Destroy;
+        using var client = new LibmonadoClient(IntPtr.Zero, exports, new IntPtr(1));
+
+        Assert.False(client.OffersApps);
+        Assert.False(client.OffersInputBlocks);
+        Assert.False(client.OffersStageOffset);
+        Assert.Empty(client.Apps());
+        Assert.Throws<NotSupportedException>(() => client.ShowApp(1));
+        Assert.Throws<NotSupportedException>(() => client.BlockInputs(1, true));
+        Assert.Throws<NotSupportedException>(() => client.GetStageOffset());
+    }
 }

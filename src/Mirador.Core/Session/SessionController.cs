@@ -1683,8 +1683,82 @@ public sealed class SessionController(SessionDeps deps)
             }
         }
 
+        public bool OffersApps => inner.OffersApps;
+
+        public bool OffersInputBlocks => inner.OffersInputBlocks;
+
+        public bool OffersStageOffset => inner.OffersStageOffset;
+
+        public IReadOnlyList<MonadoApp> Apps()
+        {
+            if (closed)
+            {
+                return [];
+            }
+
+            lock (gate)
+            {
+                try
+                {
+                    return closed ? [] : inner.Apps();
+                }
+                catch (Exception e) when (e is ObjectDisposedException || (e is MiradorException && closed))
+                {
+                    return [];
+                }
+            }
+        }
+
+        /// <exception cref="MiradorException">Monado has stopped, can't do this, or didn't answer.</exception>
+        public void ShowApp(uint id) => Call(inner.OffersApps, () => inner.ShowApp(id));
+
+        /// <exception cref="MiradorException">Monado has stopped, can't do this, or didn't answer.</exception>
+        public void BlockInputs(uint id, bool blocked) => Call(inner.OffersInputBlocks, () => inner.BlockInputs(id, blocked));
+
+        /// <exception cref="MiradorException">Monado has stopped, can't do this, or didn't answer.</exception>
+        public MonadoPose GetStageOffset()
+        {
+            var offset = MonadoPose.Identity;
+            Call(inner.OffersStageOffset, () => offset = inner.GetStageOffset());
+            return offset;
+        }
+
+        /// <exception cref="MiradorException">Monado has stopped, can't do this, or didn't answer.</exception>
+        public void SetStageOffset(MonadoPose offset) => Call(inner.OffersStageOffset, () => inner.SetStageOffset(offset));
+
         public void Dispose()
         {
+        }
+
+        /// <summary>One call that changes Monado: refused once the connection closes, or when this Monado doesn't offer it.</summary>
+        private void Call(bool offered, Action call)
+        {
+            void ThrowUnlessOpen()
+            {
+                if (closed)
+                {
+                    throw new MiradorException("Monado isn't running.");
+                }
+
+                if (!offered)
+                {
+                    throw new MiradorException("This Monado's libmonado can't do that.");
+                }
+            }
+
+            ThrowUnlessOpen();
+            lock (gate)
+            {
+                ThrowUnlessOpen();
+                try
+                {
+                    call();
+                }
+                catch (ObjectDisposedException)
+                {
+                    throw new MiradorException("Monado isn't running.");
+                }
+            }
         }
 
         /// <summary>From now on, calls return at once (empty, or with <see cref="MiradorException"/>); one under way goes on.</summary>
