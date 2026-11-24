@@ -1115,7 +1115,7 @@ public class SessionControllerTests
         }
 
         await using var lastApp = new Harness();
-        lastApp.Settings.Save(new MonadoSettings(StopWhenLastAppCloses: true));
+        lastApp.UseProfile(Harness.DreamAir with { ExtraEnvironment = [new EnvVar("IPC_EXIT_ON_DISCONNECT", "1")] });
         await lastApp.StartRunningAsync();
         lastApp.Launcher.Last!.Exit(0);
         await lastApp.HasEnded.Task.WaitAsync(Limit);
@@ -1123,10 +1123,10 @@ public class SessionControllerTests
     }
 
     [Fact]
-    public async Task Exit_after_the_last_app_closed_says_so()
+    public async Task Exit_after_the_last_app_closed_says_so_when_the_profile_asks_for_it()
     {
         await using var h = new Harness();
-        h.Settings.Save(new MonadoSettings(StopWhenLastAppCloses: true));
+        h.UseProfile(Harness.DreamAir with { ExtraEnvironment = [new EnvVar("IPC_EXIT_ON_DISCONNECT", "1")] });
         await h.StartRunningAsync();
         Assert.Equal("1", h.Launcher.Spec.Environment["IPC_EXIT_ON_DISCONNECT"]);
 

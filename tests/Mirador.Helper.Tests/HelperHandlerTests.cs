@@ -575,7 +575,7 @@ public sealed class HelperHandlerTests : IDisposable
 
     // StartMonadoElevated / StopMonadoElevated / WaitMonadoElevated
 
-    private static readonly ElevatedStart Start = new(3000, 100, 6, false, "pimax");
+    private static readonly ElevatedStart Start = new(3000, 100, 6, "pimax");
 
     private HelperHandler ElevatedHandler(FakeElevated elevated)
     {

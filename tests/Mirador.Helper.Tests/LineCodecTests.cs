@@ -146,14 +146,14 @@ public class LineCodecTests
         // the typed settings: the approved files come from the consent of whoever connected, never from a request.
         const string line =
             "{\"command\":\"StartMonadoElevated\","
-            + "\"start\":{\"lighthouseWaitMs\":3000,\"renderScalePercent\":100,\"compositorMinTimeMs\":6,\"exitOnDisconnect\":false,"
+            + "\"start\":{\"lighthouseWaitMs\":3000,\"renderScalePercent\":100,\"compositorMinTimeMs\":6,"
             + "\"module\":\"dreamair\",\"approvedFiles\":{\"ArcturusPerception.dll\":\"00\"},\"files\":[\"evil.dll=00\"]},"
             + "\"approvedFiles\":[\"ArcturusPerception.dll=00\"],\"unsignedFiles\":{\"evil.dll\":\"00\"},"
             + "\"steamVrPath\":\"C:\\\\evil\",\"sid\":\"S-1-5-18\"}\n";
 
         var request = await LineCodec.ReadAsync<HelperRequest>(Bytes(line), CancellationToken.None);
 
-        Assert.Equal(new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, false, "dreamair")), request);
+        Assert.Equal(new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, "dreamair")), request);
 
         // Nor could a later field hold one: a request is a command word, settings of plain numbers, switches and the
         // module's name, and a version's name (InstallMonado), which the helper looks up in Mirador's own release list.
@@ -179,7 +179,7 @@ public class LineCodecTests
     public async Task A_starts_variables_go_over_the_wire_in_order()
     {
         IReadOnlyList<KeyValuePair<string, string>> variables = [new("PIMAX_P3C_LOG", "debug"), new("XRT_MODE", "a=b"), new("EMPTY", "")];
-        var request = new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, false, "", ProfileId: "p1", Variables: variables));
+        var request = new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, "", ProfileId: "p1", Variables: variables));
 
         var read = await LineCodec.ReadAsync<HelperRequest>(Bytes(WireText(request)), CancellationToken.None);
 

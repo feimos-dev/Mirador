@@ -163,7 +163,7 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
         var settings = host.MonadoSettings.Load();
         var start = new ElevatedStart(
             settings.LighthouseWaitMs, settings.RenderScalePercent, settings.CompositorMinTimeMs,
-            ExitOnDisconnect: false, Module: "", Build: build, Headless: true, ElevationFix: true);
+            Module: "", Build: build, Headless: true, ElevationFix: true);
         var env = new Dictionary<string, string>(host.InheritedEnvironment, StringComparer.OrdinalIgnoreCase);
         var pipeName = host.Pipe.NameFor(env);
         if (host.Pipe.Exists(pipeName))

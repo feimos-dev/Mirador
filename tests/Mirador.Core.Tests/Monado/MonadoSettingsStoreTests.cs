@@ -11,10 +11,10 @@ public class MonadoSettingsStoreTests
         var store = new MonadoSettingsStore(dir.File("monado-settings.json"));
 
         Assert.Equal(new MonadoSettings(), store.Load());
-        Assert.Equal(new MonadoSettings(3000, 100, 6, false), store.Load());
+        Assert.Equal(new MonadoSettings(3000, 100, 6), store.Load());
         Assert.False(File.Exists(dir.File("monado-settings.json")));
 
-        var custom = new MonadoSettings(LighthouseWaitMs: 8000, RenderScalePercent: 140, CompositorMinTimeMs: 9, StopWhenLastAppCloses: true);
+        var custom = new MonadoSettings(LighthouseWaitMs: 8000, RenderScalePercent: 140, CompositorMinTimeMs: 9);
         store.Save(custom);
         Assert.Equal(custom, store.Load());
     }
@@ -27,10 +27,10 @@ public class MonadoSettingsStoreTests
         var store = new MonadoSettingsStore(path);
 
         File.WriteAllText(path, """{"lighthouseWaitMs":99999,"renderScalePercent":10,"compositorMinTimeMs":0,"stopWhenLastAppCloses":true}""");
-        Assert.Equal(new MonadoSettings(30000, 50, 1, true), store.Load());
+        Assert.Equal(new MonadoSettings(30000, 50, 1), store.Load());
 
         File.WriteAllText(path, """{"lighthouseWaitMs":2400,"renderScalePercent":103,"compositorMinTimeMs":99}""");
-        Assert.Equal(new MonadoSettings(2000, 105, 20, false), store.Load());
+        Assert.Equal(new MonadoSettings(2000, 105, 20), store.Load());
     }
 
     [Theory]
@@ -75,13 +75,6 @@ public class MonadoSettingsStoreTests
     [InlineData(int.MinValue, 1)]
     public void Compositor_minimum_time_is_whole_milliseconds_from_1_to_20(int given, int expected) =>
         Assert.Equal(expected, new MonadoSettings(CompositorMinTimeMs: given).Clamped().CompositorMinTimeMs);
-
-    [Fact]
-    public void Clamping_leaves_the_stop_switch_alone()
-    {
-        Assert.True(new MonadoSettings(StopWhenLastAppCloses: true).Clamped().StopWhenLastAppCloses);
-        Assert.False(new MonadoSettings().Clamped().StopWhenLastAppCloses);
-    }
 
     [Fact]
     public void Settings_missing_from_the_file_fall_back_to_their_defaults()

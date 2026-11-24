@@ -88,20 +88,12 @@ public class MonadoEnvironmentTests
     }
 
     [Fact]
-    public void Stop_when_last_app_closes_sets_exit_on_disconnect()
-    {
-        var env = MonadoEnvironment.Build(Inherited(), new MonadoSettings(StopWhenLastAppCloses: true), Custom(), []);
-
-        Assert.Equal("1", env["IPC_EXIT_ON_DISCONNECT"]);
-    }
-
-    [Fact]
-    public void An_inherited_exit_on_disconnect_passes_through_when_the_setting_is_off()
+    public void An_inherited_exit_on_disconnect_passes_through()
     {
         var inherited = Inherited();
         inherited["IPC_EXIT_ON_DISCONNECT"] = "1";
 
-        var env = MonadoEnvironment.Build(inherited, new MonadoSettings(StopWhenLastAppCloses: false), Custom(), []);
+        var env = MonadoEnvironment.Build(inherited, new MonadoSettings(), Custom(), []);
 
         Assert.Equal("1", env["IPC_EXIT_ON_DISCONNECT"]);
     }
@@ -244,10 +236,10 @@ public class MonadoEnvironmentTests
         var profile = CustomWith(new EnvVar("EXTRA", "1"));
         EnvVar[] moduleFixed = [new("FIXED", "2")];
 
-        var env = MonadoEnvironment.Build(new Dictionary<string, string>(), new MonadoSettings(StopWhenLastAppCloses: true), profile, moduleFixed);
+        var env = MonadoEnvironment.Build(new Dictionary<string, string>(), new MonadoSettings(), profile, moduleFixed);
 
         Assert.Equal(
-            ["EXTRA", "FIXED", "IPC_EXIT_ON_DISCONNECT", "LH_DISCOVER_WAIT_MS", "U_PACING_COMP_MIN_TIME_MS", "XRT_COMPOSITOR_SCALE_PERCENTAGE"],
+            ["EXTRA", "FIXED", "LH_DISCOVER_WAIT_MS", "U_PACING_COMP_MIN_TIME_MS", "XRT_COMPOSITOR_SCALE_PERCENTAGE"],
             env.Keys.Order(StringComparer.Ordinal));
     }
 

@@ -85,7 +85,7 @@ public static partial class ElevatedVariables
     {
         var start = new ElevatedStart(
             MonadoSettingsEnvironment.LighthouseWaitRange.Max, MonadoSettingsEnvironment.RenderScaleRange.Max,
-            MonadoSettingsEnvironment.CompositorMinTimeRange.Max, ExitOnDisconnect: true, Module: PimaxEnvironment.ModuleId,
+            MonadoSettingsEnvironment.CompositorMinTimeRange.Max, Module: PimaxEnvironment.ModuleId,
             Build: profileId, Headless: true, ElevationFix: true, StandbyOnExit: true, ProfileId: profileId, Variables: variables);
         return LineCodec.LengthOf(new HelperRequest(HelperCommand.StartMonadoElevated, start)) <= LineCodec.MaxLineBytes;
     }
@@ -99,7 +99,6 @@ public static partial class ElevatedVariables
             MonadoSettingsEnvironment.LighthouseWaitRange.Min,
             MonadoSettingsEnvironment.RenderScaleRange.Min,
             MonadoSettingsEnvironment.CompositorMinTimeRange.Min,
-            exitOnDisconnect: true,
             standbyOnExit: true);
         return names;
     }

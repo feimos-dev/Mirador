@@ -7,12 +7,10 @@ namespace Mirador.Core.Monado;
 /// <param name="LighthouseWaitMs">How long Monado waits for the tracking base stations, 1000 to 30000 in steps of 1000.</param>
 /// <param name="RenderScalePercent">Compositor render scale, 50 to 200 in steps of 5.</param>
 /// <param name="CompositorMinTimeMs">Compositor minimum frame time, 1 to 20 in steps of 1.</param>
-/// <param name="StopWhenLastAppCloses">Whether Monado exits when the last app disconnects.</param>
 public sealed record MonadoSettings(
     int LighthouseWaitMs = 3000,
     int RenderScalePercent = 100,
-    int CompositorMinTimeMs = 6,
-    bool StopWhenLastAppCloses = false)
+    int CompositorMinTimeMs = 6)
 {
     /// <summary>Each value rounded to the nearest step (halfway rounds up), then held inside its range.</summary>
     public MonadoSettings Clamped() => this with

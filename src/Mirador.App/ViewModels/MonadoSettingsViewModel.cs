@@ -41,9 +41,6 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
     public partial double CompositorBudget { get; set; }
 
     [ObservableProperty]
-    public partial bool StopWhenLastAppCloses { get; set; }
-
-    [ObservableProperty]
     public partial bool IsRunning { get; set; }
 
     [ObservableProperty]
@@ -120,8 +117,6 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
 
     partial void OnCompositorBudgetChanged(double value) => SaveSoon();
 
-    partial void OnStopWhenLastAppClosesChanged(bool value) => Save();
-
     private void SaveSoon()
     {
         if (!loading)
@@ -134,8 +129,7 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
     private MonadoSettings Current() => new MonadoSettings(
         (int)Math.Round(LighthouseWaitSeconds) * 1000,
         (int)Math.Round(RenderScale),
-        (int)Math.Round(CompositorBudget),
-        StopWhenLastAppCloses).Clamped();
+        (int)Math.Round(CompositorBudget)).Clamped();
 
     private void Load()
     {
@@ -158,7 +152,6 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
             LighthouseWaitSeconds = s.LighthouseWaitMs / 1000.0;
             RenderScale = s.RenderScalePercent;
             CompositorBudget = s.CompositorMinTimeMs;
-            StopWhenLastAppCloses = s.StopWhenLastAppCloses;
         }
         finally
         {

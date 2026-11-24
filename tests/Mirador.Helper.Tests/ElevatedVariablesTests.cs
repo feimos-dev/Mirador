@@ -69,7 +69,7 @@ public class ElevatedVariablesTests
         foreach (var name in new[]
                  {
                      MonadoSettingsEnvironment.LighthouseWait, MonadoSettingsEnvironment.RenderScale, MonadoSettingsEnvironment.CompositorMinTime,
-                     MonadoSettingsEnvironment.ExitOnDisconnect, MonadoSettingsEnvironment.StandbyOnExit,
+                     MonadoSettingsEnvironment.StandbyOnExit,
                  })
         {
             Assert.True(ElevatedVariables.IsRefused(name), name);
@@ -86,8 +86,8 @@ public class ElevatedVariablesTests
         var folders = new Mirador.Helper.ElevatedMonado.UserFolders(@"C:\Users\you", @"C:\Users\you\AppData\Roaming", @"C:\Users\you\AppData\Local", @"C:\Users\you\AppData\Local\Temp");
         var starts = new[]
         {
-            new ElevatedStart(3000, 100, 6, true, PimaxEnvironment.ModuleId, StandbyOnExit: true),
-            new ElevatedStart(3000, 100, 6, true, "", Headless: true, StandbyOnExit: true),
+            new ElevatedStart(3000, 100, 6, PimaxEnvironment.ModuleId, StandbyOnExit: true),
+            new ElevatedStart(3000, 100, 6, "", Headless: true, StandbyOnExit: true),
         };
 
         var names = starts

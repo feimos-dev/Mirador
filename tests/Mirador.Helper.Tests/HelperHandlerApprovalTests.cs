@@ -159,7 +159,7 @@ public sealed class HelperHandlerApprovalTests : IDisposable
     // The variables an approval covers, checked by the helper at each elevated Start (ElevatedRequestCheck.ApprovedVariables).
 
     private static ElevatedStart StartWith(string profileId, IReadOnlyList<KeyValuePair<string, string>>? variables, string build = "") =>
-        new(3000, 100, 6, false, "", build, ProfileId: profileId, Variables: variables);
+        new(3000, 100, 6, "", build, ProfileId: profileId, Variables: variables);
 
     private static readonly IReadOnlyList<KeyValuePair<string, string>> Approved = [new("PIMAX_P3C_LOG", "debug"), new("XRT_LOG", "info")];
 

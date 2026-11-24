@@ -9,7 +9,7 @@ public class HelperProcessLauncherTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
-    private static readonly ElevatedStart Start = new(3000, 100, 6, false, "dreamair");
+    private static readonly ElevatedStart Start = new(3000, 100, 6, "dreamair");
 
     private static readonly ProcessSpec Spec = new(
         @"C:\does-not-matter\monado-service.exe", "", @"C:\does-not-matter", new Dictionary<string, string>());

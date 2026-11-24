@@ -3,6 +3,7 @@ using Mirador.Core.Lighthouse;
 using Mirador.Core.Modules;
 using Mirador.Core.Monado;
 using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Ipc;
 
@@ -836,6 +837,7 @@ public sealed class SessionController(SessionDeps deps)
         var controllersOff = deps.ControllersOffAtStop?.Invoke() == true;
         var environment = MonadoEnvironment.Build(deps.InheritedEnvironment, run.Settings, profile, moduleEnvironment, controllersOff);
         var mine = MonadoEnvironment.Build(Nothing, run.Settings, profile, moduleEnvironment, controllersOff);
+        run.StopsWhenLastAppCloses = RoomMeasuring.StopsMonado(environment);
         var standIn = install.IsBundled
             ? null
             : StandInCopy.Place(deps.StandInExe, install.StandInDir, install.ServiceExe) ?? ServiceLaunch.Check(Path.GetDirectoryName(install.Manifest)!);
@@ -1054,7 +1056,7 @@ public sealed class SessionController(SessionDeps deps)
         try
         {
             var code = await run.Process!.Exited.ConfigureAwait(false);
-            problem = !(run.Settings.StopWhenLastAppCloses && code == 0);
+            problem = !(run.StopsWhenLastAppCloses && code == 0);
             message = problem
                 ? $"Monado stopped by itself (exit code {Number(code)})."
                 : "Monado stopped after the last app closed.";
@@ -1493,7 +1495,6 @@ public sealed class SessionController(SessionDeps deps)
             settings.LighthouseWaitMs,
             settings.RenderScalePercent,
             settings.CompositorMinTimeMs,
-            settings.StopWhenLastAppCloses,
             module?.ElevatedModuleId ?? "",
             approvedBuild ? profile.Id : "",
             ElevationFix: deps.ElevationFixVerified?.Invoke(profile, install) == true,
@@ -1756,6 +1757,9 @@ public sealed class SessionController(SessionDeps deps)
 
         // Set while starting and read when the session ends, which comes after.
         public MonadoSettings Settings { get; set; } = new();
+
+        /// <summary>Monado's environment makes it exit once the last app disconnects (a variable of the user's or the profile's).</summary>
+        public bool StopsWhenLastAppCloses { get; set; }
 
         public bool WroteSessionFile { get; set; }
 

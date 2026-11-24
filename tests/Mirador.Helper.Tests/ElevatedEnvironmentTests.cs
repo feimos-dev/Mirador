@@ -15,8 +15,8 @@ public class ElevatedEnvironmentTests
     private const string SteamVrPath = @"C:\Program Files (x86)\Steam\steamapps\common\SteamVR";
 
     private static ElevatedStart Start(
-        int lh = 3000, int scale = 100, int comp = 6, bool exit = false, string module = "", string directMode = "") =>
-        new(lh, scale, comp, exit, module, DirectMode: directMode);
+        int lh = 3000, int scale = 100, int comp = 6, string module = "", string directMode = "") =>
+        new(lh, scale, comp, module, DirectMode: directMode);
 
     private static IReadOnlyDictionary<string, string> Build(ElevatedStart? start = null, string module = "", string directMode = "") =>
         ElevatedEnvironment.Build(start ?? Start(module: module, directMode: directMode), Folders, ServerDir, SteamVrPath);
@@ -266,12 +266,12 @@ public class ElevatedEnvironmentTests
     [Fact]
     public void Settings_are_written()
     {
-        var env = Build(Start(lh: 5000, scale: 150, comp: 11, exit: true));
+        var env = Build(Start(lh: 5000, scale: 150, comp: 11));
 
         Assert.Equal("5000", env["LH_DISCOVER_WAIT_MS"]);
         Assert.Equal("150", env["XRT_COMPOSITOR_SCALE_PERCENTAGE"]);
         Assert.Equal("11", env["U_PACING_COMP_MIN_TIME_MS"]);
-        Assert.Equal("1", env["IPC_EXIT_ON_DISCONNECT"]);
+        Assert.False(env.ContainsKey("IPC_EXIT_ON_DISCONNECT"));
     }
 
     [Fact]
