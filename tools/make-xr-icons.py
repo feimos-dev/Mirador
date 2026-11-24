@@ -62,15 +62,8 @@ def confirm():
     save(image, "confirm.png")
 
 
-def charging():
-    image, draw = canvas()
-    draw.polygon([s(74), s(8), s(30), s(72), s(60), s(72), s(50), s(120), s(98), s(52), s(66), s(52)], fill=WHITE)
-    save(image, "charging.png")
-
-
 if __name__ == "__main__":
     power()
     recentre()
     desktop()
     confirm()
-    charging()

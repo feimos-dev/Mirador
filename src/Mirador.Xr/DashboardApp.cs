@@ -27,10 +27,10 @@ internal sealed class DashboardApp
     /// <summary>How long the exit button waits for its confirmation before it is the exit button again.</summary>
     private const double ConfirmSeconds = 4;
 
-    /// <summary>At or under this charge a battery's bar is red.</summary>
+    /// <summary>At or under this charge a battery's number is red.</summary>
     private const int LowPercent = 15;
 
-    /// <summary>The red of a low battery and of the exit button's confirmation: a tint over the bar's own colour.</summary>
+    /// <summary>The red of the exit button's confirmation: a tint over the button's own colour.</summary>
     private static readonly Color LowTint = new(3.2f, 0.5f, 0.4f);
 
     private readonly Link link;
@@ -38,9 +38,9 @@ internal sealed class DashboardApp
     private readonly Sprite power = Sprite.FromFile("power.png");
     private readonly Sprite recentre = Sprite.FromFile("recentre.png");
     private readonly Sprite confirm = Sprite.FromFile("confirm.png");
-    private readonly Sprite charging = Sprite.FromFile("charging.png");
     private readonly Sprite desktop = Sprite.FromFile("desktop.png");
     private readonly TextStyle text = TextStyle.FromFont(Font.Default, TextM, Color.White);
+    private readonly TextStyle lowText = TextStyle.FromFont(Font.Default, TextM, new Color(1, 0.3f, 0.25f));
     private readonly Dictionary<InteractorSource, IdHash> focused = [];
 
     private bool open;
@@ -180,7 +180,6 @@ internal sealed class DashboardApp
     private void DrawBar()
     {
         UI.PushTextStyle(text);
-        var size = Vec2.One * UI.LineHeight;
         var pose = bar;
         UI.WindowBegin("bar", ref pose, UIWin.Body, UIMove.None);
 
@@ -222,24 +221,20 @@ internal sealed class DashboardApp
                 UI.HSpace(UI.Settings.gutter);
             }
 
-            UI.PushId(i);
-            UI.Label(device.Label);
-            if (device.Percent is { } percent)
+            // "L: 82%", in red when low; a device without a battery is its label alone.
+            var low = device.Percent <= LowPercent;
+            if (low)
             {
-                UI.SameLine();
-                UI.PushTint(percent <= LowPercent ? LowTint : Color.White);
-                UI.HProgressBar(percent / 100f, UI.LineHeight * 1.2f);
-                UI.PopTint();
-                UI.SameLine();
-                UI.Label(percent.ToString(CultureInfo.CurrentCulture));
-                if (device.Charging)
-                {
-                    UI.SameLine();
-                    UI.Image(charging, size * 0.7f);
-                }
+                UI.PushTextStyle(lowText);
             }
 
+            UI.PushId(i);
+            UI.Label(device.Percent is { } percent ? $"{device.Label}: {percent.ToString(CultureInfo.CurrentCulture)}%" : device.Label);
             UI.PopId();
+            if (low)
+            {
+                UI.PopTextStyle();
+            }
         }
 
         UI.WindowEnd();

@@ -83,13 +83,16 @@ internal sealed unsafe class DesktopCapture : IDesktopFrames
         pool = Direct3D11CaptureFramePool.CreateFreeThreaded(winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, poolSize);
         session = pool.CreateCaptureSession(item);
         session.IsCursorCaptureEnabled = true;
-        try
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 20348))
         {
             // Windows 11: no yellow border around the monitor. Windows 10 keeps it.
-            session.IsBorderRequired = false;
-        }
-        catch (Exception)
-        {
+            try
+            {
+                session.IsBorderRequired = false;
+            }
+            catch (Exception)
+            {
+            }
         }
 
         session.StartCapture();

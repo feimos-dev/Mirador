@@ -2,12 +2,12 @@
 
 //--name = mirador/grid
 
-// The home's floor: a grid of 1 m lines with a heavier line every 10 m, fading into the horizon.
+// The home's floor: a grid of 1 m lines, fading into the horizon together with the floor.
 float4 line_color    = { 0.42, 0.46, 0.53, 1 };
 float4 floor_color   = { 0.018, 0.02, 0.026, 1 };
 float4 horizon_color = { 0.065, 0.075, 0.095, 1 };
 // x: how far from the eye the floor starts to fade, y: where it has become the horizon
-float4 fade          = { 6, 70, 0, 0 };
+float4 fade          = { 3, 32, 0, 0 };
 
 struct vsIn {
 	float4 pos : SV_Position;
@@ -27,22 +27,21 @@ psIn vs(vsIn input, sk_ids_t ids) {
 	return o;
 }
 
-// How much of a pixel a line of the grid with this spacing covers: lines are about a pixel and a half wide whatever
-// their distance, and go as the cells shrink towards a pixel, where they would only shimmer.
-float grid_line(float2 at, float spacing, float2 pixel) {
-	float2 cell   = at / spacing;
-	float2 width  = max(pixel / spacing, 1e-6);
-	float2 to     = abs(frac(cell - 0.5) - 0.5) / width;
+// How much of a pixel a line of the grid covers: lines are about a pixel and a half wide whatever their distance, and
+// thin out only where a cell would be smaller than two pixels, where they would shimmer.
+float grid_line(float2 at, float2 pixel) {
+	float2 width  = max(pixel, 1e-6);
+	float2 to     = abs(frac(at - 0.5) - 0.5) / width;
 	float  cover  = 1 - saturate(min(to.x, to.y) - 0.25);
 	float  crowd  = max(width.x, width.y);
-	return cover * saturate(1 - crowd * 3);
+	return cover * saturate(2 - crowd * 4);
 }
 
 float4 ps(psIn input) : SV_TARGET {
 	float2 at    = input.world.xz;
 	float2 pixel = fwidth(at);
 
-	float lines = max(grid_line(at, 1, pixel) * 0.5, grid_line(at, 10, pixel) * 0.9);
+	float lines = grid_line(at, pixel) * 0.5;
 
 	float dist = length(input.world - input.camera);
 	float far  = smoothstep(0, 1, saturate((dist - fade.x) / (fade.y - fade.x)));
