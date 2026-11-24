@@ -3,7 +3,7 @@ using System.Security;
 namespace Mirador.Core.SignIn;
 
 /// <summary>
-/// "Start Mirador when you sign in" (Mirador.md §4.8 item 33): a value in the user's Run key that starts
+/// "Start Mirador when you sign in": a value in the user's Run key that starts
 /// <c>Mirador.exe --sign-in</c>. Task Manager's Startup tab can switch it off without touching the Run value, so
 /// <see cref="IsOn"/> honours that switch too and <see cref="TurnOn"/> clears it.
 /// </summary>

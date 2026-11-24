@@ -6,7 +6,7 @@ using Microsoft.Win32;
 namespace Mirador.Ipc;
 
 /// <summary>
-/// A build a user approved to run as administrator or as the machine's OpenXR runtime (Mirador.md §4.11 item 51): a
+/// A build a user approved to run as administrator or as the machine's OpenXR runtime: a
 /// copy in <c>{app}\builds\&lt;user SID&gt;\&lt;profile&gt;\&lt;commit&gt;\</c>, which only administrators can change, and
 /// the SHA-256 of each of its files, kept in <c>HKLM\SOFTWARE\Mirador\ApprovedBuilds\&lt;user SID&gt;\&lt;profile&gt;</c>.
 /// Per user: profile ids such as <c>custom</c> are the same for everyone, and one user's approval is not another's.

@@ -88,7 +88,7 @@ void tell(const DisplayThread::Epoch& e, const std::string& line)
     }
 }
 
-// Waits for the baton (design 6.7, thread epochs). False if the epoch was asked to stop first, or the wait failed: it
+// Waits for the baton. False if the epoch was asked to stop first, or the wait failed: it
 // then makes no NVAPI call.
 bool take_baton(DisplayThread::Epoch& e)
 {

@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The default mode of mirador-display-check (design 7): NVAPI only. The display session opens exactly as it does in
+// The default mode of mirador-display-check: NVAPI only. The display session opens exactly as it does in
 // the layer; then this file plays an application that presents one solid colour per frame, through the same frame
 // model, display loop and display thread the layer runs, and counts the display's flips. There is no Vulkan here, so
 // the frame fences are always signalled and the back-buffers are cleared through a D3D11 device of our own.
@@ -37,7 +37,7 @@ using Microsoft::WRL::ComPtr;
 constexpr int64_t kMs = 1'000'000;
 constexpr int64_t kPresentWaitNs = 500 * kMs; // a present is credited within a refresh; this is generous
 constexpr int64_t kAcquireGiveUpNs = 2'000'000'000;
-constexpr int64_t kCloseStopWaitNs = 100 * kMs; // the console handler's wait (design 6.10, constraints)
+constexpr int64_t kCloseStopWaitNs = 100 * kMs; // the console handler's wait
 
 // Lines from the display thread, the model and the session, printed by the main loop (never from under the
 // display-session lock: a console write can take milliseconds).
@@ -417,7 +417,7 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
             wait_timeouts++;
         }
         r->lines.drain(out);
-        // A dead display completes every present at once (design 6.7 step 5): the loop would run at the speed of the
+        // A dead display completes every present at once: the loop would run at the speed of the
         // clears for the rest of the run. The mode's rate cannot do 3 times its count.
         if (id > 3 * expected_flips(options.seconds + static_cast<double>(env.warm_up_ns) / 1e9, refresh_hz) + 100) {
             result.steps_ok = false;

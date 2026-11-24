@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The process guard (design 5, review focus 3), the layer's negotiation with the loader (review focus 5) and the
+// The process guard, the layer's negotiation with the loader (review focus 5) and the
 // manifest the build generates next to the DLL.
 
 #include <catch2/catch_test_macros.hpp>

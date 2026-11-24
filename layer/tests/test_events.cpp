@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display events of VK_EXT_display_control (design 6.9): the event table, and vkWaitForFences on lists that name
+// The display events of VK_EXT_display_control: the event table, and vkWaitForFences on lists that name
 // display events, in fake time. A fake host plays the driver's ordinary fences (each signals at a scripted time, or
 // never) and the display thread's refreshes (scripted too), and moves the clock only inside its waits.
 
@@ -338,7 +338,7 @@ TEST_CASE("destroy_removes_event")
 
 TEST_CASE("no_event_set_while_flips_stopped")
 {
-    // The frame model's refreshes feed the table, as the display loop's refresh_seen does (design 6.7 step 4). While
+    // The frame model's refreshes feed the table, as the display loop's refresh_seen does. While
     // flips are stopped there are none, so no event is set: not by the "flips stopped" rule, not by any tick.
     nvdm::FencePool pool;
     nvdm::FrameModel model(nvdm::FrameModelConfig{}, &pool);

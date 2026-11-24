@@ -20,7 +20,7 @@ enum class TraceKind : uint32_t {
     PresentEnter = 3,     // vkQueuePresentKHR entered: a = present id, b = image index
     PresentQueued = 4,    // the frame is queued (under the lock): a = present id, b = frame seq
     PresentReturn = 5,    // vkQueuePresentKHR returns: a = present id
-    PresentTarget = 6,    // the present asks for a time (design 6.11): a = frame seq, b = the earliest flip it may take
+    PresentTarget = 6,    // the present asks for a time: a = frame seq, b = the earliest flip it may take
     Step1Wait = 10,       // the display thread's step 1 wait starts: a = mode (0 active, 1 idle, 2 stopped), b = until
     Step1Woke = 11,       // it ended: a = 1 if the "frame queued" event ended it
     FenceWait = 12,       // step 2's fence wait starts: a = frame seq, b = deadline

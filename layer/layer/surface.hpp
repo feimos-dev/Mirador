@@ -15,7 +15,7 @@
 
 namespace dvl {
 
-// The surface on the layer's display (design 6.4): the answers to every surface query, without any call, and the
+// The surface on the layer's display: the answers to every surface query, without any call, and the
 // layer's surface objects. The intercepts that give them are in surface_intercepts.cpp. No surface query on our surface
 // ever fails.
 
@@ -28,7 +28,7 @@ struct SurfaceSpec {
 // The usage of the two image configurations the import offers together (import_rules.hpp's kComputeConfig and
 // kGraphicsConfig): Monado's compute compositor (storage) and its graphics compositor (colour attachment), both sampled
 // and both transfer source and destination. A listed display's surface offers this: its usage comes from the format
-// queries of the decision (design 6.4), and the display is listed only if both configurations pass them.
+// queries of the decision, and the display is listed only if both configurations pass them.
 inline constexpr VkImageUsageFlags kSurfaceUsage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -46,7 +46,7 @@ void fill_surface_capabilities_2ext(const SurfaceSpec& spec, VkSurfaceCapabiliti
 
 // The structs the layer knows in the pNext chain of a VkSurfaceCapabilities2KHR (the output of
 // vkGetPhysicalDeviceSurfaceCapabilities2KHR); others are left alone. Present id 2, present wait 2 and present timing
-// are on (design 6.4, 6.11: VK_EXT_present_timing reports VkPresentId2KHR ids, and the layer completes and waits for
+// are on (VK_EXT_present_timing reports VkPresentId2KHR ids, and the layer completes and waits for
 // both kinds of id alike); everything else optional is off: no shared present, no protected, no full-screen exclusive,
 // no present barrier, no local dimming, no present scaling or low-latency modes. The present modes compatible with
 // `present_mode` (the query's VkSurfacePresentModeEXT) are that mode alone; none without one.
@@ -64,7 +64,7 @@ std::vector<VkSurfaceFormatKHR> surface_formats();
 // FIFO, MAILBOX, IMMEDIATE, FIFO_RELAXED: all are paced as FIFO.
 std::vector<VkPresentModeKHR> present_modes();
 
-// The swapchain-parameter check of design 6.4, for vkCreateSwapchainKHR on our surface. A swapchain is refused for one
+// The swapchain-parameter check, for vkCreateSwapchainKHR on our surface. A swapchain is refused for one
 // combination only: an SRGB format with storage usage (SRGB has no storage support on this driver). Anything else the
 // caps would not allow is accepted and named in `notes` (the swapchain is made from the caps; the caller logs them).
 struct SwapchainCheck {
@@ -76,7 +76,7 @@ SwapchainCheck check_swapchain_parameters(const VkSwapchainCreateInfoKHR& ci, co
 
 // A surface of the layer's, made by vkCreateDisplayPlaneSurfaceKHR on our mode. Its handle is its address, and it
 // starts as the loader and drivers lay out a display surface (VkIcdSurfaceDisplay, vk_icd.h), filled from the create
-// info: design 5's first fallback, so that a layer above ours that looks inside a surface handle finds a display
+// info: the first fallback, so that a layer above ours that looks inside a surface handle finds a display
 // surface, not what it would take for another platform's.
 struct SurfaceRecord {
     VkIcdSurfaceDisplay icd{}; // first: the handle points at it

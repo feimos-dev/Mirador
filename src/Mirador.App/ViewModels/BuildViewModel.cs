@@ -8,7 +8,7 @@ using Mirador.Core.Profiles;
 namespace Mirador.App.ViewModels;
 
 /// <summary>
-/// The Profiles page's build card for a branch profile (Mirador.md §4.11 item 49): what was built last (the commit,
+/// The Profiles page's build card for a branch profile: what was built last (the commit,
 /// the compiler, the checks), "Build" or "Pull and rebuild", Cancel, and the build's log as it runs.
 /// </summary>
 public sealed partial class BuildViewModel : ObservableObject

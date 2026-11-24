@@ -17,14 +17,14 @@ namespace nvdm {
 using FenceSlot = uint32_t;
 constexpr FenceSlot kNoFence = UINT32_MAX;
 
-// At most this many frame fences per device (design 6.5).
+// At most this many frame fences per device.
 inline constexpr uint32_t kFencePoolCap = 16;
 
-// Where a fence is (design 6.5): in the pool, taken for a present that is being submitted, attached to a frame, or
+// Where a fence is: in the pool, taken for a present that is being submitted, attached to a frame, or
 // left over (its frame ended before the fence was seen signalled).
 enum class FenceState { InPool, Taken, Attached, LeftOver };
 
-// The frame fences of one VkDevice (design 6.5, invariant 2). Pure bookkeeping; callers hold the display-session lock.
+// The frame fences of one VkDevice. Pure bookkeeping; callers hold the display-session lock.
 // Whether a slot's VkFence is signalled (vkGetFenceStatus) comes from `is_signalled`, which take() calls under the
 // lock. A fence the display thread waits on is never handed out again until the wait is over.
 //

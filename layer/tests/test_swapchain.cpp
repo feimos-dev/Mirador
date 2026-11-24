@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The swapchain, acquire, present, present-wait and display events (design 6.4-6.10) through the layer's chain: the
+// The swapchain, acquire, present, present-wait and display events through the layer's chain: the
 // test build of the layer DLL, a fake driver below it, and a display session on a FakeApi whose clock runs at the real
 // rate, so the layer's real display thread (DisplayThread, DisplayLoop, Win32Waiter) presents to it and its counter
 // flips every 1/90 s. Monado is played as it calls the layer: its render loop (acquire, present with a present id,
@@ -1034,7 +1034,7 @@ TEST_CASE("a_display_event_wait_leaves_pending_lines_for_later")
 TEST_CASE("the_fence_fallback_line_is_written_at_most_once_a_second")
 {
     // With every frame fence left over and unsignalled (the fake GPU holds them), a present waits a frame period on
-    // the oldest, then falls back to vkQueueWaitIdle (design 6.5 invariant 2). Monado presents at 90 Hz holding its
+    // the oldest, then falls back to vkQueueWaitIdle. Monado presents at 90 Hz holding its
     // queue lock, so that line comes at most once a second; the warnings' once-per-app-session line
     // stays.
     Monado m;
@@ -1078,7 +1078,7 @@ TEST_CASE("the_fence_fallback_line_is_written_at_most_once_a_second")
 TEST_CASE("a_present_whose_submit_fails_releases_its_image_for_a_later_acquire")
 {
     // After a failed vkQueuePresentKHR Monado acquires again and never presents that image. Its frame
-    // is released, as a failed acquire's is (design 6.10), so the image comes back to a later acquire instead of
+    // is released, as a failed acquire's is, so the image comes back to a later acquire instead of
     // staying acquired for good. Here all three are acquired, so only the released one can come back.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
@@ -1111,7 +1111,7 @@ TEST_CASE("a_present_whose_submit_fails_releases_its_image_for_a_later_acquire")
 TEST_CASE("a_present_whose_fallback_queue_wait_fails_releases_its_image_too")
 {
     // The other error return of vkQueuePresentKHR: no frame fence was free (the fake GPU holds every one), the present
-    // falls back to vkQueueWaitIdle (design 6.5 invariant 2), and that fails.
+    // falls back to vkQueueWaitIdle, and that fails.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     g_driver.hold_fences = true;
@@ -1190,7 +1190,7 @@ TEST_CASE("a_stopped_display_never_hangs_monado")
     // never credited, the next two queue behind it, each present-wait ends at its own timeout. The fourth acquire
     // (UINT64_MAX) finds no free back-buffer and still returns past the bound with the back-buffer of a queued frame,
     // never the presented one. The vblank thread's display-event wait ends at its own timeout with the event not set
-    // (design 6.6, 6.7 step 5, 6.8, 6.9).
+    //.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     std::this_thread::sleep_for(30ms); // the display thread sees the counter run first
@@ -1425,7 +1425,7 @@ TEST_CASE("a_full_trace_says_so_once_and_the_file_gets_what_it_holds")
     m.destroy_device();
 }
 
-// --- Present timing (design 6.11) ---------------------------------------------------------------------------------
+// --- Present timing ---------------------------------------------------------------------------------
 
 namespace {
 
@@ -1710,7 +1710,7 @@ TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_aft
 TEST_CASE("a_frame_behind_a_held_one_waits_for_it")
 {
     // Presents are taken in order: an untargeted frame queued behind a held one is not shown before the held one's
-    // flip. At that flip the newest queued frame goes, as always (design 6.7), and the held one is retired unshown.
+    // flip. At that flip the newest queued frame goes, as always, and the held one is retired unshown.
     dvl_test::ScopedEnv present_at_on(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", nullptr);
     Monado m;
     const VkSwapchainKHR swapchain = make_timed_swapchain(m);

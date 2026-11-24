@@ -8,7 +8,7 @@ using Mirador.Ipc;
 namespace Mirador.App.Services;
 
 /// <summary>
-/// Monado started headless for "Verify build for Windows" (Mirador.md §4.11 item 49), for <paramref name="profile"/>:
+/// Monado started headless for "Verify build for Windows", for <paramref name="profile"/>:
 /// its build's own service as the user, the same when a stand-in asks for it, and as administrator through the helper
 /// (Mirador's Monado with the consent, or an approved build). Headless means Monado's null compositor and its simulated
 /// headset: no headset, display or headset module is touched.

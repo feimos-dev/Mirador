@@ -11,7 +11,7 @@ using Mirador.Core.Profiles;
 namespace Mirador.App.ViewModels;
 
 /// <summary>
-/// The profile's "Verify build for Windows" card (Mirador.md §4.11 item 49): Verify, then passed or failed with the
+/// The profile's "Verify build for Windows" card: Verify, then passed or failed with the
 /// date, for the profile's build as it is now (kept by its commit). Each step and the run's log are on Diagnostics,
 /// which a failure points to. Its elevation result shows by "Run as administrator" too.
 /// </summary>

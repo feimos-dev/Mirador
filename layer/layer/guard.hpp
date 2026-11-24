@@ -8,7 +8,7 @@
 
 namespace dvl {
 
-// The process guard (design 5). It is a safety net, not what keeps the layer out of games: the layer is enabled by
+// The process guard. It is a safety net, not what keeps the layer out of games: the layer is enabled by
 // the MIRADOR_DIRECT_MODE variable, and only the start script, the launcher and the check tool set it. If someone sets
 // it machine-wide anyway, negotiation declines in every process that is not on this list.
 

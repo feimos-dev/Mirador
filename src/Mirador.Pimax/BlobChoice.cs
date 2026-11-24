@@ -7,7 +7,7 @@ namespace Mirador.Pimax;
 public sealed record BlobDecision(string Variant, bool NeedsOwner, DreamAirState State);
 
 /// <summary>
-/// Which eye geometry variant the headset needs (Mirador.md §4.5 item 14): the one Pimax's software was started with,
+/// Which eye geometry variant the headset needs: the one Pimax's software was started with,
 /// read while it runs, wins and is remembered; else the one remembered; else <see cref="EyeBlobVariants.Fallback"/>, and
 /// the owner is asked.
 /// </summary>

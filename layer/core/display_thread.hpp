@@ -14,17 +14,17 @@
 
 namespace nvdm {
 
-// A new epoch waits this long for the one before it to leave NVAPI, and then checks again this often (design 6.7).
+// A new epoch waits this long for the one before it to leave NVAPI, and then checks again this often.
 inline constexpr int64_t kBatonWaitNs = 1'000'000'000;
-// The layer's join timeout when the last swapchain goes (design 6.10).
+// The layer's join timeout when the last swapchain goes.
 inline constexpr int64_t kJoinTimeoutNs = 1'000'000'000;
 
-// The display thread of design 6.7: a raw Win32 thread (CreateThread; no std::thread in anything that may be a
-// global, design 6.10) that runs a DisplayLoop's passes until it is asked to stop. It raises its priority with MMCSS
+// The display thread: a raw Win32 thread (CreateThread; no std::thread in anything that may be a
+// global) that runs a DisplayLoop's passes until it is asked to stop. It raises its priority with MMCSS
 // ("Games"), or THREAD_PRIORITY_TIME_CRITICAL where MMCSS refuses.
 //
 // Thread epochs. Each start() is a new epoch with its own loop. Only one epoch at a time holds the NVAPI baton
-// (design invariant 8): a thread takes it before its first NVAPI call and gives it back when it exits. A thread left
+//: a thread takes it before its first NVAPI call and gives it back when it exits. A thread left
 // behind by a join that timed out (stop_and_join() false: it was inside an NVAPI call) keeps the baton until that call
 // returns; its loop is abandoned, so it then exits touching nothing. A new epoch waits up to kBatonWaitNs for the
 // baton; if it has not got it, it logs that once and makes no NVAPI call, checking again every kBatonWaitNs (and
@@ -36,7 +36,7 @@ public:
     // `log` gets the thread's lines (epoch start, the baton, a thread left behind); unset: dropped. `baton_wait_ns` is
     // kBatonWaitNs but for tests.
     explicit DisplayThread(std::function<void(const std::string&)> log = {}, int64_t baton_wait_ns = kBatonWaitNs);
-    // Asks a running thread to stop and does not wait for it (design 6.10: nothing at process exit waits). Destroy it
+    // Asks a running thread to stop and does not wait for it. Destroy it
     // only after stop_and_join(); the layer keeps its one for the life of the process.
     ~DisplayThread();
     DisplayThread(const DisplayThread&) = delete;

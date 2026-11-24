@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The per-device frame-fence pool (design 6.5, invariant 2). Slots stand for VkFences; whether one is signalled comes
+// The per-device frame-fence pool. Slots stand for VkFences; whether one is signalled comes
 // from the injected function, scripted here through a set.
 
 #include <catch2/catch_test_macros.hpp>

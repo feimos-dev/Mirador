@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// VK_EXT_present_timing on the layer's swapchain (design 6.11): the results queue's size, the timing properties, the
+// VK_EXT_present_timing on the layer's swapchain: the results queue's size, the timing properties, the
 // time domains and the past presentation timings, answered from PresentTimings under the display-session lock. And
 // vkGetCalibratedTimestamps (KHR and EXT), whose VkSwapchainCalibratedTimestampInfoEXT can name the layer's swapchain:
 // its swapchain-local and present-stage-local domains are QPC nanoseconds, taken from the layer below's QPC reading, and

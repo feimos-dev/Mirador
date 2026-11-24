@@ -11,7 +11,7 @@
 namespace dvl {
 namespace {
 
-// The console handler's wait for the stop hook, as the layer's in Monado (design 6.10, constraints).
+// The console handler's wait for the stop hook, as the layer's in Monado.
 constexpr DWORD kStopHookWaitMs = 100;
 
 std::atomic<bool> g_interrupted{false};

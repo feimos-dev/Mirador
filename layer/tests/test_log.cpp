@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The layer's log (design 8): levels from MIRADOR_DIRECT_MODE_LOG, a new file per process with the last five kept.
+// The layer's log: levels from MIRADOR_DIRECT_MODE_LOG, a new file per process with the last five kept.
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -119,7 +119,7 @@ TEST_CASE("a display-session failure line is written with MIRADOR_DIRECT_MODE_LO
 TEST_CASE("trace_folder_is_off_the_log_folder_or_another")
 {
     // MIRADOR_DIRECT_MODE_TRACE: unset, empty or 0 is off; 1 is the log's folder; anything else is a folder.
-    const std::wstring log_dir = L"C:\\Users\\finn\\AppData\\Local\\Mirador\\direct-mode";
+    const std::wstring log_dir = L"C:\\Users\\user\\AppData\\Local\\Mirador\\direct-mode";
     const auto folder = [&](std::optional<std::string> setting) { return dvl::trace_folder(setting, log_dir); };
 
     CHECK_FALSE(folder(std::nullopt).has_value());
@@ -240,7 +240,7 @@ TEST_CASE("logger_starts_a_new_file_for_each_process")
 
 TEST_CASE("logger_append_leaves_the_newest_file_in_place")
 {
-    // A process the guard declines must not push real logs out (design 5: the guard is a safety net).
+    // A process the guard declines must not push real logs out.
     TempDir dir;
     {
         dvl::Logger first(quiet_config(dir));

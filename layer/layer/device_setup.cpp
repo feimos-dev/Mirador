@@ -25,7 +25,7 @@ bool family_listed(const std::vector<VkDeviceQueueCreateInfo>& queues, uint32_t 
                        [&](const VkDeviceQueueCreateInfo& q) { return q.queueFamilyIndex == family; });
 }
 
-// Enlarges the first create info by one queue, if it may be (design 6.2: flags 0, and within the family's count).
+// Enlarges the first create info by one queue, if it may be.
 bool enlarge_first(DevicePlan& plan, const std::vector<VkQueueFamilyProperties>& families)
 {
     if (plan.queues.empty()) {

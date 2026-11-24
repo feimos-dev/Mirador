@@ -1,11 +1,11 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The rest of design 6.3's list: every other command that can be handed one of the layer's display, mode, surface or
+// The rest of the display commands: every other command that can be handed one of the layer's display, mode, surface or
 // swapchain (handled_commands.cpp). For the layer's own handles each is accepted and answered here (debug names and
 // tags, HDR metadata, full-screen exclusive, NVIDIA low latency, AMD local dimming, GOOGLE display timing, private
 // data, released images), or refused with a log line (vkCreateSharedSwapchainsKHR, an image made or bound for the
-// layer's swapchain: design 6.10's exceptions). Anything else goes down unchanged.
+// layer's swapchain: failures Monado never hits). Anything else goes down unchanged.
 
 #include <vulkan/vulkan.h>
 
@@ -27,7 +27,7 @@ namespace {
 // --- Private data on the layer's objects ---------------------------------------------------------------------------
 
 // The layer keeps it itself: the driver cannot be handed our handles. Keyed by device, slot, type and handle. Made at
-// first use and never destroyed (design 6.10); a slot's entries outlive it, which costs a few bytes.
+// first use and never destroyed; a slot's entries outlive it, which costs a few bytes.
 struct PrivateStore {
     std::mutex mutex;
     std::map<std::tuple<VkDevice, VkPrivateDataSlot, VkObjectType, uint64_t>, uint64_t> data;
@@ -80,7 +80,7 @@ bool creates_for_our_swapchain(const VkDeviceImageMemoryRequirements* info)
 
 void refuse_image(const char* command)
 {
-    // One of design 6.10's exceptions: the images of the layer's swapchain are the imported back-buffers.
+    // A failure Monado never hits: the images of the layer's swapchain are the imported back-buffers.
     log(Level::Error, "%s: the pNext chain names the layer's swapchain; images of it come from "
                       "vkGetSwapchainImagesKHR only. Refused",
         command);
@@ -399,7 +399,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPastPresentationTimingGOOGLE(VkDevice de
 {
     return guarded("vkGetPastPresentationTimingGOOGLE", [&] {
         if (find_swapchain(swapchain)) {
-            *count = 0; // design 6.3: no timings
+            *count = 0; // no timings
             return VK_SUCCESS;
         }
         DeviceData& d = device_data(device);

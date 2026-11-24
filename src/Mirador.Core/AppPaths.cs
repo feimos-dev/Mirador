@@ -26,7 +26,7 @@ public sealed class AppPaths(string root)
     /// <summary>Where branch profiles are built: <c>Builds\&lt;profile id&gt;\</c> with <c>src</c>, <c>build</c> and <c>install</c>.</summary>
     public string BuildsDir { get; } = Path.Combine(root, "Builds");
 
-    /// <summary>Mirador's own copies of the build tools (Mirador.md §4.11 item 49): <c>vcpkg</c>, <c>cmake</c>, <c>ninja</c>, <c>git</c>.</summary>
+    /// <summary>Mirador's own copies of the build tools: <c>vcpkg</c>, <c>cmake</c>, <c>ninja</c>, <c>git</c>.</summary>
     public string ToolsDir { get; } = Path.Combine(root, "tools");
 
     /// <summary>Where OpenLamina's installer is downloaded to, and deleted from once it has run.</summary>

@@ -12,7 +12,7 @@
 
 namespace dvl {
 
-// The back-buffer import (design 6.3, 6.4): the calls on the layer below. What they decide without a call is in
+// The back-buffer import: the calls on the layer below. What they decide without a call is in
 // import_rules.hpp (dvl_pure); this half calls the driver and the display session (dvl_layer).
 
 // A back-buffer imported on a device: the image, and the imported memory bound to it.
@@ -22,7 +22,7 @@ struct ImportedImage {
 };
 
 // Imports one back-buffer (`shared`, a KMT handle of the display session) as an image of `extent` in `config`, with
-// design 6.4's checks in order:
+// the checks in order:
 //  1. vkGetPhysicalDeviceImageFormatProperties2KHR with the image's format, MUTABLE_FORMAT, usage and view formats, and
 //     VkPhysicalDeviceExternalImageFormatInfoKHR (D3D11_TEXTURE_KMT): IMPORTABLE is required (import_support());
 //     DEDICATED_ONLY is honoured by step 4, which is always dedicated;
@@ -43,26 +43,26 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
 // Destroys the image, then frees its memory (either may be null), and empties `image`.
 void release_imported(DeviceData& device, ImportedImage& image);
 
-// The trial import of design 6.3 on one device, run once per device: each configuration of kTrialConfigs in turn,
+// The trial import on one device, run once per device: each configuration of kTrialConfigs in turn,
 // with all three back-buffers of the open display session imported, then released before the next configuration and
 // before it returns. Later calls give the first call's answer without a call down. False, with a log line, if the
 // display session is not open, the device lacks an import extension, or any import fails (it stops there).
 bool trial_import(DeviceData& device);
 
 // For vkCreateSwapchainKHR on our surface. A device that did not exist when its physical device was asked
-// for displays had no trial import there: it has it now, with one log line (design 6.3; when it fails, the swapchain
-// is refused, one of design 6.10's exceptions). Any other device gets the answer it had. Meant for devices of the
+// for displays had no trial import there: it has it now, with one log line (when it fails, the swapchain
+// is refused, one of the failures Monado never hits). Any other device gets the answer it had. Meant for devices of the
 // physical device that lists the display.
 bool trial_import_at_swapchain(DeviceData& device);
 
-// The usage our surface offers on a physical device (design 6.4): the usage of each trial configuration whose format
+// The usage our surface offers on a physical device: the usage of each trial configuration whose format
 // query (step 1 above, for back-buffers of `extent`) allows the import, together; 0 if none does. Each refusal is
 // logged.
 VkImageUsageFlags supported_usage(InstanceData& instance, VkPhysicalDevice physical_device, VkExtent2D extent);
 // The same on a device's physical device, for the open display session's back-buffers (0 while it is not open).
 VkImageUsageFlags supported_usage(DeviceData& device);
 
-// The import's part of the display-listing decision (design 6.3), once the display session is open on the adapter of
+// The import's part of the display-listing decision, once the display session is open on the adapter of
 // `physical_device`: the format queries (supported_usage()), then the trial import on every device of
 // `physical_device` in `instance` that exists now (Monado's does). The display is listed only if the format queries
 // allow both configurations and every one of those devices passes (or there is none: a device made later has its

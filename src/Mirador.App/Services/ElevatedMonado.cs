@@ -9,7 +9,7 @@ using Mirador.Ipc;
 namespace Mirador.App.Services;
 
 /// <summary>
-/// The user's consent to run Monado as administrator (Mirador.md section 4.10 item 44): giving it takes one UAC prompt,
+/// The user's consent to run Monado as administrator: giving it takes one UAC prompt,
 /// taking it back goes through the helper without one.
 /// </summary>
 public static class ElevatedMonado

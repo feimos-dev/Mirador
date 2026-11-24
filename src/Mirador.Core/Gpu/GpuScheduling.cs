@@ -23,7 +23,7 @@ public readonly record struct AdapterScheduling(bool Supported, bool Enabled);
 
 /// <summary>
 /// Hardware-accelerated GPU scheduling: Monado running as administrator gets the GPU's realtime priority only with it on
-/// (Mirador.md §4.10), and every Dream Air run so far had it on. Home warns while it isn't.
+///, and every Dream Air run so far had it on. Home warns while it isn't.
 /// </summary>
 public static class GpuScheduling
 {

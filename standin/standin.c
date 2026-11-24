@@ -1,5 +1,5 @@
 /*
- * Mirador's stand-in for monado-service.exe (Mirador.md section 4.2 item 5).
+ * Mirador's stand-in for monado-service.exe.
  *
  * Monado's runtime DLL starts the service it was built to start (XRT_SERVICE_EXECUTABLE) from service\ below its own
  * folder when a game finds no Monado running, then retries the service's pipe every 100 ms for as long as that program

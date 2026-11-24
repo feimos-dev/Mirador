@@ -8,7 +8,7 @@
 
 namespace dvl {
 
-// The check tool's exit codes (design 7): 0 only for a passing verdict, 1 when a check failed, 2 for a usage error
+// The check tool's exit codes: 0 only for a passing verdict, 1 when a check failed, 2 for a usage error
 // (and for --help, which gives no verdict), 3 when direct mode isn't used for this headset (its EDID hands it to
 // Windows, which drives it itself: nothing about the driver failed).
 inline constexpr int kExitPass = 0;
@@ -22,7 +22,7 @@ inline constexpr int kMaxSeconds = 3600;
 // mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]
 struct Options {
     bool no_heartbeat = false;   // Do not send the board heartbeat.
-    bool ignore_holders = false; // Skip the holder checks (tests only, design 4).
+    bool ignore_holders = false; // Skip the holder checks (tests only).
     bool enable_direct_mode = false; // Only turn direct mode on for the headset: no holder checks, no display session.
     bool help = false;
     int seconds = kDefaultSeconds;

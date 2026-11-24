@@ -1,8 +1,8 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Acquire, present and present-wait on the layer's swapchain (design 6.5, 6.6, 6.8), and what a present asks of the
-// present timing (design 6.11). Every decision is the frame model's, made under the display-session lock; every wait
+// Acquire, present and present-wait on the layer's swapchain, and what a present asks of the
+// present timing. Every decision is the frame model's, made under the display-session lock; every wait
 // is bounded and made on a condition variable (never a spin); the GPU work (the acquire signal on the private queue,
 // the present's fence submit on the caller's queue) is done with the lock let go. Swapchains that are not the layer's
 // go down unchanged.
@@ -75,7 +75,7 @@ void note_state_locked(Presenter& p, int64_t now_ns)
     p.warnings.check(now_ns);
 }
 
-// --- Acquire (design 6.6) ------------------------------------------------------------------------------------------
+// --- Acquire ------------------------------------------------------------------------------------------
 
 VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t timeout, VkSemaphore semaphore,
                       VkFence fence, uint32_t* index)
@@ -89,7 +89,7 @@ VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t t
         for (;;) {
             if (!record->alive) {
                 // Destroyed during the acquire: an application error (the swapchain is externally synchronised).
-                // Never out-of-date (design 6.6: Monado answers that with a recreate loop).
+                // Never out-of-date.
                 p.pending.add(Level::Error, "vkAcquireNextImageKHR: the swapchain was destroyed during the call");
                 return VK_ERROR_UNKNOWN;
             }
@@ -105,7 +105,7 @@ VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t t
                 return VK_TIMEOUT;
             }
             // No free back-buffer: wait for one, but no longer than the bound, after which the model always finds one
-            // for an infinite timeout (design 6.6). Past the bound with nothing to take (a removed generation, more
+            // for an infinite timeout. Past the bound with nothing to take (a removed generation, more
             // images held than Vulkan allows): wait a refresh period for a change instead of spinning.
             int64_t until = std::min(deadline, p.model.acquire_bound_ns());
             if (until <= now) {
@@ -127,7 +127,7 @@ VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t t
     if (semaphore == VK_NULL_HANDLE && fence == VK_NULL_HANDLE) {
         return VK_SUCCESS;
     }
-    // One empty submit on the private queue, under its mutex, with the session lock let go (design 6.6, invariant 7).
+    // One empty submit on the private queue, under its mutex, with the session lock let go.
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.signalSemaphoreCount = semaphore != VK_NULL_HANDLE ? 1 : 0;
     submit.pSignalSemaphores = &semaphore;
@@ -141,7 +141,7 @@ VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t t
     p.note(nvdm::TraceKind::AcquireSubmitted, got.seq);
     if (r != VK_SUCCESS) {
         // A Vulkan failure the layer cannot recover from (a lost device, out of memory): logged, returned, and the
-        // image is not left acquired (design 6.10).
+        // image is not left acquired.
         log(Level::Error, "vkAcquireNextImageKHR: the signal submit on the private queue returned %d",
             static_cast<int>(r));
         Locked lk(p);
@@ -155,9 +155,9 @@ VkResult acquire_ours(const std::shared_ptr<SwapchainRecord>& record, uint64_t t
     return VK_SUCCESS;
 }
 
-// --- Present (design 6.6) ------------------------------------------------------------------------------------------
+// --- Present ------------------------------------------------------------------------------------------
 
-// A frame fence for the next present (design 6.5 invariant 2), ready to submit (made, or reset), or kNoFence when
+// A frame fence for the next present, ready to submit (made, or reset), or kNoFence when
 // there is none: then the present is followed by vkQueueWaitIdle. Taken from the pool; else a left-over one whose
 // status says signalled; else a new one below the cap; else the oldest left-over one, waited on for up to one frame
 // period outside the lock (the fence protocol of frame_model.hpp), then the pool again.
@@ -186,7 +186,7 @@ nvdm::FenceSlot take_frame_fence(Presenter& p, DeviceData& d)
                                ? d.WaitForFences(d.handle, 1, &fence, VK_TRUE, static_cast<uint64_t>(p.refresh_ns))
                                : VK_ERROR_UNKNOWN;
         Locked lk(p);
-        if (p.model.pool_serial() == serial) { // invariant 5's re-check: still the same pool
+        if (p.model.pool_serial() == serial) { // the re-check after the fence wait: still the same pool
             if (r == VK_SUCCESS) {
                 p.model.fence_seen(*oldest);
             }
@@ -363,7 +363,7 @@ VkResult present_ours(VkQueue queue, const VkPresentInfoKHR& info, const std::sh
         }
         // Queued with its present id; a frame that is not acquired (any more) leaves its submitted fence left over. Its
         // timing request first: the model may report the frame at once (dropped while flips are stopped). Its target
-        // time in the same lock hold, so the display thread never sees it queued and not yet held (design 6.11).
+        // time in the same lock hold, so the display thread never sees it queued and not yet held.
         const int64_t now = p.clock.now_ns();
         if (seq != 0) {
             p.timings.queued(record->gen, seq, request);
@@ -391,7 +391,7 @@ VkResult present_ours(VkQueue queue, const VkPresentInfoKHR& info, const std::sh
     return VK_SUCCESS;
 }
 
-// --- Present-wait (design 6.8) -------------------------------------------------------------------------------------
+// --- Present-wait -------------------------------------------------------------------------------------
 
 // vkWaitForPresentKHR and vkWaitForPresent2KHR (`command`), which wait alike.
 VkResult wait_for_present_ours(const char* command, const std::shared_ptr<SwapchainRecord>& record,
@@ -494,7 +494,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_WaitForPresent2KHR(VkDevice device, VkSwapc
 {
     return guarded("vkWaitForPresent2KHR", [&] {
         if (std::shared_ptr<SwapchainRecord> record = find_swapchain(swapchain)) {
-            // The ids are the VkPresentId2KHR ones, completed as present_id's are (design 6.8).
+            // The ids are the VkPresentId2KHR ones, completed as present_id's are.
             return wait_for_present_ours("vkWaitForPresent2KHR", record, info->presentId, info->timeout);
         }
         DeviceData& data = device_data(device);

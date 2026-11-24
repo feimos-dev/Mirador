@@ -35,7 +35,7 @@ SessionLine session_line(std::string_view line);
 // write.
 std::optional<std::wstring> trace_folder(const std::optional<std::string>& setting, const std::wstring& log_dir);
 
-// The last this many log files stay in the folder: layer.log (the newest), layer.1.log, ... (design 8).
+// The last this many log files stay in the folder: layer.log (the newest), layer.1.log, ....
 inline constexpr int kLogsKept = 5;
 
 // Starts a new log: layer.log becomes layer.1.log, layer.1.log becomes layer.2.log, and so on; the one that would
@@ -74,7 +74,7 @@ private:
 };
 
 // The process's logger: %LOCALAPPDATA%\Mirador\direct-mode\layer.log, the level from MIRADOR_DIRECT_MODE_LOG, read at the
-// first line. It is never destroyed (no destructors that take a lock at process exit, design 6.10).
+// first line. It is never destroyed (no destructors that take a lock at process exit).
 Logger& process_logger();
 
 // printf-style lines on the process's logger.

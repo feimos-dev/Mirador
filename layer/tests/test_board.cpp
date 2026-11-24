@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The Dream Air's board in the list of present devices (design 6.3's last EDID route): which instance ids are the
+// The Dream Air's board in the list of present devices: which instance ids are the
 // board's. Whether the board is in this machine's list is not tested here; the check tool's run on the headset is.
 
 #include <catch2/catch_test_macros.hpp>

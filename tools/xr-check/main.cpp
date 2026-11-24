@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 //
-// xr-check: Mirador's small OpenXR test client (Mirador.md §4.11 item 49, "Verify build for Windows").
+// xr-check: Mirador's small OpenXR test client.
 //
 //   xr-check --api d3d11|vulkan|none [--frames 300] [--timeout 60]
 //
@@ -528,7 +528,7 @@ struct PoseInput
 constexpr int kHeadFrames = 30;
 
 // --api none: the runtime loads and its service takes the app (xrCreateInstance), with no graphics API and no session.
-// The nightly's check on CI, whose machines have no GPU for Monado's compositor (Mirador_Plan.md).
+// The nightly's check on CI, whose machines have no GPU for Monado's compositor.
 void
 run_instance_only(Result &result)
 {

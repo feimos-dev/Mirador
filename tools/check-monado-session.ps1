@@ -1,15 +1,14 @@
 #Requires -Version 7.3
 <#
 .SYNOPSIS
-  Starts a Monado build headless and connects an OpenXR app to it: the last check of the weekly build (Mirador.md §4.11
-  item 55).
+  Starts a Monado build headless and connects an OpenXR app to it: the last check of the weekly build.
 .DESCRIPTION
   Starts the build's monado-service.exe with its null compositor and simulated headset (XRT_COMPOSITOR_NULL=1,
   SIMULATED_ENABLE=1: no display, no headset), waits for its pipe, then runs xr-check (tools\xr-check) against it,
   once per -Api. The default, none, creates an OpenXR instance only: the runtime DLL loads with everything it needs,
   and the service takes the app over its pipe. That is all a GitHub runner can show: it has no GPU, and Monado's
   compositor (the null one too) needs a Vulkan device with Windows' sharing extensions, which no software driver tried
-  there gave (lavapipe lacks them; Mesa's Dozen didn't load; Mirador_Plan.md). d3d11 and vulkan run a whole session, as
+  there gave (lavapipe lacks them; Mesa's Dozen didn't load). d3d11 and vulkan run a whole session, as
   "Verify build for Windows" does on a PC with a GPU.
   The build must be the OpenXR runtime the loader finds: XR_RUNTIME_JSON is set, but an elevated process's loader
   ignores it (GitHub's runners are elevated), so there the build is made the machine's active runtime first.

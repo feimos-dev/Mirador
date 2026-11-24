@@ -230,7 +230,7 @@ public sealed record VsPlan(ToolState State, VsInstance? Install, IReadOnlyList<
 public sealed record ToolPin(string Name, string Folder, string Version, string Url, string Sha256, string Exe);
 
 /// <summary>
-/// The versions Mirador's builds use (Mirador.md §4.11 item 49: "every build uses the same versions"). Raising one is
+/// The versions Mirador's builds use. Raising one is
 /// a code change, with the new release file's SHA-256 from GitHub.
 /// </summary>
 public static class ToolPins

@@ -10,8 +10,8 @@
 
 namespace nvdm {
 
-// A headset the layer drives (design 6.3): how its EDID names it, and the one mode it runs. A product of the tested
-// table, or another headset of a direct-mode vendor whose EDID gives its mode (untested: Mirador.md section 4.11 item 52).
+// A headset the layer drives: how its EDID names it, and the one mode it runs. A product of the tested
+// table, or another headset of a direct-mode vendor whose EDID gives its mode (untested).
 struct Product {
     uint16_t pnp_vendor;  // The EDID manufacturer id as the 16 bits the standard stores big-endian (0x42d2 is "PVR").
     uint16_t pnp_product; // The EDID product code (stored little-endian).
@@ -29,7 +29,7 @@ struct DirectModeVendor {
     const char* name;    // "Pimax"
 };
 
-// Pimax first. Another vendor is another line here, and needs a capture on its headset first (design: layer doc 14).
+// Pimax first. Another vendor is another line here, and needs a capture on its headset first.
 inline constexpr DirectModeVendor kDirectModeVendors[] = {
     {0xd242, 0x42d2, "PVR", "Pimax"},
 };
@@ -37,7 +37,7 @@ inline constexpr DirectModeVendor kDirectModeVendors[] = {
 // The vendor with this EDID manufacturer id, or nullptr.
 const DirectModeVendor* vendor_for_pnp(uint16_t pnp_vendor);
 
-// PVR 0x1019: 7104x3840 at 90.000 Hz, the mode struct of DreamAir_Windows.md 3.3.
+// PVR 0x1019: 7104x3840 at 90.000 Hz.
 extern const Product kDreamAir;
 
 // The tested table's entry whose manufacturer and product code the EDID (a base block or more) names; else, for a

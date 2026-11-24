@@ -29,7 +29,7 @@ public sealed record OpenVrState(OpenVrTarget Target, string? First, string? Pro
 
 /// <summary>
 /// The user's <c>openvrpaths.vrpath</c>, which Valve's <c>openvr_api.dll</c> in every OpenVR game reads to find the
-/// runtime: the first folder of its <c>runtime</c> list, whose <c>bin\vrclient_x64.dll</c> it loads (Mirador.md §4.6).
+/// runtime: the first folder of its <c>runtime</c> list, whose <c>bin\vrclient_x64.dll</c> it loads.
 /// Switching keeps every other key and entry, as OpenLamina's own switcher does, and never writes over a file it
 /// couldn't read.
 /// </summary>

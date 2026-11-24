@@ -16,7 +16,7 @@
 namespace dvl {
 
 // Design 8's degradation warnings (anti-goal "silent degradation"). Each fires at most once per app session; a session
-// starts at the first present after more than kAppSessionGapNs without one, as the stats' windows do (design 6.8).
+// starts at the first present after more than kAppSessionGapNs without one, as the stats' windows do.
 //
 // Two kinds:
 // - standing conditions of the presenting device and swapchain (set_*): the device was made without
@@ -52,9 +52,9 @@ public:
     // The frame model's counters (they only grow) and whether flips are stopped: an increase of dropped, failed,
     // unconfirmed or reserved warns, as do stopped flips.
     void on_counters(const nvdm::FrameModel::Counters& counters, bool flips_stopped);
-    // A present that found no fence and waited for its queue to go idle (design 6.5 invariant 2).
+    // A present that found no fence and waited for its queue to go idle.
     void on_fence_fallback();
-    // A teardown's join timed out and left the display thread inside NVAPI (design 6.10).
+    // A teardown's join timed out and left the display thread inside NVAPI.
     void on_thread_left_behind();
 
     // The warnings since the last call, oldest first.

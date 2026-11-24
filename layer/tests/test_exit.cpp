@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Process exit (design 6.10): the console control handler and DllMain's process-exit rule.
+// Process exit: the console control handler and DllMain's process-exit rule.
 
 #include <catch2/catch_test_macros.hpp>
 

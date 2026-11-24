@@ -11,7 +11,7 @@ namespace Mirador.Ipc;
 public sealed record MiradorMonadoVersions(string? Current, string? Previous);
 
 /// <summary>
-/// Mirador's Monado (Mirador.md §4.11 item 55): the weekly builds of upstream <c>main</c> the helper installs in
+/// Mirador's Monado: the weekly builds of upstream <c>main</c> the helper installs in
 /// <c>{app}\monado\&lt;version&gt;\</c>, an admin-only folder, with <c>current.json</c> beside them saying which is in use.
 /// Only the helper writes there; the app reads.
 /// </summary>

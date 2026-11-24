@@ -46,7 +46,7 @@ public class GpuSchedulingTests
     [Trait("Category", "Hardware")]
     public void This_pcs_adapters_can_be_asked()
     {
-        // Finn's PC: an RTX 5070 Ti with it on (Mirador.md, the tested setup; HwSchMode 2).
+        // A real PC: an RTX 5070 Ti with it on.
         Assert.NotEmpty(GpuScheduling.Query());
         Assert.Equal(GpuSchedulingState.On, GpuScheduling.Now());
     }

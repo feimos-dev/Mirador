@@ -27,7 +27,7 @@ const Product* const kProducts[] = {&kDreamAir};
 // must stay valid).
 const char* untested_name(const DirectModeVendor& vendor, uint16_t pnp_product)
 {
-    // Never destroyed (as the layer's other names, design 6.10): a display's properties may be read during exit.
+    // Never destroyed (as the layer's other names): a display's properties may be read during exit.
     static std::mutex& mutex = *new std::mutex;
     static auto& names = *new std::deque<std::pair<uint32_t, std::string>>;
     const uint32_t key = static_cast<uint32_t>(vendor.pnp_vendor) << 16 | pnp_product;

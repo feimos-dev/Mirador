@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The stats line (design 6.8): its windows, its app sessions and its fields. A feeder plays a display that flips every
+// The stats line: its windows, its app sessions and its fields. A feeder plays a display that flips every
 // 1/90 s and an app that presents 2 ms after each flip; the missed test drives the frame model, which owns that count.
 
 #include <catch2/catch_test_macros.hpp>

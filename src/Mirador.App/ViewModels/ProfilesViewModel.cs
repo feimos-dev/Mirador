@@ -158,7 +158,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public partial DirectModeItem? DirectMode { get; set; }
 
     /// <summary>
-    /// The "Monado" drop-down (Mirador.md §4.11 item 55): 0 Mirador's Monado, 1 build upstream main, 2 build from a
+    /// The "Monado" drop-down: 0 Mirador's Monado, 1 build upstream main, 2 build from a
     /// link, 3 a build folder.
     /// </summary>
     [ObservableProperty]
@@ -214,7 +214,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     private BranchOffer Offer => branchOffer ??= new BranchOffer(() => host.Tools.Git, new CommandRunner());
 
     /// <summary>
-    /// The profile's "Run as administrator" (Mirador.md §4.10 item 44, §4.11 item 51): for Mirador's Monado the user's
+    /// The profile's "Run as administrator": for Mirador's Monado the user's
     /// consent (one UAC prompt, at Save) is enough; a branch or build folder also needs its build approved.
     /// </summary>
     [ObservableProperty]
@@ -437,7 +437,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     private async Task<bool> AddAsync()
     {
-        // New profiles start with no headset module, unless a headset a module knows is plugged in (Mirador.md §4.11 item 53).
+        // New profiles start with no headset module, unless a headset a module knows is plugged in.
         // Listing the USB devices is a WMI query (up to seconds): off the UI thread.
         string? module = null;
         try

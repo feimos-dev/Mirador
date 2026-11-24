@@ -8,7 +8,7 @@
 
 namespace nvdm {
 
-// What another program can hold that the layer, the check tool and the start script need (design 4).
+// What another program can hold that the layer, the check tool and the start script need.
 enum class Held {
     Display,  // The display in direct mode: pi_server.exe, vrcompositor.exe.
     Board,    // The board and eye tracker: Pimax's six programs (the launcher's list).

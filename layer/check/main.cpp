@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]  (design 7)
+// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]
 //
 // The order: arguments, then the holder checks (before anything is touched: no NVAPI, no HID if Pimax or Monado runs),
 // then the board heartbeat, then the NVAPI check, then the verdict. Exit code: 0 PASS, 1 a check failed, 2 usage,

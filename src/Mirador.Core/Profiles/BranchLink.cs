@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Mirador.Core.Profiles;
 
 /// <summary>
-/// The link an owner pastes for a branch profile (Mirador.md §4.11 item 49), and the checks that keep its URL, ref and
+/// The link an owner pastes for a branch profile, and the checks that keep its URL, ref and
 /// options from becoming anything but a clone of a public repository over HTTPS: no local path, no other protocol,
 /// nothing git or CMake would read as an option of their own.
 /// </summary>

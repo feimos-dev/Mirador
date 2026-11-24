@@ -11,7 +11,7 @@
 
 namespace dvl {
 
-// Command coverage (design 6.3, last bullet). The layer makes its own VkDisplayKHR, VkDisplayModeKHR, VkSurfaceKHR and
+// Command coverage. The layer makes its own VkDisplayKHR, VkDisplayModeKHR, VkSurfaceKHR and
 // VkSwapchainKHR, so every command that can be handed one must be answered by the layer: none may reach the loader's
 // terminators or the driver. tools/gen_handle_commands.py lists those commands from vk.xml, in all extensions; this
 // file says what the layer does with each.

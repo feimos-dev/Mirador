@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// VK_EXT_present_timing's bookkeeping on the layer's swapchain (design 6.11), alone: what a present asks for (its target
+// VK_EXT_present_timing's bookkeeping on the layer's swapchain, alone: what a present asks for (its target
 // time and what the display thread makes of it), the results queue and its slots, and the results
 // vkGetPastPresentationTimingEXT gives from the frame model's reports. The commands through the layer's chain are in
 // test_swapchain.cpp.

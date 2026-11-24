@@ -3,7 +3,7 @@
 
 #pragma once
 
-// VK_EXT_present_timing on the layer's swapchain (design 6.11), from the frame model's per-frame times
+// VK_EXT_present_timing on the layer's swapchain, from the frame model's per-frame times
 // (FrameModel::set_report), whose first-pixel-out time is the NVAPI flip: the stats' QPC time of the refresh that put
 // the frame on screen. No Vulkan call and no lock of its own: the intercepts (present.cpp,
 // present_timing_intercepts.cpp) hold the display-session lock around every call on PresentTimings, and the frame model
@@ -38,7 +38,7 @@ inline constexpr VkPresentStageFlagsEXT kPresentStages = VK_PRESENT_STAGE_QUEUE_
                                                          VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
                                                          VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
 
-// Present at a time (design 6.11): on unless MIRADOR_DIRECT_MODE_NO_PRESENT_AT is set to a value other than 0, for an A/B
+// Present at a time: on unless MIRADOR_DIRECT_MODE_NO_PRESENT_AT is set to a value other than 0, for an A/B
 // of the same build with and without target times. Read when called; a swapchain keeps what it read at creation.
 bool present_at_enabled();
 
@@ -67,10 +67,10 @@ struct PresentRequest {
 PresentRequest read_present_request(const VkPresentInfoKHR& info);
 
 // A target further ahead of its present than this is not held for: it would hold the back-buffer past acquire's bound
-// (600 ms, design 6.6), which then drops the frame, and on a headset it is a wrong clock, not a wish.
+// (600 ms), which then drops the frame, and on a headset it is a wrong clock, not a wish.
 inline constexpr int64_t kFarTargetNs = 500'000'000;
 
-// What a present's target time asks of the display thread (design 6.11).
+// What a present's target time asks of the display thread.
 struct Target {
     enum class Use {
         None,     // no target (no timing info, or targetTime 0): shown at the first flip it can make, as always
@@ -88,7 +88,7 @@ struct Target {
 // first flip the frame can make is after it).
 Target read_target(const PresentRequest& request, int64_t refresh_ns, int64_t now_ns, bool present_at);
 
-// The present timing state of the layer's swapchains, by frame-model generation (design 6.11). Every call is made under
+// The present timing state of the layer's swapchains, by frame-model generation. Every call is made under
 // the display-session lock.
 //
 // A present that asks for stages (presentStageQueries non-zero) takes a slot of its swapchain's results queue, whose

@@ -7,7 +7,7 @@ namespace Mirador.App.Services;
 
 /// <summary>
 /// Runs a program through Windows' administrator prompt and waits for it: Visual Studio's installer for the build tools
-/// (Mirador.md §4.11 item 49). Mirador itself stays unelevated.
+///. Mirador itself stays unelevated.
 /// </summary>
 public sealed class UacLauncher : IElevatedLauncher
 {

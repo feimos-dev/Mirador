@@ -17,7 +17,7 @@ struct LayerObject {
 LayerObject g_display{0x444953504c415944ull}; // "DISPLAYD"
 LayerObject g_mode{0x45444f4d59414c44ull};    // "DLAYMODE"
 
-// Product names as strings that live for the process (never destroyed, design 6.10).
+// Product names as strings that live for the process (never destroyed).
 const char* lasting_name(const char* name)
 {
     static std::mutex* const mutex = new std::mutex;

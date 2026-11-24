@@ -1,9 +1,9 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The swapchain on the layer's surface (design 6.4) and the presentation state behind it: the swapchain records, the
+// The swapchain on the layer's surface and the presentation state behind it: the swapchain records, the
 // presenter (frame model, stats, display events, warnings, display thread), the display thread's start and stop, and
-// vkDestroyDevice's part (design 6.10). Swapchains on any other surface go down unchanged. See swapchain.hpp.
+// vkDestroyDevice's part. Swapchains on any other surface go down unchanged. See swapchain.hpp.
 
 #include "layer/swapchain.hpp"
 
@@ -30,7 +30,7 @@ namespace {
 
 // A condition-variable wait looks at the clock again at least this often (a missed notification, a test's clock).
 constexpr int64_t kMaxWaitSliceNs = 100'000'000;
-// vkDestroyDevice waits this long for frame fences still outstanding (design 6.10).
+// vkDestroyDevice waits this long for frame fences still outstanding.
 constexpr int64_t kOutstandingFenceWaitNs = 100'000'000;
 // The handshake waits a refresh period and this much for the display thread to leave a Vulkan call.
 constexpr int64_t kLeaveSlackNs = 2'000'000;
@@ -61,7 +61,7 @@ struct SwapchainRegistry {
     std::unordered_map<const void*, std::shared_ptr<SwapchainRecord>> records;
 };
 
-// Made at first use and never destroyed (design 6.10).
+// Made at first use and never destroyed.
 SwapchainRegistry& registry()
 {
     static SwapchainRegistry* const r = new SwapchainRegistry;
@@ -132,7 +132,7 @@ void keep_timer_resolution()
     }
 }
 
-// The first swapchain starts it (design 6.7: it runs while one of ours exists), on the swapchain's device. Holding
+// The first swapchain starts it, on the swapchain's device. Holding
 // Presenter::lifecycle, not the display-session lock.
 void start_display_thread(Presenter& p, DeviceData& device)
 {
@@ -151,7 +151,7 @@ void start_display_thread(Presenter& p, DeviceData& device)
         pp->pending.flush();
         log(Level::Info, "%s", line.c_str());
     };
-    // Under the lock, at every counter increment: the display events registered before it are set (design 6.9), and
+    // Under the lock, at every counter increment: the display events registered before it are set, and
     // every wait wakes to look again (credits free back-buffers and complete present ids).
     config.refresh_seen = [pp](int64_t qpc_ns) {
         pp->events.on_refresh(qpc_ns);
@@ -165,14 +165,14 @@ void start_display_thread(Presenter& p, DeviceData& device)
                                                    *fences, pp->stats, config);
     });
     // Ctrl+C or closing Monado's console: the thread leaves NVAPI before the default handler ends the process
-    // (design 6.10), and the newest trace records are written, if tracing.
+    //, and the newest trace records are written, if tracing.
     set_console_stop_hook([pp] {
         pp->thread->stop_and_join(static_cast<int64_t>(kConsoleHookWaitMs) * 1'000'000);
         pp->write_trace(kConsoleHookTraceRecords);
     });
 }
 
-// The last swapchain stops it, with design 6.10's 1 s join. Holding Presenter::lifecycle, never the session lock. The
+// The last swapchain stops it, with a 1 s join. Holding Presenter::lifecycle, never the session lock. The
 // caller writes the trace once it has let go of Presenter::lifecycle (Presenter::write_trace).
 void stop_display_thread(Presenter& p)
 {
@@ -185,7 +185,7 @@ void stop_display_thread(Presenter& p)
     }
 }
 
-// The frame model holds the frames of one device (design 6.4): a swapchain on another device ends the old device's
+// The frame model holds the frames of one device: a swapchain on another device ends the old device's
 // frames (destroyed, no ids completed) and gives the model the new device's fence pool. Under the lock.
 void attach_device_locked(Presenter& p, DeviceData& device)
 {
@@ -207,7 +207,7 @@ void attach_device_locked(Presenter& p, DeviceData& device)
 
 VkResult refuse_swapchain(const std::string& why)
 {
-    // One of design 6.10's exceptions: none happens to Monado.
+    // Failures Monado never hits.
     log(Level::Error, "vkCreateSwapchainKHR on the layer's surface refused: %s", why.c_str());
     return VK_ERROR_INITIALIZATION_FAILED;
 }
@@ -244,7 +244,7 @@ VkResult create_our_swapchain(VkDevice device, const VkSwapchainCreateInfoKHR& c
     Presenter& p = presenter();
     std::lock_guard<std::mutex> life(p.lifecycle);
 
-    // The checks of design 6.3 and 6.4, each one of design 6.10's exceptions.
+    // The display and swapchain checks: each a failure Monado never hits.
     if (d.instance == nullptr || !display_listed_now(*d.instance, d.physical_device)) {
         return refuse_swapchain("device " + describe_device(d) +
                                 " is not on the GPU that drives the headset (its instance did not list the display "
@@ -292,7 +292,7 @@ VkResult create_our_swapchain(VkDevice device, const VkSwapchainCreateInfoKHR& c
     record->present_mode = ci.presentMode;
     record->present_at = present_at_enabled();
 
-    // Recreate with the same parameters: the old swapchain's images and memory move over (design 6.4), no second
+    // Recreate with the same parameters: the old swapchain's images and memory move over, no second
     // import of the same handles. Different parameters: import again.
     const std::shared_ptr<SwapchainRecord> old = find_swapchain(ci.oldSwapchain);
     bool moved = false;
@@ -312,7 +312,7 @@ VkResult create_our_swapchain(VkDevice device, const VkSwapchainCreateInfoKHR& c
                 for (ImportedImage& image : record->images) {
                     release_imported(d, image);
                 }
-                // A Vulkan failure after the display was listed (design 6.10): a bug, with what is needed to report it.
+                // A Vulkan failure after the display was listed: a bug, with what is needed to report it.
                 log(Level::Error,
                     "vkCreateSwapchainKHR: importing back-buffer %u as %s usage 0x%x on device %p failed (%d) after "
                     "the trial import passed; a bug: please report this log",
@@ -351,7 +351,7 @@ VkResult create_our_swapchain(VkDevice device, const VkSwapchainCreateInfoKHR& c
 
 // Design 6.4: its queued and acquired frames are dropped (ids written nowhere, fences left over), its presented and
 // on-screen frames are unlinked (their back-buffer states stay), its images and memory are released unless a newer
-// swapchain took them, and its waiters wake. The last one stops the display thread (design 6.10) and the function
+// swapchain took them, and its waiters wake. The last one stops the display thread and the function
 // returns true: the caller writes the trace once it has let go of Presenter::lifecycle. Holding Presenter::lifecycle.
 bool destroy_our_swapchain(Presenter& p, VkSwapchainKHR handle, const std::shared_ptr<SwapchainRecord>& record)
 {
@@ -644,7 +644,7 @@ Presenter& presenter()
     std::lock_guard<std::mutex> hold(presenter_mutex());
     Presenter* p = g_presenter.load(std::memory_order_acquire);
     if (p == nullptr) {
-        p = new Presenter(display_session()); // never destroyed (design 6.10)
+        p = new Presenter(display_session()); // never destroyed
         g_presenter.store(p, std::memory_order_release);
     }
     return *p;
@@ -720,9 +720,9 @@ void before_device_destroyed(DeviceData& device)
     if (stopped) {
         p->write_trace();
     }
-    // No layer lock from here on: the waits below may take a refresh period and 100 ms (design invariant 7).
+    // No layer lock from here on: the waits below may take a refresh period and 100 ms.
     // The handshake: the display thread makes no Vulkan call on the device after this, and one in progress ends by
-    // its deadline, within a refresh period (design 6.10).
+    // its deadline, within a refresh period.
     for (const std::shared_ptr<LayerFenceOps>& ops : epochs) {
         if (ops->device() == &device && !ops->leave(p->refresh_ns + kLeaveSlackNs)) {
             log(Level::Error, "vkDestroyDevice: the display thread is still in a fence call on device %p after a "
@@ -847,7 +847,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetSwapchainStatusKHR(VkDevice device, VkSw
 {
     return guarded("vkGetSwapchainStatusKHR", [&] {
         if (find_swapchain(swapchain)) {
-            return VK_SUCCESS; // never shared presentable, never out of date (design 6.6)
+            return VK_SUCCESS; // never shared presentable, never out of date
         }
         DeviceData& data = device_data(device);
         return call_down(data.GetSwapchainStatusKHR, "vkGetSwapchainStatusKHR", device, swapchain);

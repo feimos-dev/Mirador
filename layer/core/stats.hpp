@@ -13,12 +13,12 @@
 
 namespace nvdm {
 
-// When stats lines come (design 6.8).
+// When stats lines come.
 inline constexpr int64_t kSessionGapNs = 1'000'000'000; // more than this without a present: a new app session
 inline constexpr uint64_t kSessionLinePresents = 90;     // the first line of an app session, after this many presents
 inline constexpr uint64_t kWindowPresents = 2700;        // then a line after every this many (30 s at 90 Hz)
 
-// The stats line of design 6.8: the target's line ("N presents in S s (Hz), F flips (Hz), M missed (%), L link drops")
+// The stats line: the target's line ("N presents in S s (Hz), F flips (Hz), M missed (%), L link drops")
 // plus the frame ends, the back-buffers reserved and the display-event wake times. One line per window of presents.
 //
 // An app session starts at the first present after more than kSessionGapNs without one; that present opens its first
@@ -32,7 +32,7 @@ inline constexpr uint64_t kWindowPresents = 2700;        // then a line after ev
 //   flip, and the increments from the new value count.
 // - missed, link drops, dropped, failed, unconfirmed, reserved: FrameModel::Counters (on_counters), which owns them
 //   (missed is "flip gap - 1, gaps over 1 s are idle"). They are not counted again here.
-// - event wake: on_wake(), each display-event wait's wake time minus NVAPI's refresh QPC time (design 6.9); median and
+// - event wake: on_wake(), each display-event wait's wake time minus NVAPI's refresh QPC time; median and
 //   maximum over the window, 0 when there were none.
 //
 // Not thread-safe: callers hold the display-session lock (the display loop, and the layer's display-event waits).

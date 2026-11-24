@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The back-buffer import and the trial import (design 6.3, 6.4). See import.hpp.
+// The back-buffer import and the trial import. See import.hpp.
 
 #include "layer/import.hpp"
 
@@ -307,7 +307,7 @@ bool trial_import_at_swapchain(DeviceData& device)
         }
     }
     log(Level::Info, "vkCreateSwapchainKHR: device %p did not exist when its GPU was asked for displays, so its trial "
-                     "import runs now (design 6.3)",
+                     "import runs now",
         static_cast<void*>(device.handle));
     return trial_import(device);
 }
@@ -341,7 +341,7 @@ ImportVerdict import_verdict(InstanceData& instance, VkPhysicalDevice physical_d
     });
     if (devices == 0 && answers.all) {
         log(Level::Info, "no device exists on this GPU yet: the import is tried at each device's first "
-                         "vkCreateSwapchainKHR instead (design 6.3)");
+                         "vkCreateSwapchainKHR instead");
     }
     if (failed > 0) {
         log(Level::Warn, "%zu of %zu devices on this GPU failed the trial import, so the layer's display is not listed",

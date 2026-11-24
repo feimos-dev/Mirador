@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The holder lists (design 4): who can hold the display, the board, the Lighthouse receiver.
+// The holder lists: who can hold the display, the board, the Lighthouse receiver.
 
 #include <catch2/catch_test_macros.hpp>
 

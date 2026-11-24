@@ -65,7 +65,7 @@ public class SteamVrDriverCheckTests
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    /// <summary>Valve signs <c>driver_lighthouse.dll</c> and <c>vrcamera_api.dll</c>, nothing else (as on Finn's PC).</summary>
+    /// <summary>Valve signs <c>driver_lighthouse.dll</c> and <c>vrcamera_api.dll</c>, nothing else (as on a real PC).</summary>
     private static string? ValveSignsTheDriver(string path) =>
         Path.GetFileName(path) is "driver_lighthouse.dll" or "vrcamera_api.dll" ? ValveSubject : null;
 

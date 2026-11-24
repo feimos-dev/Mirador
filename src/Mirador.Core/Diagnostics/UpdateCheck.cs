@@ -10,7 +10,7 @@ namespace Mirador.Core.Diagnostics;
 /// <param name="InstallerSha256">That asset's SHA-256 from GitHub's <c>digest</c>, lower case without <c>sha256:</c>; null likewise.</param>
 public sealed record Release(string Tag, string Url, string? InstallerUrl, string? InstallerSha256);
 
-/// <summary>Asks GitHub for the latest release of Mirador and of OpenLamina, to say so on Home. It never installs anything (Mirador.md §4.4 item 13).</summary>
+/// <summary>Asks GitHub for the latest release of Mirador and of OpenLamina, to say so on Home. It never installs anything.</summary>
 public static class UpdateCheck
 {
     public const string MiradorRepository = "feimos-dev/mirador";

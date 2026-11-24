@@ -11,7 +11,7 @@ namespace Mirador.Ipc;
 public sealed record MonadoRelease(string Version, string ZipUrl, string ZipSha256, DateTimeOffset PublishedAt);
 
 /// <summary>
-/// Mirador's Monado builds as GitHub lists them (Mirador.md §4.11 item 55): the app reads the list for "Update Monado",
+/// Mirador's Monado builds as GitHub lists them: the app reads the list for "Update Monado",
 /// and the helper reads it again itself before installing one, never trusting a URL or hash the app hands over.
 /// </summary>
 public static class MonadoReleaseList

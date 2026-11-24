@@ -10,7 +10,7 @@ using Mirador.Ipc;
 namespace Mirador.Helper.ElevatedMonado;
 
 /// <summary>
-/// The real <see cref="IElevatedMonado"/> (Mirador.md section 4.10 item 46): one per machine, keyed by the caller's
+/// The real <see cref="IElevatedMonado"/>: one per machine, keyed by the caller's
 /// SID. It runs only the bundled <c>monado\server\monado-service.exe</c> found from the helper's own install folder,
 /// with the environment the helper builds (<see cref="ElevatedEnvironment"/>), in the caller's session with the
 /// caller's linked (elevated) token, inside a kill-on-close job that also ends when the caller process exits. Its

@@ -1,9 +1,9 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The design 10 M1 scenarios, walked against the frame model. A small simulation moves time in 0.1 ms steps; each step
+// The headset's scenarios, walked against the frame model. A small simulation moves time in 0.1 ms steps; each step
 // runs the display (a counter that increments every 11.111 ms while the display is alive), a simplified display thread
-// (design 6.7: read the counter, tick, Present the candidate once its fence has signalled) and Monado's call pattern
+// and Monado's call pattern
 // (acquire, render, vkQueuePresentKHR, wait for the queue to go idle, wait for the present id with a 2.5-frame
 // timeout). Every model call is followed by check_invariants(), and every acquire that returns nothing is checked to
 // be before the bound.

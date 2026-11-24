@@ -20,7 +20,7 @@
 
 namespace nvdm {
 
-// The driver versions the layer has been run on. Any other is tried, with a warning (design 7).
+// The driver versions the layer has been run on. Any other is tried, with a warning.
 inline constexpr const char* kTestedDrivers[] = {"621.01"};
 
 bool is_tested_driver(const std::string& version);
@@ -66,8 +66,8 @@ struct SessionDeps {
     std::function<std::vector<std::string>()> processes; // The running programs' names (list_processes()). Unset: that.
     std::function<void()> pin_module;                    // Keeps the layer DLL loaded until the process exits.
     std::function<bool()> board_present; // The Dream Air's board is connected (board_present()). Unset: that.
-    bool ignore_holders = false;                         // Skips the holder check (tests only, design 4).
-    bool skip_edid = false;                              // Skips every EDID route (tests only, design 8).
+    bool ignore_holders = false;                         // Skips the holder check (tests only).
+    bool skip_edid = false;                              // Skips every EDID route (tests only).
     uint32_t wait_ms = 10000;                            // How long open() waits for the display to appear.
     std::function<void(int64_t ns)> sleep;               // Waits that long. Unset: std::this_thread::sleep_for.
 
@@ -77,7 +77,7 @@ struct SessionDeps {
     std::function<void(const std::string&)> log;
 };
 
-// The process-wide display session of design 6.3: NVAPI loaded, the display found, bound to a D3D11 device, three
+// The process-wide display session: NVAPI loaded, the display found, bound to a D3D11 device, three
 // back-buffers made and the mode set. It holds nothing from Vulkan.
 //
 // Progress is kept per step: a step that succeeded is not repeated, and a failed one is tried again, with every step
@@ -86,7 +86,7 @@ struct SessionDeps {
 // comparison of the adapter run on every attempt.
 //
 // open() may be called from any thread; calls are serialised among themselves. It calls NVAPI, sleeps and takes no
-// lock() (design invariant 7): never call it while holding lock().
+// lock(): never call it while holding lock().
 class DisplaySession {
 public:
     explicit DisplaySession(SessionDeps deps);
@@ -112,7 +112,7 @@ public:
     // display thread and the layer's waits share.
     Clock& clock() { return deps_.clock; }
 
-    // The display-session lock of design 6.5. The session does not take it itself; the frame model and the display
+    // The display-session lock. The session does not take it itself; the frame model and the display
     // loop do, with their callers.
     std::mutex& lock() { return lock_; }
 
@@ -161,7 +161,7 @@ private:
     std::string done_message_;
 };
 
-// The layer's variables for the session (design 8): MIRADOR_DIRECT_MODE_WAIT_MS (milliseconds, default 10000),
+// The layer's variables for the session: MIRADOR_DIRECT_MODE_WAIT_MS (milliseconds, default 10000),
 // MIRADOR_DIRECT_MODE_IGNORE_HOLDERS and MIRADOR_DIRECT_MODE_TEST_NO_EDID (only "1" counts for these two). Null means not
 // set; text that is not a number that fits is the default. Separate from the environment so it can be tested.
 struct SessionSettings {
@@ -178,7 +178,7 @@ void set_process_session_log(std::function<void(const std::string&)> sink);
 // The one display session of this process, for the layer and the check tool. Built on the first call from the real
 // parts: make_nvapi(), QpcClock, a D3D11 device made on the display's adapter and never released, list_processes(),
 // board_present(), GetModuleHandleExW with GET_MODULE_HANDLE_EX_FLAG_PIN to keep the module loaded, Sleep, and the
-// three variables above. It is never destroyed (no destructors at process exit, design 6.10). Do not call this in a
+// three variables above. It is never destroyed (no destructors at process exit). Do not call this in a
 // unit test: its first open() talks to the real driver.
 DisplaySession& process_session();
 

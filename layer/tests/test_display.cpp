@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display, its mode and its plane (design 6.3): the answers alone, then the display, plane and mode queries
+// The display, its mode and its plane: the answers alone, then the display, plane and mode queries
 // through the layer's chain to a fake driver, with the display session on a fake NVAPI.
 
 #include <catch2/catch_test_macros.hpp>
@@ -207,7 +207,7 @@ TEST_CASE("our_display_first")
 
 TEST_CASE("display_not_listed_while_pimax_holds_it")
 {
-    // The holder check comes first (design 6.3): no NVAPI call at all, one line from the session, and the answer is
+    // The holder check comes first: no NVAPI call at all, one line from the session, and the answer is
     // kept for the instance (the plane query does not try again).
     ChainRig rig;
     REQUIRE(rig.ready());

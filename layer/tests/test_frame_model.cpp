@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The frame model (design 6.5-6.8), one rule at a time. Every model call goes through M, which runs
+// The frame model, one rule at a time. Every model call goes through M, which runs
 // check_invariants() after it.
 
 #include <catch2/catch_test_macros.hpp>
@@ -1104,7 +1104,7 @@ TEST_CASE("frame model: present_started refuses what candidate() would not give"
     m.fence_of[a.seq] = fa;
     m.queue(a.seq, 1, fa);
     const Acquired b = m.frame(g, 3 * kMs, 2);
-    REQUIRE(m.present_started(a.seq, 4 * kMs)); // the older one may still go (invariant 5's re-check)
+    REQUIRE(m.present_started(a.seq, 4 * kMs)); // the older one may still go (the re-check after a fence wait)
     CHECK_FALSE(m.present_started(b.seq, 5 * kMs)); // one Present outstanding at most
     CHECK(m.state_of(b.seq) == FrameState::Queued);  // newer frames are not retired
     CHECK_FALSE(m.candidate(5 * kMs).has_value());
@@ -1159,7 +1159,7 @@ TEST_CASE("frame model: release ends an acquired frame and frees its back-buffer
     CHECK(m.model.frame_state(c.seq) == FrameState::Acquired);
 }
 
-// --- Present timing (design 6.11) ---------------------------------------------------------------------------------
+// --- Present timing ---------------------------------------------------------------------------------
 
 TEST_CASE("frame model: a shown frame is reported once, with its fence, Present and flip times")
 {
@@ -1281,7 +1281,7 @@ TEST_CASE("frame model: queue says whether it took the frame")
     CHECK(m.reports.empty());
 }
 
-// --- Present at a time (design 6.11) --------------------------------------------------------------------------------
+// --- Present at a time --------------------------------------------------------------------------------
 // Flips at k * kRefresh. A frame held for `not_before` may be Presented once a flip F with F + kRefresh >= not_before
 // has been seen: its Present then lands on F + kRefresh, the first flip not before the limit.
 

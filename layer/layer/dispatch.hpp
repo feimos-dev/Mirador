@@ -24,7 +24,7 @@
 namespace dvl {
 
 // The functions the layer calls on the layer below it (or the driver), by instance. X(name) is vkName; the member is
-// called `name`. Only Vulkan 1.0 core plus extension commands (design 6.2: Monado's vk_display instance is API 1.0).
+// called `name`. Only Vulkan 1.0 core plus extension commands.
 // A command the layer below does not know (its extension is not enabled) leaves the member null: callers that use an
 // extension command check it first. Tasks 9-11 add what they call.
 #define DVL_INSTANCE_FUNCTIONS(X)                    \
@@ -154,12 +154,12 @@ public:
     // layer below at the first call, not at vkCreateInstance, and kept; empty if it cannot be done.
     std::vector<VkPhysicalDevice> physical_devices();
 
-    // Whether the layer's display is listed on a physical device (design 6.3), decided at the first display query on
+    // Whether the layer's display is listed on a physical device, decided at the first display query on
     // it and kept for the instance's life, so that every later query in this instance gives the same answer
     // (display_intercepts.cpp). A physical device that is not in the map has not been decided yet. A later instance
     // (Monado's retry) decides again. display_mutex is held while deciding, which may open the display session and
     // run the trial import. surface_usage_on: the usage our surface offers on a physical device that lists the display
-    // (design 6.4: from the trial import's format queries), set with the decision.
+    //, set with the decision.
     std::mutex display_mutex;
     std::unordered_map<VkPhysicalDevice, bool> display_listed_on;
     std::unordered_map<VkPhysicalDevice, VkImageUsageFlags> surface_usage_on;
@@ -186,7 +186,7 @@ public:
     DVL_DEVICE_FUNCTIONS(X)
 #undef X
 
-    // The private queue that signals acquire (design 6.2), set up at vkCreateDevice (device.cpp) on an NVIDIA device.
+    // The private queue that signals acquire, set up at vkCreateDevice (device.cpp) on an NVIDIA device.
     // VK_NULL_HANDLE on any other device, or when no queue family had room. queue_mutex guards it and is held around
     // vkDeviceWaitIdle and vkDestroyDevice.
     VkQueue private_queue = VK_NULL_HANDLE;
@@ -195,7 +195,7 @@ public:
     std::mutex queue_mutex;
 
     // The application asked for VK_EXT_display_control (the layer's, so it is not passed down). Without it Monado runs
-    // no vblank thread (design 8's first degradation warning).
+    // no vblank thread.
     bool display_control = false;
 
     // vkLatencySleepNV on the layer's swapchain found no vkSignalSemaphoreKHR on this device, and said so (once).
@@ -203,16 +203,16 @@ public:
 
     // The back-buffer import (import.cpp). missing_import_extensions: the import extensions (kImportExtensions) the
     // device was made without because the driver lacks them, set at vkCreateDevice; the import cannot run on such a
-    // device. trial_import_result: the device's trial import (design 6.3), run once: at the display query if the
+    // device. trial_import_result: the device's trial import, run once: at the display query if the
     // device existed then, else at its first vkCreateSwapchainKHR; nullopt until it has run. import_mutex guards it
-    // and is held for the whole trial. memory_fallback_logged: the memory-type fallback (design 6.4) was logged for
+    // and is held for the whole trial. memory_fallback_logged: the memory-type fallback was logged for
     // this device.
     std::vector<const char*> missing_import_extensions;
     std::mutex import_mutex;
     std::optional<bool> trial_import_result;
     std::atomic<bool> memory_fallback_logged{false};
 
-    // The frame fences (design 6.5): the pool's bookkeeping, guarded by the display-session lock as FencePool requires,
+    // The frame fences: the pool's bookkeeping, guarded by the display-session lock as FencePool requires,
     // and the VkFence of each slot (VK_NULL_HANDLE until the present that first takes the slot makes it). A slot's
     // VkFence is written only by the present that holds the slot taken, and at vkDestroyDevice; the display thread
     // reads the slots of queued frames without the lock, so the array never moves. The pool asks vkGetFenceStatus

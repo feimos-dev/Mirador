@@ -1569,7 +1569,7 @@ public class StationManagerTests
 
         h.WhenRelevant();
 
-        // As Finn's stations wake: 01 at 3 s, 02 at 4.5 s, 03 at 13.6 s (Mirador listens after a command).
+        // As real stations wake: 01 at 3 s, 02 at 4.5 s, 03 at 13.6 s (Mirador listens after a command).
         await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         h.Clock.Advance(TimeSpan.FromSeconds(3));
         h.Hear(Right, RightName, 0x01);
@@ -2772,7 +2772,7 @@ internal sealed class StationHarness : IDisposable
     /// <summary>Writes the station list, as an earlier Mirador would have.</summary>
     public void Known(params KnownStation[] stations) => new StationStore(Path).Save(stations);
 
-    /// <summary>A 2.0 advert with the state byte where Finn's stations have it (null: no Valve data, as a 1.0 sends).</summary>
+    /// <summary>A 2.0 advert with the state byte where real stations have it (null: no Valve data, as a 1.0 sends).</summary>
     public void Hear(ulong address, string name, byte? state = 0x03, bool random = true) =>
         Radio.Advertise(new Advert(address, random, name, state is { } s ? [0x00, 0x02, 0x07, 0x01, s, 0x06, 0x00] : null));
 

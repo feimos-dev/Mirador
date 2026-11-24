@@ -10,7 +10,7 @@ namespace Mirador.Core.Diagnostics;
 public sealed record OpenVrFiles(string PathsFile, string LogFile);
 
 /// <summary>
-/// The zip a user saves to report a problem (Mirador.md §4.2 item 8): logs, the profile, the settings, the environment
+/// The zip a user saves to report a problem: logs, the profile, the settings, the environment
 /// Mirador gave Monado and the versions, plus what the headset module adds. Files are read as they are, even while a
 /// log is being written; one that is missing is left out and named in <c>missing.txt</c>.
 /// </summary>
@@ -40,7 +40,7 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
     /// <param name="lastEnvironment">The session's <c>LastMiradorEnvironment</c>; null before the first Start.</param>
     /// <param name="versions">Mirador's, Windows' and the profile's Monado's versions, one a line.</param>
     /// <param name="openVr">The OpenVR paths file and OpenLamina's log, added as <c>openvrpaths.vrpath</c> and
-    /// under the log's own name, <c>openlamina.log</c> (Mirador.md §4.6 item 23); null leaves them out.</param>
+    /// under the log's own name, <c>openlamina.log</c>; null leaves them out.</param>
     /// <param name="directMode">The profile's direct-mode layer; null for none.</param>
     public static DiagnosticsZip Collect(
         AppPaths paths, Profile profile, IReadOnlyDictionary<string, string>? lastEnvironment, string versions, IHeadsetModule? module, ModuleContext ctx,

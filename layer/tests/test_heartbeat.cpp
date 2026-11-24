@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The check tool's board heartbeat (design 7): the report, the interface it goes to, and the thread that sends it. The
+// The check tool's board heartbeat: the report, the interface it goes to, and the thread that sends it. The
 // real HID transport is never opened here (Pimax runs on this machine); the thread runs against a fake port.
 
 #include <catch2/catch_test_macros.hpp>
@@ -90,7 +90,7 @@ TEST_CASE("heartbeat_report_bytes")
     CHECK(report[0] == 0x00);
 }
 
-TEST_CASE("the heartbeat period is design 7's 200 ms")
+TEST_CASE("the heartbeat period is 200 ms")
 {
     // DreamAirWin\heartbeat.py sends every 200 ms; the board sleeps without it. The real Heartbeat() uses this period.
     STATIC_REQUIRE(dvl::kHeartbeatPeriod == std::chrono::milliseconds(200));

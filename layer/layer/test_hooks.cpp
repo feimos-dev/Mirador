@@ -78,7 +78,7 @@ int on_device(VkDevice device, const char* name, Trial&& trial)
 } // namespace
 
 // What vkCreateSwapchainKHR on our surface asks first: the trial import of a device that did not exist at
-// the display query (design 6.3).
+// the display query.
 extern "C" __declspec(dllexport) int dvl_test_trial_import_at_swapchain(VkDevice device)
 {
     return on_device(device, "dvl_test_trial_import_at_swapchain",

@@ -27,7 +27,7 @@ public sealed record PimaxDeps(
 /// </summary>
 public sealed class PimaxModule(PimaxDeps deps) : IHeadsetModule
 {
-    /// <summary>The Pimax module (Mirador.md §4.11 item 53): every P3C headset, the steps each model has.</summary>
+    /// <summary>The Pimax module: every P3C headset, the steps each model has.</summary>
     public const string ModuleId = PimaxEnvironment.ModuleId;
 
     /// <summary>

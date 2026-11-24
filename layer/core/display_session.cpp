@@ -131,7 +131,7 @@ OpenResult DisplaySession::fail(OpenStep step, int code, const std::string& deta
     if (code != 0) {
         message += " (code " + std::to_string(code) + ")";
     }
-    log("error: " + message); // the layer logs it as an error (design 8)
+    log("error: " + message); // the layer logs it as an error
     return OpenResult{false, step, code, std::move(message)};
 }
 
@@ -358,8 +358,8 @@ OpenResult DisplaySession::identify_product()
     EdidRoute route = deps_.skip_edid ? EdidRoute::None : deps_.api.read_edid(display_id_, edid);
     std::optional<Product> product;
     if (route == EdidRoute::None) {
-        // The last route (design 6.3): no EDID, but the one PVR display is the Dream Air if its board is connected (the
-        // display only appears while the board gets its heartbeat, design 7). Nothing is opened to find out.
+        // The last route: no EDID, but the one PVR display is the Dream Air if its board is connected (the
+        // display only appears while the board gets its heartbeat). Nothing is opened to find out.
         const std::string unread =
             deps_.skip_edid ? "the display's EDID was not read (MIRADOR_DIRECT_MODE_TEST_NO_EDID skips every route)"
                             : "the display's EDID could not be read (NVAPI, then the registry)";
@@ -398,7 +398,7 @@ OpenResult DisplaySession::identify_product()
                                             "headset's");
         }
         if (!product->tested) {
-            // A headset Windows drives itself (its HMD route, WDDC) is left to it (Mirador.md section 4.11 item 52).
+            // A headset Windows drives itself (its HMD route, WDDC) is left to it.
             // Never the tested Dream Air: its own EDID has no such block, and an override that adds one doesn't hand
             // it to Windows.
             if (has_microsoft_hmd_block(edid)) {
@@ -505,7 +505,7 @@ SessionSettings parse_session_settings(const char* wait_ms, const char* ignore_h
 
 namespace {
 
-// Nothing here is destroyed at process exit (design 6.10: no destructors that could wait on a killed thread's lock).
+// Nothing here is destroyed at process exit.
 std::mutex& sink_mutex()
 {
     static std::mutex* const mutex = new std::mutex;

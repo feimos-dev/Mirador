@@ -9,12 +9,12 @@
 
 namespace dvl {
 
-// Process exit (design 6.10). Monado quits cleanly only on a key press in its console. Ctrl+C or closing the console
+// Process exit. Monado quits cleanly only on a key press in its console. Ctrl+C or closing the console
 // runs the default handler, which calls ExitProcess: no teardown, and every other thread is killed wherever it is,
 // maybe the display thread inside NVAPI. So the layer registers a console control handler that stops the display
 // thread first, waits a little, and lets the default exit go on.
 
-// How long the console handler waits for the stop hook (design 6.10).
+// How long the console handler waits for the stop hook.
 inline constexpr DWORD kConsoleHookWaitMs = 100;
 
 // The hook the console handler calls: "stop the display thread and wait for it to leave NVAPI" (set once

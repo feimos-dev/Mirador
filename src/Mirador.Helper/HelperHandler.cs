@@ -366,7 +366,7 @@ public sealed class HelperHandler
     }
 
     /// <summary>
-    /// The approved copy of a profile's build as the runtime (Mirador.md §4.11 item 51): only once every file matches its
+    /// The approved copy of a profile's build as the runtime: only once every file matches its
     /// recorded hash, so the machine's runtime never points at anything but what was approved.
     /// </summary>
     private HelperReply SetRuntimeApproved(string? profileId, CallerInfo? caller)

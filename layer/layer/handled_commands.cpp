@@ -3,7 +3,7 @@
 
 // What the layer does with each command of build/generated/handle_commands.inc (tools/gen_handle_commands.py): every
 // command in vk.xml, in all extensions, that can be handed one of the layer's own VkDisplayKHR, VkDisplayModeKHR,
-// VkSurfaceKHR or VkSwapchainKHR (design 6.3, last bullet). Each is one of
+// VkSurfaceKHR or VkSwapchainKHR. Each is one of
 //   - intercepted (kIntercepted), or
 //   - not applicable, with the reason (kNotApplicable).
 // The test every_handle_command_is_classified fails for a command that is neither, and the runtime guard
@@ -28,10 +28,10 @@ namespace {
 const std::initializer_list<std::string_view> kIntercepted = {
     "vkGetInstanceProcAddr", "vkGetDeviceProcAddr", "vkCreateInstance", "vkDestroyInstance", "vkCreateDevice",
     "vkDestroyDevice",
-    // The private queue's mutex (design 6.2).
+    // The private queue's mutex.
     "vkDeviceWaitIdle",
     // The display, plane and mode queries (display_intercepts.cpp). The layer lists its own display first and
-    // answers for it; a call on a display, mode or plane that is not its goes down (design 6.3).
+    // answers for it; a call on a display, mode or plane that is not its goes down.
     "vkGetPhysicalDeviceDisplayPropertiesKHR", "vkGetPhysicalDeviceDisplayProperties2KHR",
     "vkGetPhysicalDeviceDisplayPlanePropertiesKHR", "vkGetPhysicalDeviceDisplayPlaneProperties2KHR",
     "vkGetDisplayPlaneSupportedDisplaysKHR", "vkGetDisplayModePropertiesKHR", "vkGetDisplayModeProperties2KHR",
@@ -42,7 +42,7 @@ const std::initializer_list<std::string_view> kIntercepted = {
     // VK_NV_acquire_winrt_display, which NVIDIA's Windows driver offers: refused for the layer's display, any other
     // goes down. vkGetWinrtDisplayNV only ever returns the driver's display, so it always goes down.
     "vkAcquireWinrtDisplayNV", "vkGetWinrtDisplayNV",
-    // The surface (surface_intercepts.cpp), and every surface query (design 6.4). None fails on the layer's
+    // The surface (surface_intercepts.cpp), and every surface query. None fails on the layer's
     // surface; a surface that is not its goes down (vkGetPhysicalDeviceSurfaceCapabilities2EXT included: the loader
     // emulates it).
     "vkCreateDisplayPlaneSurfaceKHR", "vkDestroySurfaceKHR", "vkGetPhysicalDeviceSurfaceSupportKHR",
@@ -62,7 +62,7 @@ const std::initializer_list<std::string_view> kIntercepted = {
     // generated list).
     "vkRegisterDisplayEventEXT", "vkDisplayPowerControlEXT", "vkGetSwapchainCounterEXT", "vkRegisterDeviceEventEXT",
     "vkWaitForFences", "vkGetFenceStatus", "vkResetFences", "vkDestroyFence",
-    // The rest of design 6.3's list (misc_intercepts.cpp): accepted and answered, or refused with a log line
+    // The rest of the display commands (misc_intercepts.cpp): accepted and answered, or refused with a log line
     // (vkCreateSharedSwapchainsKHR), for the layer's own handles; anything else goes down.
     "vkSetHdrMetadataEXT", "vkCreateSharedSwapchainsKHR", "vkAcquireFullScreenExclusiveModeEXT",
     "vkReleaseFullScreenExclusiveModeEXT", "vkReleaseSwapchainImagesEXT", "vkGetRefreshCycleDurationGOOGLE",
@@ -85,7 +85,7 @@ const std::initializer_list<std::string_view> kIntercepted = {
     "vkGetDeviceImageMemoryRequirementsKHR", "vkGetDeviceImageSparseMemoryRequirements",
     "vkGetDeviceImageSparseMemoryRequirementsKHR", "vkGetDeviceImageSubresourceLayout",
     "vkGetDeviceImageSubresourceLayoutKHR",
-    // Present timing (design 6.11), from the 1.4.363 registry on; NVIDIA's driver offers all of these.
+    // Present timing, from the 1.4.363 registry on; NVIDIA's driver offers all of these.
     //  - VK_KHR_present_wait2 waits as vkWaitForPresentKHR does (present.cpp), and VK_KHR_swapchain_maintenance1's KHR
     //    name of vkReleaseSwapchainImagesEXT releases as it does (misc_intercepts.cpp).
     "vkWaitForPresent2KHR", "vkReleaseSwapchainImagesKHR",
@@ -170,7 +170,7 @@ bool classified_command(std::string_view name)
 
 const std::vector<HandleCommand>& handle_commands()
 {
-    // Made at first use and never destroyed, like the other process-wide state (design 6.10).
+    // Made at first use and never destroyed, like the other process-wide state.
     static const std::vector<HandleCommand>* const list =
         new std::vector<HandleCommand>(std::begin(kGenerated), std::end(kGenerated));
     return *list;

@@ -1,7 +1,7 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Command coverage (design 6.3, last bullet): every command in vk.xml that can be handed one of the layer's own objects
+// Command coverage: every command in vk.xml that can be handed one of the layer's own objects
 // (VkDisplayKHR, VkDisplayModeKHR, VkSurfaceKHR, VkSwapchainKHR) is either intercepted by the layer or listed as not
 // applicable, so none reaches the loader's terminators or the driver.
 

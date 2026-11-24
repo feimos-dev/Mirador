@@ -49,7 +49,7 @@ private:
 // printf-style line.
 void say(Output& out, _Printf_format_string_ const char* format, ...);
 
-// --- The holder checks (design 4, 7) ----------------------------------------------------------------------------
+// --- The holder checks ----------------------------------------------------------------------------
 
 struct HolderFindings {
     bool list_unreadable = false;      // The process list could not be read, so nothing can be ruled out.
@@ -63,10 +63,10 @@ struct HolderFindings {
 
 // The display (pi_server, vrcompositor), the board and eye tracker (Pimax's six) and Monado, from the running
 // programs' names. The Lighthouse receiver's holders are the start script's business, not this tool's. `warnings`
-// carries RTSS.exe, which can draw into the headset image (design 5).
+// carries RTSS.exe, which can draw into the headset image.
 HolderFindings holder_findings(const std::vector<std::string>& processes);
 
-// --- The verdict (design 7) -------------------------------------------------------------------------------------
+// --- The verdict -------------------------------------------------------------------------------------
 
 inline constexpr double kRefreshHz = 90.0; // The Dream Air's mode, 90.000 Hz: the rate when none is known.
 
