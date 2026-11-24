@@ -5,7 +5,8 @@ namespace Mirador.Xr;
 
 /// <summary>
 /// A monitor shown as a flat panel above the dashboard's bar. A laser on it is the mouse: the pointer follows where it
-/// meets the panel, the trigger is the left button, and the thumbstick scrolls.
+/// meets the panel (held still through a click, <see cref="LaserClick"/>), the trigger is the left button, and the
+/// thumbstick scrolls.
 /// </summary>
 internal sealed class DesktopPanel : IDisposable
 {
@@ -25,7 +26,16 @@ internal sealed class DesktopPanel : IDisposable
     private readonly Action<int>? scroll;
     private readonly Mesh quad = Mesh.GeneratePlane(Vec2.One, Vec3.Forward, Vec3.Up);
     private readonly Material material = Default.MaterialUnlit.Copy();
-    private readonly Tex picture = new(TexType.ImageNomips | TexType.Dynamic, TexFormat.Bgra32Srgb);
+    // Mipmapped and filtered: the panel shows far fewer pixels than the desktop has, and without a mip chain its edges
+    // and text shimmer and break up.
+    private readonly Tex picture = new(TexType.Image | TexType.Dynamic, TexFormat.Bgra32Srgb)
+    {
+        SampleMode = TexSample.Anisotropic,
+        Anisoptropy = 8,
+        AddressMode = TexAddress.Clamp,
+    };
+
+    private readonly LaserClick click = new();
     private byte[] pixels = [];
     private float aspect;
     private bool pressed;
@@ -82,13 +92,20 @@ internal sealed class DesktopPanel : IDisposable
         if (focus.IsActive() && interactor != Interactor.None
             && DesktopMaths.PanelPoint(interactor.Start, interactor.End, centre, right, up, size.x, size.y) is { } at)
         {
-            moveTo?.Invoke(at.U, at.V);
+            var hand = HandOf(interactor.Source);
+            var trigger = hand is { } h ? Input.Controller(h).trigger : 0;
+            var pointer = click.Pointer(at, trigger, pressed || button.IsActive(), size.x, size.y);
+            moveTo?.Invoke(pointer.U, pointer.V);
             if (button.IsJustActive())
             {
                 Press(true);
             }
 
-            Scroll(interactor.Source);
+            Scroll(hand);
+        }
+        else
+        {
+            click.Left();
         }
 
         // Let go wherever the laser is by then: a drag that leaves the panel must still end.
@@ -114,12 +131,14 @@ internal sealed class DesktopPanel : IDisposable
         left?.Invoke(down);
     }
 
+    private static Handed? HandOf(InteractorSource source) =>
+        (source & InteractorSource.ControllerLeft) != 0 ? Handed.Left
+        : (source & InteractorSource.ControllerRight) != 0 ? Handed.Right
+        : null;
+
     /// <summary>The thumbstick of the hand whose laser is on the panel turns the wheel, a notch at a time.</summary>
-    private void Scroll(InteractorSource source)
+    private void Scroll(Handed? hand)
     {
-        var hand = (source & InteractorSource.ControllerLeft) != 0 ? Handed.Left
-            : (source & InteractorSource.ControllerRight) != 0 ? Handed.Right
-            : (Handed?)null;
         if (hand is null)
         {
             return;
