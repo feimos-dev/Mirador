@@ -64,6 +64,11 @@ internal sealed class DashboardApp
         settings.overlayApp = true;
         settings.overlayPriority = uint.MaxValue; // above every other overlay
         settings.omitEmptyFrames = true; // closed, it submits no layer
+        if (OperatingSystem.IsWindows())
+        {
+            DesktopMouse.UseRealPixels();
+        }
+
         if (!SK.Initialize(settings))
         {
             return 1;
@@ -98,11 +103,6 @@ internal sealed class DashboardApp
         UI.Settings = ui;
         UI.ColorScheme = Color.HSV(0.6f, 0.3f, 0.45f);
         Renderer.SkyboxVisible = false;
-        if (OperatingSystem.IsWindows())
-        {
-            DesktopMouse.UseRealPixels();
-        }
-
         Show(false);
     }
 
@@ -263,13 +263,6 @@ internal sealed class DashboardApp
             desktopFailed = true;
             monitors = [];
         }
-    }
-
-    /// <summary>Shows <paramref name="other"/> above the bar in a monitor's place; for trying the panel without a desktop.</summary>
-    internal void ShowDesktop(DesktopPanel other)
-    {
-        panel?.Dispose();
-        panel = other;
     }
 
     /// <summary>The exit button: a cross that ends the game shown, or a power sign that stops Monado once its tick is pressed too.</summary>

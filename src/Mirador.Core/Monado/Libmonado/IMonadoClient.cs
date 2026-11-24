@@ -24,7 +24,7 @@ public readonly record struct MonadoPose(float Qx, float Qy, float Qz, float Qw,
 /// <summary>An app connected to Monado, as libmonado describes it.</summary>
 /// <param name="Id">Monado's id for the app, for <see cref="IMonadoClient.ShowApp"/> and <see cref="IMonadoClient.BlockInputs"/>.</param>
 /// <param name="Name">The application name the app gave OpenXR.</param>
-/// <param name="Shown">Whether it is the app Monado shows: the one primary session that is visible and focused.</param>
+/// <param name="Shown">Whether it is the app Monado shows, its primary app.</param>
 /// <param name="SessionRunning">Whether the app has begun its session.</param>
 /// <param name="Overlay">Whether its session is an overlay, drawn above the app shown.</param>
 /// <param name="InputsBlocked">Whether Monado keeps its inputs from it.</param>

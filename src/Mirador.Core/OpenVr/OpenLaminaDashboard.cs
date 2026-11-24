@@ -104,7 +104,7 @@ public sealed class OpenLaminaDashboard(OpenLaminaStore store, IProcessProbe pro
         }
     });
 
-    /// <summary>Completes once every change asked for so far has been written or given up; for tests and for quitting.</summary>
+    /// <summary>Completes once every change asked for so far has been written or given up; for tests.</summary>
     public Task Flushed()
     {
         lock (gate)

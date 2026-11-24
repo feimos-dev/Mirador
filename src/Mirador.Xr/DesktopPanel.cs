@@ -49,9 +49,6 @@ internal sealed class DesktopPanel : IDisposable
         material[MatParamName.DiffuseTex] = picture;
     }
 
-    /// <summary>Where a laser last met the panel, from its top left corner; null while none is on it. For tests.</summary>
-    internal (float U, float V)? Pointed { get; private set; }
-
     /// <summary>Draws the panel above a bar whose top middle is at <paramref name="bar"/>, and moves the mouse with the laser on it.</summary>
     public void Draw(Pose bar)
     {
@@ -82,11 +79,9 @@ internal sealed class DesktopPanel : IDisposable
         UI.ButtonBehavior(new Vec3(size.x / 2, size.y / 2, 0), size, "desktop", out _, out var button, out var focus, out var interactor);
         UI.PopSurface();
 
-        Pointed = null;
         if (focus.IsActive() && interactor != Interactor.None
             && DesktopMaths.PanelPoint(interactor.Start, interactor.End, centre, right, up, size.x, size.y) is { } at)
         {
-            Pointed = at;
             moveTo?.Invoke(at.U, at.V);
             if (button.IsJustActive())
             {

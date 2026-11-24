@@ -95,13 +95,8 @@ public sealed class XrHost(XrHostDeps deps)
     /// <summary>Why the home or the dashboard isn't running though it should be; null otherwise.</summary>
     public string? Problem
     {
-        get
-        {
-            lock (gate)
-            {
-                return home.Problem ?? dashboard.Problem;
-            }
-        }
+        // Read without the lock, which a stalled Monado can hold: the event follows every change.
+        get => home.Problem ?? dashboard.Problem;
     }
 
     /// <summary>Follows <paramref name="session"/>: the programs start once its libmonado connection is open and end as it stops.</summary>
