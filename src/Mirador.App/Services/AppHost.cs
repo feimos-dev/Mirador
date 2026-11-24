@@ -146,6 +146,8 @@ public sealed class AppHost : IAsyncDisposable
         RoomMeasuring = new RoomMeasuring(new CommandRunner(), Path.Combine(appDir, "tools", "xr-check.exe"));
         Session.MonadoConnected += client => _ = Task.Run(() => ApplyRoomSetup(client));
 
+        // OpenLamina's programs learn of the dashboard through their store, which also names the OpenVR game that runs.
+        var openLamina = new OpenLaminaDashboard(new OpenLaminaStore(OpenLaminaStore.DefaultDirectory), new ProcessProbe(), text => AppLog.Write(text));
         Xr = new XrHost(new XrHostDeps(
             launcher,
             Path.Combine(appDir, "Mirador.Xr.exe"),
@@ -153,7 +155,9 @@ public sealed class AppHost : IAsyncDisposable
             TimeProvider.System,
             () => StationSettings().HomeEnvironment,
             () => StationSettings().Dashboard,
-            text => AppLog.Write(text)));
+            text => AppLog.Write(text),
+            GameExit: openLamina,
+            Record: openLamina));
         Xr.Follow(Session);
         Xr.StopMonadoRequested += () => _ = Task.Run(() => Session.StopAsync(CancellationToken.None));
         xrPipe = new XrHostPipe(Xr, XrLink.CurrentName(), text => AppLog.Write(text));

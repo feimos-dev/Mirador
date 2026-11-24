@@ -22,6 +22,16 @@ public interface IGameExit
     bool Quit();
 }
 
+/// <summary>Told who runs the dashboard and whether it is open, for other programs that have a dashboard of their own to give way to it.</summary>
+public interface IDashboardRecord
+{
+    /// <summary>The dashboard's session began in process <paramref name="processId"/>, or (null) the dashboard has gone. Returns at once.</summary>
+    void Hosted(int? processId);
+
+    /// <summary>The dashboard opened or closed. Returns at once.</summary>
+    void Opened(bool open);
+}
+
 /// <summary>What an <see cref="XrHost"/> works with.</summary>
 /// <param name="Launcher">Starts the two programs. The app owns it; they end with it, and so with Mirador.</param>
 /// <param name="ProgramExe">The full path of <c>Mirador.Xr.exe</c>.</param>
@@ -31,6 +41,7 @@ public interface IGameExit
 /// <param name="DashboardEnabled">Whether the dashboard is switched on ("Dashboard").</param>
 /// <param name="Log">Takes a line for Mirador's log.</param>
 /// <param name="GameExit">Ends the game shown; null: the exit button only stops Monado.</param>
+/// <param name="Record">Told who runs the dashboard and whether it is open; null: nobody.</param>
 public sealed record XrHostDeps(
     IProcessLauncher Launcher,
     string ProgramExe,
@@ -39,7 +50,8 @@ public sealed record XrHostDeps(
     Func<bool> HomeEnabled,
     Func<bool> DashboardEnabled,
     Action<string> Log,
-    IGameExit? GameExit = null);
+    IGameExit? GameExit = null,
+    IDashboardRecord? Record = null);
 
 /// <summary>
 /// Runs the home and the dashboard beside Monado and decides what the dashboard does: started once libmonado is
@@ -174,6 +186,10 @@ public sealed class XrHost(XrHostDeps deps)
             state.DevicesTimer?.Dispose();
             state.OpenTimer?.Dispose();
             UnblockLocked(state);
+            if (dashboard.Process is not null)
+            {
+                deps.Record?.Hosted(null);
+            }
             foreach (var slot in new[] { home, dashboard })
             {
                 slot.RestartTimer?.Dispose();
@@ -471,7 +487,9 @@ public sealed class XrHost(XrHostDeps deps)
         else
         {
             state.Open = false;
+            state.Recorded = false;
             UnblockLocked(state);
+            deps.Record?.Hosted(null);
         }
     }
 
@@ -545,6 +563,8 @@ public sealed class XrHost(XrHostDeps deps)
         {
             case XrLink.Running:
                 dashboard.Running = true;
+                state.Recorded = false;
+                deps.Record?.Hosted(dashboard.Process?.Id);
                 // A dashboard that starts (again) while the home shows opens at once.
                 state.Open = false;
                 SetOpenLocked(state, state.HomeShown);
@@ -619,6 +639,11 @@ public sealed class XrHost(XrHostDeps deps)
         }
 
         link.Send(XrLink.Flag(XrLink.Open, state.Open));
+        if (state.Recorded != state.Open)
+        {
+            state.Recorded = state.Open;
+            deps.Record?.Opened(state.Open);
+        }
     }
 
     private void UnblockLocked(RunState state)
@@ -681,6 +706,9 @@ public sealed class XrHost(XrHostDeps deps)
 
         /// <summary>Whether the dashboard is open.</summary>
         public bool Open { get; set; }
+
+        /// <summary>Whether the record was last told the dashboard is open; a new host starts closed.</summary>
+        public bool Recorded { get; set; }
 
         /// <summary>The app whose inputs Mirador blocked, to give them back.</summary>
         public uint? Blocked { get; set; }

@@ -22,6 +22,7 @@ public sealed class XrHostTests : IDisposable
     private readonly Program home = new();
     private readonly Program bar = new();
     private readonly List<string> log = [];
+    private readonly Record record = new();
     private bool homeOn = true;
     private bool dashboardOn = true;
     private int stopsAsked;
@@ -33,7 +34,7 @@ public sealed class XrHostTests : IDisposable
         var exe = dir.File("Mirador.Xr.exe");
         File.WriteAllText(exe, "");
         var host = new XrHost(new XrHostDeps(
-            launcher, exe, new Dictionary<string, string> { ["PATH"] = "x" }, time, () => homeOn, () => dashboardOn, log.Add, gameExit));
+            launcher, exe, new Dictionary<string, string> { ["PATH"] = "x" }, time, () => homeOn, () => dashboardOn, log.Add, gameExit, record));
         host.StopMonadoRequested += () => stopsAsked++;
         return host;
     }
@@ -375,6 +376,19 @@ public sealed class XrHostTests : IDisposable
     }
 
     [Fact]
+    public void The_dashboards_process_and_each_opening_and_closing_are_recorded()
+    {
+        var host = InGame();
+        Assert.Equal(["host 102"], record.Events);
+
+        host.Line(XrLink.DashboardRole, XrLink.Toggle);
+        host.Line(XrLink.DashboardRole, XrLink.Toggle);
+        host.Disconnected(XrLink.DashboardRole, bar);
+
+        Assert.Equal(["host 102", "open", "closed", "host none"], record.Events);
+    }
+
+    [Fact]
     public void A_program_nobody_started_is_told_to_quit()
     {
         var host = Host();
@@ -418,6 +432,15 @@ public sealed class XrHostTests : IDisposable
                 OnQuit?.Invoke();
             }
         }
+    }
+
+    private sealed class Record : IDashboardRecord
+    {
+        public List<string> Events { get; } = [];
+
+        public void Hosted(int? processId) => Events.Add("host " + (processId?.ToString() ?? "none"));
+
+        public void Opened(bool open) => Events.Add(open ? "open" : "closed");
     }
 
     private sealed class Exit : IGameExit
