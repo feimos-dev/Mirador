@@ -920,6 +920,22 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task A_missing_dll_at_start_is_named_with_the_folder_monado_runs_from()
+    {
+        await using var h = new Harness();
+
+        var start = Start(h);
+        await h.Pipe.FirstPoll.Task.WaitAsync(Limit);
+        h.Launcher.Last!.Exit(unchecked((int)0xC0000135));
+        var outcome = await start.WaitAsync(Limit);
+
+        var folder = Path.GetDirectoryName(h.Launcher.Spec.FileName);
+        Assert.Equal(
+            new StartOutcome(false, $"Monado stopped while starting (exit code -1073741515): Windows couldn't find a DLL it needs. It runs from {folder}."),
+            outcome);
+    }
+
+    [Fact]
     public async Task Start_gives_up_after_45_seconds()
     {
         await using var h = new Harness();
