@@ -735,6 +735,12 @@ public sealed class AppHost : IAsyncDisposable
             var reason = ElevatedChoice.RunsAsYouReason(
                 profile, module, IsInstalledCopy(askHelper: false), ApprovedBuildCurrent(profile), VariablesApproved(profile));
 
+            // A build that differs from the approved copy: rebuilt, or a file added, removed or changed since.
+            if (reason == ElevatedChoice.NotApproved && Approval(profile) is not null)
+            {
+                reason = ElevatedChoice.BuildChanged;
+            }
+
             // Variables that differ from an approval of them: added, removed or changed since.
             if (reason == ElevatedChoice.ExtraVariables && Approval(profile) is { } record
                 && (record.Variables.Count > 0 || profile.Monado.Kind != SourceKind.Mirador))
@@ -926,7 +932,7 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>
     /// The approved copy of <paramref name="install"/>, <paramref name="profile"/>'s build as it is now, or null when it
-    /// isn't the approved one (the locator's lookup). The build's DLL, service and libmonado are hashed only when they changed.
+    /// isn't the approved one (the locator's lookup). Each file of the build is hashed again only when it changed.
     /// </summary>
     private ApprovedBuild? ApprovedCopyOf(Profile profile, MonadoInstall install)
     {

@@ -95,7 +95,9 @@
             <toolkit:SettingsCard Description="Boost Software License 1.0" Header="{x:Bind ViewModel.Version}">
                 <HyperlinkButton Content="github.com/feimos-dev/Mirador" NavigateUri="https://github.com/feimos-dev/Mirador" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="{x:Bind ViewModel.BundledMonadoVersion}" />
+            <toolkit:SettingsCard Header="{x:Bind ViewModel.BundledMonadoVersion}">
+                <HyperlinkButton Content="gitlab.freedesktop.org/monado/monado" NavigateUri="https://gitlab.freedesktop.org/monado/monado" />
+            </toolkit:SettingsCard>
             <toolkit:SettingsCard Description="{x:Bind ViewModel.OpenCompositeDescription, Mode=OneWay}" Header="OpenLamina">
                 <HyperlinkButton Content="github.com/feimos-dev/OpenLamina" NavigateUri="https://github.com/feimos-dev/OpenLamina" />
             </toolkit:SettingsCard>

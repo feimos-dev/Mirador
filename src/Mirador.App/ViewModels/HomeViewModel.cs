@@ -771,13 +771,16 @@ public sealed partial class HomeViewModel : ObservableObject
 
     private void RefreshRuntime()
     {
+        // The running profile's Monado while one runs, else the selected profile's.
         MonadoInstall? install = host.Session.CurrentInstall;
+        var profile = install is not null ? host.Session.CurrentProfile?.Profile : null;
         string? noMonado = null;
         if (install is null)
         {
             try
             {
-                install = host.Locator.Locate(SelectedSet().Selected);
+                profile = SelectedSet().Selected;
+                install = host.Locator.Locate(profile);
             }
             catch (Exception e) when (e is MiradorException or IOException or UnauthorizedAccessException)
             {
@@ -803,7 +806,7 @@ public sealed partial class HomeViewModel : ObservableObject
 
         var active = host.Runtime.Active();
         var isActive = install is not null && host.Runtime.IsActive(install);
-        OpenXrRow = new StatusItem("OpenXR runtime", RuntimeLine.Describe(active, install, isActive), isActive ? StatusLevel.Ok : StatusLevel.Info);
+        OpenXrRow = new StatusItem("OpenXR runtime", RuntimeLine.Describe(active, install, isActive, (profile ?? SelectedSet().Selected).Name), isActive ? StatusLevel.Ok : StatusLevel.Info);
         CanSetRuntime = install is not null && !isActive;
         if (isActive)
         {

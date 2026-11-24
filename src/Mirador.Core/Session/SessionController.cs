@@ -68,6 +68,9 @@ public sealed class SessionController(SessionDeps deps)
     private const int KeptLogs = 10;
     private const int LastLinesShown = 5;
 
+    /// <summary>The exit code of a program Windows couldn't find a DLL for (<c>STATUS_DLL_NOT_FOUND</c>).</summary>
+    private const int DllNotFound = unchecked((int)0xC0000135);
+
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>How long a module's <see cref="ModuleSession.EndAsync"/> may take before Mirador stops waiting for it.</summary>
@@ -865,7 +868,7 @@ public sealed class SessionController(SessionDeps deps)
         run.Process = process;
         Listen(run, process);
 
-        var outcome = await WaitForPipeAsync(run, process, deps.Pipe.NameFor(environment), logPath, ct).ConfigureAwait(false);
+        var outcome = await WaitForPipeAsync(run, process, deps.Pipe.NameFor(environment), logPath, Path.GetDirectoryName(serviceExe)!, ct).ConfigureAwait(false);
         if (outcome.Ok && !process.Exited.IsCompleted)
         {
             await OpenLibmonadoAsync(run, install).ConfigureAwait(false);
@@ -1002,7 +1005,8 @@ public sealed class SessionController(SessionDeps deps)
     }
 
     /// <summary>Looks for Monado's pipe every 100 ms until it is there, the service ends, or <see cref="StartTimeout"/> has passed.</summary>
-    private async Task<StartOutcome> WaitForPipeAsync(Run run, IRunningProcess process, string pipeName, string logPath, CancellationToken ct)
+    /// <param name="serviceDir">The folder Monado's service runs from, named when it misses a DLL.</param>
+    private async Task<StartOutcome> WaitForPipeAsync(Run run, IRunningProcess process, string pipeName, string logPath, string serviceDir, CancellationToken ct)
     {
         var time = deps.Context.Time;
         using var timeout = new CancellationTokenSource(StartTimeout, time);
@@ -1014,7 +1018,7 @@ public sealed class SessionController(SessionDeps deps)
                 if (process.Exited.IsCompleted)
                 {
                     var code = await process.Exited.ConfigureAwait(false);
-                    return Fail(StoppedWhileStarting(code, run.Log!.Tail));
+                    return Fail(StoppedWhileStarting(code, run.Log!.Tail, serviceDir));
                 }
 
                 if (deps.Pipe.Exists(pipeName))
@@ -1039,9 +1043,11 @@ public sealed class SessionController(SessionDeps deps)
         }
     }
 
-    private static string StoppedWhileStarting(int exitCode, IReadOnlyList<string> tail)
+    private static string StoppedWhileStarting(int exitCode, IReadOnlyList<string> tail, string serviceDir)
     {
-        var text = $"Monado stopped while starting (exit code {Number(exitCode)}).";
+        var text = exitCode == DllNotFound
+            ? $"Monado stopped while starting (exit code {Number(exitCode)}): Windows couldn't find a DLL it needs. It runs from {serviceDir}."
+            : $"Monado stopped while starting (exit code {Number(exitCode)}).";
         var last = tail.TakeLast(LastLinesShown).ToArray();
         return last.Length == 0
             ? text

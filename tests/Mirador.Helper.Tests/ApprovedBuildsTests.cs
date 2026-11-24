@@ -611,6 +611,80 @@ public sealed class ApprovedBuildsTests : IDisposable
         Assert.NotNull(ApprovedBuilds.Verify(build, App));
     }
 
+    [Theory]
+    [InlineData(@"bin\vulkan-1.dll")]
+    [InlineData(@"bin\msvcp140.dll")]
+    [InlineData(@"share\monado\data.json")]
+    [InlineData("notes.txt")]
+    public void A_file_added_to_the_build_after_the_approval_is_not_the_approved_build(string added)
+    {
+        var source = MakeInstall();
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        var path = Path.Combine(source, added);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "added");
+
+        Assert.False(ApprovedBuilds.Matches(build, source));
+    }
+
+    [Fact]
+    public void A_file_removed_from_the_build_or_changed_in_a_subfolder_is_not_the_approved_build()
+    {
+        var source = MakeInstall();
+        Directory.CreateDirectory(Path.Combine(source, "share", "monado"));
+        File.WriteAllText(Path.Combine(source, "share", "monado", "data.json"), "v1");
+        File.WriteAllText(Path.Combine(source, "bin", "extra.dll"), "v1");
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+        Assert.True(ApprovedBuilds.Matches(build, source));
+
+        File.WriteAllText(Path.Combine(source, "share", "monado", "data.json"), "v2");
+        Assert.False(ApprovedBuilds.Matches(build, source));
+
+        File.WriteAllText(Path.Combine(source, "share", "monado", "data.json"), "v1");
+        Assert.True(ApprovedBuilds.Matches(build, source));
+
+        File.Delete(Path.Combine(source, "bin", "extra.dll"));
+        Assert.False(ApprovedBuilds.Matches(build, source));
+    }
+
+    [Fact]
+    public void The_files_the_approval_writes_itself_are_not_compared()
+    {
+        var source = MakeInstallWithManifest(Runtime(", \"MND_libmonado_path\": \"bin\\\\monado.dll\""));
+        Directory.CreateDirectory(Path.Combine(source, "bin", "service"));
+        File.WriteAllText(Path.Combine(source, "bin", "service", "monado-service.exe"), "the build's own");
+        Directory.CreateDirectory(Path.Combine(App, "standin"));
+        File.WriteAllText(Path.Combine(App, "standin", "mirador-standin.exe"), "mirador's stand-in");
+
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+
+        Assert.NotEqual(File.ReadAllText(Path.Combine(source, "openxr_monado.json")), File.ReadAllText(build.Manifest));
+        Assert.True(ApprovedBuilds.Matches(build, source));
+    }
+
+    [Fact]
+    public void A_link_added_to_the_build_after_the_approval_is_not_the_approved_build()
+    {
+        var source = MakeInstall();
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+        Directory.CreateDirectory(temp.File("elsewhere"));
+        Directory.CreateSymbolicLink(Path.Combine(source, "bin", "plugins"), temp.File("elsewhere"));
+
+        Assert.False(ApprovedBuilds.Matches(build, source));
+    }
+
+    [Fact]
+    public void A_build_folder_that_is_gone_or_a_bundled_approval_is_never_matched()
+    {
+        var source = MakeInstall();
+        var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
+        var bundled = ApprovedBuilds.Approve(Finn, "p2", ApprovedBuilds.BundledCommit, "", App, store);
+
+        Assert.False(ApprovedBuilds.Matches(bundled, source));
+        Assert.False(ApprovedBuilds.Matches(build, temp.File("user", "missing")));
+    }
+
     [Fact]
     public void A_libmonado_added_to_the_build_after_the_approval_is_not_the_approved_build()
     {

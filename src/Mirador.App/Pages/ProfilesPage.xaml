@@ -103,7 +103,7 @@
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard
                     Header="Branch"
-                    Visibility="{x:Bind ViewModel.ShowBranches, Mode=OneWay}">
+                    Visibility="{x:Bind ViewModel.ShowBranchCard, Mode=OneWay}">
                     <ComboBox
                         MinWidth="200"
                         ItemsSource="{x:Bind ViewModel.Branches}"

@@ -25,6 +25,9 @@ public static class ElevatedChoice
     public const string NoElevatedTable = "Runs as you: Mirador has no administrator settings for this headset yet.";
     public const string NotApproved = "Runs as you: this build isn't approved. Press Start to approve it.";
 
+    /// <summary>Home's line when the profile has an approval of its build, but the build differs from it now.</summary>
+    public const string BuildChanged = "Runs as you: this build changed since it was approved. Press Start to approve it.";
+
     /// <summary>
     /// Whether the user's consent for Monado as administrator is still needed: while a profile has "Run as administrator"
     /// on. Without one it is taken back, so it never outlives the profiles that asked for it.

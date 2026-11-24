@@ -6,17 +6,18 @@ namespace Mirador.Core.Runtime;
 public static class RuntimeLine
 {
     /// <summary>
-    /// "Monado, this profile" when <paramref name="isActive"/>; otherwise the active manifest's file name, or
+    /// "Monado: &lt;profile name&gt;" when <paramref name="isActive"/>; otherwise the active manifest's file name, or
     /// "None set".
     /// </summary>
     /// <param name="activeManifest">The active runtime's manifest path, as the registry holds it; null when none is set.</param>
-    /// <param name="install">The selected profile's Monado, when it could be found.</param>
+    /// <param name="install">The profile's Monado, when it could be found.</param>
     /// <param name="isActive">Whether <paramref name="install"/>'s manifest is the active runtime.</param>
-    public static string Describe(string? activeManifest, MonadoInstall? install, bool isActive)
+    /// <param name="profileName">The name of the profile <paramref name="install"/> is the Monado of.</param>
+    public static string Describe(string? activeManifest, MonadoInstall? install, bool isActive, string profileName)
     {
         if (isActive && install is not null)
         {
-            return "Monado, this profile";
+            return $"Monado: {profileName}";
         }
 
         if (string.IsNullOrWhiteSpace(activeManifest))

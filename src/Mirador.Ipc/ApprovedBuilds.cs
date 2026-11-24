@@ -271,32 +271,63 @@ public static partial class ApprovedBuilds
     }
 
     /// <summary>
-    /// Whether the build in <paramref name="sourceInstall"/> (the profile's build as it is now) is the one approved: its
-    /// runtime DLL and service have the approved copy's hashes, and so has its libmonado when either has one (games load
-    /// it through the copy's manifest). A rebuild is new code and runs as the user until approved.
+    /// Whether the build in <paramref name="sourceInstall"/> (the profile's build as it is now) is the one approved: the
+    /// same files as the approved copy, none added or removed, each with the copy's hash. The two files the approval
+    /// writes itself aren't compared: the copy's runtime manifest and Mirador's stand-in (<see cref="WrittenByApproval"/>).
+    /// A link or junction anywhere in the build counts as a change, as the approval refuses one. A rebuild is new code and
+    /// runs as the user until approved.
     /// </summary>
     /// <param name="hashOf">The SHA-256 of a file, lower case: <see cref="HashOf"/>, or a cache in front of it.</param>
+    /// <exception cref="IOException">The build's folder can't be read.</exception>
+    /// <exception cref="UnauthorizedAccessException">A folder of the build can't be listed.</exception>
     public static bool Matches(ApprovedBuild build, string sourceInstall, Func<string, string>? hashOf = null)
     {
         hashOf ??= HashOf;
-        var required = new List<string> { RuntimeDll, Path.Combine("bin", "monado-service.exe") };
-        if (build.Files.ContainsKey(LibmonadoDll) || File.Exists(Path.Combine(sourceInstall, LibmonadoDll)))
+        if (build.Commit == BundledCommit || !Directory.Exists(sourceInstall) || new DirectoryInfo(sourceInstall).LinkTarget is not null)
         {
-            required.Add(LibmonadoDll);
+            return false;
         }
 
-        foreach (var relative in required)
+        var compared = 0;
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 };
+        foreach (var entry in new DirectoryInfo(sourceInstall).EnumerateFileSystemInfos("*", options))
         {
-            var file = Path.Combine(sourceInstall, relative);
-            if (!build.Files.TryGetValue(relative, out var hash) || !File.Exists(file)
-                || !string.Equals(hashOf(file), hash, StringComparison.OrdinalIgnoreCase))
+            if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint) && entry.LinkTarget is not null)
             {
                 return false;
             }
+
+            if (entry is not FileInfo file)
+            {
+                continue;
+            }
+
+            var relative = Path.GetRelativePath(sourceInstall, file.FullName);
+            if (WrittenByApproval(relative))
+            {
+                continue;
+            }
+
+            if (!build.Files.TryGetValue(relative, out var hash) || !string.Equals(hashOf(file.FullName), hash, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            compared++;
         }
 
-        return true;
+        // Every file of the copy was found in the build: none was removed since.
+        return compared == build.Files.Keys.Count(k => !WrittenByApproval(k));
     }
+
+    /// <summary>
+    /// Whether <paramref name="relative"/>, a path in an approved copy, is one the approval writes itself rather than
+    /// copies as it is: the runtime manifest (<see cref="WriteManifest"/>) and the stand-in's names in the service folder
+    /// (<see cref="PlaceStandIn"/>).
+    /// </summary>
+    private static bool WrittenByApproval(string relative) =>
+        string.Equals(relative, "openxr_monado.json", StringComparison.OrdinalIgnoreCase)
+        || StandInNames.FileNames.Any(name => string.Equals(relative, Path.Combine("bin", "service", name), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Whether the copy's manifest names the copy's own DLL in a way OpenXR programs can load (a quick look, for the app;
