@@ -15,7 +15,7 @@ public class RuntimeLineTests
     [Fact]
     public void This_profiles_monado()
     {
-        Assert.Equal("Monado, this profile", RuntimeLine.Describe(Bundled.Manifest, Bundled, isActive: true));
+        Assert.Equal("Monado: Pimax p3c", RuntimeLine.Describe(Bundled.Manifest, Bundled, isActive: true, "Pimax p3c"));
     }
 
     [Fact]
@@ -23,10 +23,10 @@ public class RuntimeLineTests
     {
         Assert.Equal(
             "PiOpenXR_64.json",
-            RuntimeLine.Describe(@"C:\Program Files\Pimax\Runtime\PiOpenXR_64.json", Bundled, isActive: false));
+            RuntimeLine.Describe(@"C:\Program Files\Pimax\Runtime\PiOpenXR_64.json", Bundled, isActive: false, "Default"));
         Assert.Equal(
             "steamxr_win64.json",
-            RuntimeLine.Describe("\"C:/Program Files (x86)/Steam/steamapps/common/SteamVR/steamxr_win64.json\"", null, isActive: false));
+            RuntimeLine.Describe("\"C:/Program Files (x86)/Steam/steamapps/common/SteamVR/steamxr_win64.json\"", null, isActive: false, "Default"));
     }
 
     [Theory]
@@ -35,6 +35,6 @@ public class RuntimeLineTests
     [InlineData("  ")]
     public void None_set(string? active)
     {
-        Assert.Equal("None set", RuntimeLine.Describe(active, Bundled, isActive: false));
+        Assert.Equal("None set", RuntimeLine.Describe(active, Bundled, isActive: false, "Default"));
     }
 }
