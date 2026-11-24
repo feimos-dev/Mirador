@@ -93,16 +93,22 @@ public sealed class OpenLaminaDashboardTests : IDisposable
     }
 
     [Fact]
-    public void The_game_in_the_scene_document_can_be_ended_while_that_very_process_runs()
+    public async Task The_game_in_the_scene_document_is_asked_to_quit_and_then_ended_while_that_very_process_runs()
     {
         File.WriteAllText(dir.File("scene.json"), """{"format":1,"data":{"pid":500,"start":133769000000000000,"app_key":"steam.app.1"}}""");
         probe.Starts[500] = 133769000000000000;
+        probe.Starts[40] = 1337;
         var dashboard = Dashboard();
+        dashboard.Hosted(40);
+        var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
 
         Assert.True(dashboard.CanQuit());
         Assert.True(dashboard.Quit());
+        await dashboard.Flushed().WaitAsync(Limit);
 
         Assert.Equal([(500, 133769000000000000ul, OpenLaminaDashboard.QuitGrace)], probe.Ended);
+        var asked = (double)Store().Read(OpenLaminaStore.Dashboard)!["quit_at"]!;
+        Assert.InRange(asked, before, before + 10);
     }
 
     [Fact]
