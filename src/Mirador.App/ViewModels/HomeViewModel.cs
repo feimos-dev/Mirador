@@ -73,6 +73,7 @@ public sealed partial class HomeViewModel : ObservableObject
         host.Session.Warning += w => ui.TryEnqueue(() => AddWarning(w));
         host.Session.Ended += end => ui.TryEnqueue(() => OnEnded(end));
         host.RoomSetupApplied += problem => ui.TryEnqueue(() => ShowRoomSetupProblem(problem));
+        host.Xr.ProblemChanged += () => ui.TryEnqueue(ShowHeadsetProblem);
         App.Current.StartFailed += message =>
         {
             // Through null, so that the same message again opens the bar again after it was closed.
@@ -1054,6 +1055,19 @@ public sealed partial class HomeViewModel : ObservableObject
     {
         ShowNotice("miradors-monado", "Bundled Monado", message, ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         RefreshRuntime();
+    }
+
+    /// <summary>The home or the dashboard isn't running though it should be, or (no problem) it is again.</summary>
+    private void ShowHeadsetProblem()
+    {
+        if (host.Xr.Problem is { } problem)
+        {
+            ShowNotice("headset", "In the headset", problem, InfoBarSeverity.Warning);
+        }
+        else
+        {
+            RemoveNotice("headset");
+        }
     }
 
     /// <summary>After a Monado start: the room setup couldn't be put into Monado, or (null) it could.</summary>

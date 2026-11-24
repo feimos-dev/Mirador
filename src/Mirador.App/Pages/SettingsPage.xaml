@@ -52,6 +52,14 @@
                 </StackPanel>
             </toolkit:SettingsCard>
 
+            <TextBlock Style="{StaticResource SectionHeader}" Text="In the headset" />
+            <toolkit:SettingsCard Header="Home environment">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.HomeEnvironment, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Dashboard">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.Dashboard, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+
             <TextBlock Style="{StaticResource SectionHeader}" Text="Monado folder" />
             <toolkit:SettingsExpander
                 Description="{x:Bind Folder.Description}"

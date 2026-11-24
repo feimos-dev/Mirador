@@ -14,6 +14,8 @@
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageVersion Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+    <!-- The home and the dashboard. A preview: StereoKit's stable 0.3 line has no laser pointing and no haptics. -->
+    <PackageVersion Include="StereoKit" Version="0.4.0-preview.3902" />
     <!-- Helper -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />

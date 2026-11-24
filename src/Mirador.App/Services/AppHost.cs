@@ -14,6 +14,7 @@ using Mirador.Core.Playspace;
 using Mirador.Core.Profiles;
 using Mirador.Core.Runtime;
 using Mirador.Core.Session;
+using Mirador.Core.Xr;
 using Mirador.DirectMode;
 using Mirador.Pimax;
 using Mirador.Ipc;
@@ -37,6 +38,7 @@ public sealed class AppHost : IAsyncDisposable
     private readonly List<string> notices = [];
     private readonly WinRtStationRadio radio;
     private readonly StationStore stationStore;
+    private readonly XrHostPipe xrPipe;
     private AppPipeServer? pipe;
 
     // Set when the helper refused the last elevated Start because SteamVR's unsigned Lighthouse DLLs aren't the copies
@@ -143,7 +145,23 @@ public sealed class AppHost : IAsyncDisposable
         RoomSetups = new RoomSetupStore(paths.RoomSetupFile);
         RoomMeasuring = new RoomMeasuring(new CommandRunner(), Path.Combine(appDir, "tools", "xr-check.exe"));
         Session.MonadoConnected += client => _ = Task.Run(() => ApplyRoomSetup(client));
+
+        Xr = new XrHost(new XrHostDeps(
+            launcher,
+            Path.Combine(appDir, "Mirador.Xr.exe"),
+            InheritedEnvironment,
+            TimeProvider.System,
+            () => StationSettings().HomeEnvironment,
+            () => StationSettings().Dashboard,
+            text => AppLog.Write(text)));
+        Xr.Follow(Session);
+        Xr.StopMonadoRequested += () => _ = Task.Run(() => Session.StopAsync(CancellationToken.None));
+        xrPipe = new XrHostPipe(Xr, XrLink.CurrentName(), text => AppLog.Write(text));
+        xrPipe.Start();
     }
+
+    /// <summary>Runs the home and the dashboard in the headset beside Monado.</summary>
+    public XrHost Xr { get; }
 
     /// <summary>Mirador's room setups, one per tracking origin and Lighthouse universe.</summary>
     public RoomSetupStore RoomSetups { get; }
@@ -1209,6 +1227,8 @@ public sealed class AppHost : IAsyncDisposable
         }
         finally
         {
+            await Xr.MonadoStoppedAsync().ConfigureAwait(false);
+            await xrPipe.DisposeAsync().ConfigureAwait(false);
             OpenVrWatch.Dispose();
             launcher.Dispose();
         }

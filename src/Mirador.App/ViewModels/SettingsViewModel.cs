@@ -29,6 +29,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         CheckForUpdates = settings.CheckForUpdates;
         StartMiradorForGames = settings.StartMiradorForGames;
         StartMinimized = settings.StartMinimized;
+        HomeEnvironment = settings.HomeEnvironment;
+        Dashboard = settings.Dashboard;
         try
         {
             StartAtSignIn = signIn.IsOn;
@@ -61,6 +63,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>"Start Mirador when a game needs Monado": the stand-in starts Mirador for a game; off, games find Monado only while Mirador is open.</summary>
     [ObservableProperty]
     public partial bool StartMiradorForGames { get; set; }
+
+    /// <summary>"Home environment": the floor grid in the headset while no game runs.</summary>
+    [ObservableProperty]
+    public partial bool HomeEnvironment { get; set; }
+
+    /// <summary>"Dashboard": the bar the system button opens in the headset.</summary>
+    [ObservableProperty]
+    public partial bool Dashboard { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProblem))]
@@ -233,6 +243,28 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     partial void OnCloseToTrayChanged(bool value) => Save(s => s with { CloseToTray = value });
+
+    partial void OnHomeEnvironmentChanged(bool value)
+    {
+        Save(s => s with { HomeEnvironment = value });
+        SwitchesChanged();
+    }
+
+    partial void OnDashboardChanged(bool value)
+    {
+        Save(s => s with { Dashboard = value });
+        SwitchesChanged();
+    }
+
+    /// <summary>A running Monado gets the home or the dashboard now, or loses it; off the UI thread, since it reads the settings file.</summary>
+    private void SwitchesChanged()
+    {
+        if (!loading)
+        {
+            var xr = host.Xr;
+            _ = Task.Run(xr.SwitchesChanged);
+        }
+    }
 
     partial void OnMinimizeToTrayChanged(bool value) => Save(s => s with { MinimizeToTray = value });
 

@@ -343,6 +343,38 @@ public sealed class XrHostTests : IDisposable
     }
 
     [Fact]
+    public void A_program_switched_off_while_monado_runs_is_ended_and_not_started_again()
+    {
+        var host = InGame();
+        host.Line(XrLink.DashboardRole, XrLink.Toggle);
+
+        dashboardOn = false;
+        host.SwitchesChanged();
+        time.Advance(XrHost.QuitLimit);
+        WaitFor(() => launcher.Processes[1].Killed);
+        time.Advance(XrHost.RestartDelay + XrHost.RestartDelay);
+
+        Assert.Equal(XrLink.Quit, bar.Lines[^1]);
+        Assert.Equal((Game.Id, false), client.Blocks[^1]);
+        Assert.Equal(2, launcher.Specs.Count);
+        Assert.False(launcher.Processes[0].Killed);
+    }
+
+    [Fact]
+    public void A_program_switched_on_while_monado_runs_starts()
+    {
+        dashboardOn = false;
+        var host = Host();
+        host.MonadoStarted(client, Manifest);
+
+        dashboardOn = true;
+        host.SwitchesChanged();
+        host.SwitchesChanged();
+
+        Assert.Equal(["--home", "--dashboard"], launcher.Specs.Select(s => s.Arguments));
+    }
+
+    [Fact]
     public void A_program_nobody_started_is_told_to_quit()
     {
         var host = Host();

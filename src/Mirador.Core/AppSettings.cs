@@ -25,6 +25,8 @@ namespace Mirador.Core;
 /// "Stop SteamVR starting when a controller turns on" was turned on here: Mirador wrote <c>false</c> into SteamVR's
 /// own setting, and checks at launch and at Start that SteamVR didn't change it back.
 /// </param>
+/// <param name="HomeEnvironment">"Home environment": while Monado runs and no game does, the headset shows Mirador's floor grid.</param>
+/// <param name="Dashboard">"Dashboard": the system button opens Mirador's bar in the headset, over the home and over games.</param>
 /// <param name="SteamVrButtonStartBefore">SteamVR's setting before Mirador's first write, put back when the switch is turned off; null: it wasn't there.</param>
 /// <remarks>
 /// A file from before 2026-11-07 may still have <c>baseStationsOff</c> ("Off means: Sleep / Standby"); it is ignored,
@@ -44,7 +46,9 @@ public sealed record AppSettings(
     bool StartMiradorForGames = true,
     bool KeepSteamVrFromButtonStart = false,
     bool? SteamVrButtonStartBefore = null,
-    bool MinimizeToTray = false);
+    bool MinimizeToTray = false,
+    bool HomeEnvironment = true,
+    bool Dashboard = true);
 
 /// <summary>How often Mirador follows the base stations' states ("Station state tracking rate" on the Lighthouse page).</summary>
 public enum StationStateMode

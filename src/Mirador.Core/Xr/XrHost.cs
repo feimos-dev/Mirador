@@ -1,5 +1,6 @@
 using Mirador.Core.Monado;
 using Mirador.Core.Monado.Libmonado;
+using Mirador.Core.Session;
 using Mirador.Ipc;
 
 namespace Mirador.Core.Xr;
@@ -91,6 +92,26 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
+    /// <summary>Follows <paramref name="session"/>: the programs start once its libmonado connection is open and end as it stops.</summary>
+    public void Follow(SessionController session)
+    {
+        session.MonadoConnected += client =>
+        {
+            if (session.CurrentInstall is { } install)
+            {
+                // The copy that runs: the approved one when there is one.
+                MonadoStarted(client, install.Approved?.Manifest ?? install.Manifest);
+            }
+        };
+        session.Changed += () =>
+        {
+            if (session.State is SessionState.Stopping or SessionState.Stopped)
+            {
+                _ = MonadoStoppedAsync();
+            }
+        };
+    }
+
     /// <summary>
     /// Monado is up and libmonado connected: starts the programs that are switched on. Without the app list in this
     /// Monado's libmonado, neither starts: a home couldn't hand the view back to a game that began before it.
@@ -170,28 +191,78 @@ public sealed class XrHost(XrHostDeps deps)
         }
 
         RaiseProblemChanged();
-        foreach (var process in ending)
+        await Task.WhenAll(ending.Select(EndAsync)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// "Home environment" or "Dashboard" was switched while Monado may be running: a program switched on starts now, one
+    /// switched off is ended. Never throws.
+    /// </summary>
+    public void SwitchesChanged()
+    {
+        List<IRunningProcess> ending = [];
+        lock (gate)
         {
-            try
+            if (run is not { } state || !File.Exists(deps.ProgramExe))
             {
-                await process.Exited.WaitAsync(QuitLimit, deps.Time).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                process.Kill();
-            }
-            catch (Exception)
-            {
-                // Its exit can't be read: it is ended below with the others, and with Mirador at the latest.
+                return;
             }
 
-            try
+            foreach (var (slot, enabled) in new[] { (home, deps.HomeEnabled()), (dashboard, deps.DashboardEnabled()) })
             {
-                await process.DisposeAsync().ConfigureAwait(false);
+                var runs = slot.Process is not null || slot.RestartTimer is not null || slot.Problem is not null;
+                if (enabled && !runs)
+                {
+                    StartLocked(state, slot);
+                }
+                else if (!enabled && runs)
+                {
+                    slot.RestartTimer?.Dispose();
+                    slot.RestartTimer = null;
+                    slot.Link?.Send(XrLink.Quit);
+                    slot.Link = null;
+                    slot.Running = false;
+                    if (slot.Process is { } process)
+                    {
+                        ending.Add(process);
+                        slot.Process = null;
+                    }
+
+                    slot.Reset();
+                    GoneLocked(state, slot);
+                }
             }
-            catch (Exception)
-            {
-            }
+        }
+
+        RaiseProblemChanged();
+        foreach (var process in ending)
+        {
+            _ = EndAsync(process);
+        }
+    }
+
+    /// <summary>Waits <see cref="QuitLimit"/> for a program told to quit, then ends it. Never throws.</summary>
+    private async Task EndAsync(IRunningProcess process)
+    {
+        try
+        {
+            await process.Exited.WaitAsync(QuitLimit, deps.Time).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            process.Kill();
+        }
+        catch (Exception)
+        {
+            // Its exit can't be read: it ends with Mirador at the latest.
+        }
+
+        try
+        {
+            await process.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
         }
     }
 
