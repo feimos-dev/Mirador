@@ -76,6 +76,9 @@ internal sealed unsafe class LibmonadoExports
     public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> GetReferenceSpaceOffset;
     public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> SetReferenceSpaceOffset;
 
+    /// <summary><c>mnd_root_recenter_local_spaces</c>; null when the library lacks it.</summary>
+    public delegate* unmanaged[Cdecl]<IntPtr, int> RecenterLocalSpaces;
+
     /// <summary><c>mnd_client_flags_t</c>.</summary>
     public const uint ClientPrimaryApp = 1u << 0;
     public const uint ClientSessionActive = 1u << 1;
@@ -103,6 +106,8 @@ internal sealed unsafe class LibmonadoExports
 
     /// <summary>Whether the reference-space offset functions were both found.</summary>
     public bool OffersReferenceSpaceOffsets => GetReferenceSpaceOffset != null;
+
+    public bool OffersLocalRecentre => RecenterLocalSpaces != null;
 
     /// <summary>The functions of <paramref name="module"/>; null when it lacks one every client needs.</summary>
     public static LibmonadoExports? Resolve(IntPtr module)
@@ -171,6 +176,9 @@ internal sealed unsafe class LibmonadoExports
             exports.GetReferenceSpaceOffset = (delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int>)getSpaceOffset;
             exports.SetReferenceSpaceOffset = (delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int>)setSpaceOffset;
         }
+
+        exports.RecenterLocalSpaces =
+            (delegate* unmanaged[Cdecl]<IntPtr, int>)LibmonadoNative.GetProcAddress(module, "mnd_root_recenter_local_spaces");
 
         return exports;
     }

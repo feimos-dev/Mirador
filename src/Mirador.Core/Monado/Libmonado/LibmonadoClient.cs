@@ -207,6 +207,8 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
     public bool OffersStageOffset => exports.OffersReferenceSpaceOffsets;
 
+    public bool OffersLocalRecentre => exports.OffersLocalRecentre;
+
     /// <summary>More apps than Monado serves at once (its client table has 8 places): a count over this is a broken answer.</summary>
     private const uint MaxApps = 64;
 
@@ -306,6 +308,20 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
             var pose = new MndPose(offset);
             Check(exports.SetReferenceSpaceOffset(root, LibmonadoExports.ReferenceSpaceStage, &pose));
+        }
+    }
+
+    public void RecentreLocalSpaces()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!exports.OffersLocalRecentre)
+            {
+                throw new NotSupportedException("This libmonado doesn't recentre the local spaces.");
+            }
+
+            Check(exports.RecenterLocalSpaces(root));
         }
     }
 

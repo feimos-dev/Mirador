@@ -577,6 +577,12 @@ public sealed class XrHost(XrHostDeps deps)
                         state.Client.SetStageOffset(DashboardMaths.Compose(state.Client.GetStageOffset(), origin));
                         moved = true;
                     }
+
+                    if (state.Client.OffersLocalRecentre)
+                    {
+                        state.Client.RecentreLocalSpaces();
+                        moved = true;
+                    }
                 }
                 finally
                 {

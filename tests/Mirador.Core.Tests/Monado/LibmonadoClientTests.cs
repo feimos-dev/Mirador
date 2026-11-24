@@ -213,6 +213,25 @@ public unsafe class LibmonadoClientTests
         Assert.Equal(new MonadoPose(0, 0, 0, 1, 1, 2, 3), offset);
     }
 
+    // MND_ERROR_RECENTERING_NOT_SUPPORTED
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int CannotRecentre(IntPtr root) => -5;
+
+    [Fact]
+    public void Recentring_the_local_spaces_calls_libmonado_and_its_refusal_is_a_failed_call()
+    {
+        var exports = LibmonadoExports.ForTests();
+        exports.RootDestroy = &Destroy;
+        exports.RecenterLocalSpaces = &Ok;
+        using var client = new LibmonadoClient(IntPtr.Zero, exports, new IntPtr(1));
+
+        Assert.True(client.OffersLocalRecentre);
+        client.RecentreLocalSpaces();
+
+        exports.RecenterLocalSpaces = &CannotRecentre;
+        Assert.Throws<MiradorException>(() => client.RecentreLocalSpaces());
+    }
+
     [Fact]
     public void A_libmonado_without_the_newer_functions_offers_none_of_them()
     {
@@ -223,9 +242,11 @@ public unsafe class LibmonadoClientTests
         Assert.False(client.OffersApps);
         Assert.False(client.OffersInputBlocks);
         Assert.False(client.OffersStageOffset);
+        Assert.False(client.OffersLocalRecentre);
         Assert.Empty(client.Apps());
         Assert.Throws<NotSupportedException>(() => client.ShowApp(1));
         Assert.Throws<NotSupportedException>(() => client.BlockInputs(1, true));
         Assert.Throws<NotSupportedException>(() => client.GetStageOffset());
+        Assert.Throws<NotSupportedException>(() => client.RecentreLocalSpaces());
     }
 }

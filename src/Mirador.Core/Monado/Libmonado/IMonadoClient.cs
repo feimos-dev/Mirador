@@ -89,4 +89,13 @@ public interface IMonadoClient : IDisposable
 
     /// <summary>Moves the stage to <paramref name="offset"/>.</summary>
     void SetStageOffset(MonadoPose offset) => throw new NotSupportedException("This libmonado doesn't move the stage.");
+
+    /// <summary>
+    /// Whether this libmonado recentres the local spaces, which seated apps use instead of the stage:
+    /// <see cref="RecentreLocalSpaces"/> throws <see cref="NotSupportedException"/> when not.
+    /// </summary>
+    bool OffersLocalRecentre => false;
+
+    /// <summary>Puts every app's local space at the head, turned the way it faces.</summary>
+    void RecentreLocalSpaces() => throw new NotSupportedException("This libmonado doesn't recentre the local spaces.");
 }
