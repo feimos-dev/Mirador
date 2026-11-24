@@ -11,8 +11,8 @@ public static class DashboardMaths
     /// <summary>How far ahead of the head the dashboard opens.</summary>
     public const float AheadM = 1.5f;
 
-    /// <summary>How far below the head the dashboard's middle is.</summary>
-    public const float BelowM = 0.2f;
+    /// <summary>How far below the head the dashboard's bar is: low enough for the desktop panel above it to sit at eye height.</summary>
+    public const float BelowM = 0.35f;
 
     /// <summary>
     /// A pose <paramref name="ahead"/> metres in front of the head along the floor and <paramref name="below"/> metres

@@ -8,8 +8,9 @@ namespace Mirador.Xr;
 
 /// <summary>
 /// The dashboard: an overlay app, drawn above whatever Monado shows. Open, it is a bar ahead of the head with the time,
-/// each controller's and tracker's battery, a recentre button and an exit button, pointed at with a laser from either
-/// controller; closed, it draws nothing. It reads the system button (a press opens or closes it, a hold recentres) and
+/// a recentre button, a button for each monitor, an exit button and each controller's and tracker's battery, pointed
+/// at with a laser from either controller; a monitor's button shows the desktop on a panel above the bar, where the
+/// laser is the mouse. Closed, it draws nothing. It reads the system button (a press opens or closes it, a hold recentres) and
 /// leaves every decision to Mirador: it only says what was pressed and shows what it is told.
 /// </summary>
 internal sealed class DashboardApp
@@ -38,6 +39,7 @@ internal sealed class DashboardApp
     private readonly Sprite recentre = Sprite.FromFile("recentre.png");
     private readonly Sprite confirm = Sprite.FromFile("confirm.png");
     private readonly Sprite charging = Sprite.FromFile("charging.png");
+    private readonly Sprite desktop = Sprite.FromFile("desktop.png");
     private readonly TextStyle text = TextStyle.FromFont(Font.Default, TextM, Color.White);
     private readonly Dictionary<InteractorSource, IdHash> focused = [];
 
@@ -45,6 +47,12 @@ internal sealed class DashboardApp
     private Pose bar;
     private XrExit exits = XrExit.Monado;
     private IReadOnlyList<XrDevice> devices = [];
+
+    // The desktop: the monitors as they were when the bar opened, and the one shown above the bar, if any.
+    private IReadOnlyList<DesktopMonitor> monitors = [];
+    private DesktopPanel? panel;
+    private int shown = -1;
+    private bool desktopFailed;
 
     // The origin asked for and not yet answered: where the stage goes, in the stage as it was.
     private MonadoPose? recentring;
@@ -90,6 +98,11 @@ internal sealed class DashboardApp
         UI.Settings = ui;
         UI.ColorScheme = Color.HSV(0.6f, 0.3f, 0.45f);
         Renderer.SkyboxVisible = false;
+        if (OperatingSystem.IsWindows())
+        {
+            DesktopMouse.UseRealPixels();
+        }
+
         Show(false);
     }
 
@@ -117,6 +130,7 @@ internal sealed class DashboardApp
         if (open)
         {
             DrawBar();
+            panel?.Draw(bar);
             TickOnHover();
         }
     }
@@ -150,6 +164,11 @@ internal sealed class DashboardApp
             bar = ToPose(DashboardMaths.AheadOfHead(FromPose(Input.Head)));
             confirmUntil = 0;
             focused.Clear();
+            monitors = OperatingSystem.IsWindows() && !desktopFailed ? DesktopMouse.Monitors() : [];
+        }
+        else if (!on)
+        {
+            ShowDesktop(-1);
         }
 
         open = on;
@@ -171,6 +190,21 @@ internal sealed class DashboardApp
         if (UI.ButtonRound("recentre", recentre, UI.LineHeight))
         {
             AskRecentre();
+        }
+
+        for (var i = 0; i < monitors.Count; i++)
+        {
+            // One button a monitor; with several, each carries its number.
+            UI.SameLine();
+            UI.PushTint(i == shown ? new Color(1.6f, 1.6f, 1.6f) : Color.White);
+            var pressed = monitors.Count == 1
+                ? UI.ButtonRound("desktop", desktop, UI.LineHeight)
+                : UI.ButtonImg((i + 1).ToString(CultureInfo.CurrentCulture), desktop, UIBtnLayout.Left);
+            UI.PopTint();
+            if (pressed)
+            {
+                ShowDesktop(i == shown ? -1 : i);
+            }
         }
 
         if (exits != XrExit.Nothing)
@@ -210,6 +244,37 @@ internal sealed class DashboardApp
 
         UI.WindowEnd();
         UI.PopTextStyle();
+    }
+
+    /// <summary>Shows monitor <paramref name="index"/> above the bar, or (-1) none. A monitor Windows won't capture takes the desktop buttons away.</summary>
+    private void ShowDesktop(int index)
+    {
+        panel?.Dispose();
+        panel = null;
+        shown = -1;
+        if (index < 0 || index >= monitors.Count)
+        {
+            return;
+        }
+
+        try
+        {
+            panel = new DesktopPanel(monitors[index]);
+            shown = index;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"The desktop can't be shown: {e.Message}");
+            desktopFailed = true;
+            monitors = [];
+        }
+    }
+
+    /// <summary>Shows <paramref name="other"/> above the bar in a monitor's place; for trying the panel without a desktop.</summary>
+    internal void ShowDesktop(DesktopPanel other)
+    {
+        panel?.Dispose();
+        panel = other;
     }
 
     /// <summary>The exit button: a cross that ends the game shown, or a power sign that stops Monado once its tick is pressed too.</summary>

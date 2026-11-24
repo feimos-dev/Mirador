@@ -11,7 +11,8 @@ and a direct-mode layer for a headset the GPU's driver keeps off the desktop (NV
 
 While Monado runs, Mirador puts two things in the headset: a home, a floor grid shown whenever no game is, and a
 dashboard, a bar the system button opens over the home and over games, with the controllers' batteries, a recentre
-button and an exit button. Holding the system button for a second recentres. Both need a Monado that offers libmonado.
+button, the desktop on a panel (the laser is the mouse) and an exit button. Holding the system button for a second
+recentres. Both need a Monado that offers libmonado.
 
 Work in progress: nothing is released yet.
 
@@ -92,7 +93,8 @@ StereoKit.
   uses them as they are, with no `SettingsRow` of its own and no `Shell_NotifyIconW` code.
 - `CommunityToolkit.Mvvm` 8.4.2 for the pages' view models.
 - [StereoKit](https://stereokit.net/) `0.4.0-preview.3902` for the home and the dashboard: a preview, because the
-  stable 0.3 line has no laser pointing at buttons and no haptics. Its icons (`src\Mirador.Xr\Assets`) are drawn by
+  stable 0.3 line has no laser pointing at buttons and no haptics. `Vortice.Direct3D11` 3.8.3 reads the desktop's
+  picture back from Windows.Graphics.Capture. The icons (`src\Mirador.Xr\Assets`) are drawn by
   `tools\make-xr-icons.py` (Python with Pillow).
 - The icons in `src\Mirador.App\Assets` (also the picture at the top of this README) are drawn by
   `tools\make-icons.py` (Python with Pillow).
@@ -101,8 +103,8 @@ StereoKit.
 
 [Boost Software License 1.0](LICENSE).
 
-The home and the dashboard are built on StereoKit, Copyright (c) 2019 Nick Klingensmith,
-[MIT](src/Mirador.Xr/Assets/StereoKit-LICENSE.txt).
+The home and the dashboard are built on StereoKit, Vortice.Windows and SharpGen.Runtime, all under the MIT license:
+[their notices](src/Mirador.Xr/Assets/THIRD-PARTY-NOTICES.txt).
 
 The icons contain Monado's logo, from Monado's Android launcher icon, Copyright 2023, Collabora, Ltd.,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); Mirador's icons recolour it and set it into four panes.

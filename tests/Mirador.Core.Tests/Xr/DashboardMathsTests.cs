@@ -23,7 +23,7 @@ public class DashboardMathsTests
     {
         var panel = DashboardMaths.AheadOfHead(Head(0, 0, 0.5f, 1.7f, 0.2f));
 
-        Near(new Vector3(0.5f, 1.5f, -1.3f), new Vector3(panel.X, panel.Y, panel.Z));
+        Near(new Vector3(0.5f, 1.35f, -1.3f), new Vector3(panel.X, panel.Y, panel.Z));
         Near(Vector3.UnitZ, Rotate(panel, -Vector3.UnitZ));
     }
 
@@ -33,7 +33,7 @@ public class DashboardMathsTests
         // Yaw +90° turns −Z to −X.
         var panel = DashboardMaths.AheadOfHead(Head(90, -30, 0, 1.6f, 0));
 
-        Near(new Vector3(-1.5f, 1.4f, 0), new Vector3(panel.X, panel.Y, panel.Z));
+        Near(new Vector3(-1.5f, 1.25f, 0), new Vector3(panel.X, panel.Y, panel.Z));
         Near(Vector3.UnitX, Rotate(panel, -Vector3.UnitZ));
         Near(Vector3.UnitY, Rotate(panel, Vector3.UnitY));
     }
@@ -43,7 +43,7 @@ public class DashboardMathsTests
     {
         var panel = DashboardMaths.AheadOfHead(Head(0, -90, 0, 1.6f, 0));
 
-        Near(new Vector3(0, 1.4f, -1.5f), new Vector3(panel.X, panel.Y, panel.Z));
+        Near(new Vector3(0, 1.25f, -1.5f), new Vector3(panel.X, panel.Y, panel.Z));
     }
 
     [Fact]

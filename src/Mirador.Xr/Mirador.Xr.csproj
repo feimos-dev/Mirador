@@ -5,6 +5,7 @@
     <AssemblyName>Mirador.Xr</AssemblyName>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>..\Mirador.App\Assets\Mirador.ico</ApplicationIcon>
     <!-- The shaders and icons go to xr\ beside the program: Assets\ there is the app's. -->
     <SKAssetFolder>Assets</SKAssetFolder>
@@ -12,12 +13,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="StereoKit" />
+    <PackageReference Include="Vortice.Direct3D11" />
   </ItemGroup>
   <ItemGroup>
     <!-- The icons (tools\make-xr-icons.py draws them). The package compiles the shaders into xr\ by itself. -->
     <Content Include="Assets\*.png" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <!-- StereoKit's licence travels with its DLLs. -->
-    <Content Include="Assets\StereoKit-LICENSE.txt" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The libraries' licences travel with their DLLs. -->
+    <Content Include="Assets\THIRD-PARTY-NOTICES.txt" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mirador.Core\Mirador.Core.csproj" />
