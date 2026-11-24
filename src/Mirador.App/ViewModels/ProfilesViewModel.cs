@@ -162,7 +162,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
     /// link, 3 a build folder.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MonadoFromFolder), nameof(MonadoFromLink), nameof(RunAsAdministratorDescription))]
+    [NotifyPropertyChangedFor(nameof(MonadoFromFolder), nameof(MonadoFromLink), nameof(ShowBranchCard), nameof(RunAsAdministratorDescription))]
     public partial int MonadoSource { get; set; }
 
     /// <summary>The pasted link of a branch or merge request (or the repository's URL).</summary>
@@ -193,7 +193,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     /// <summary>Whether the "Branch" drop-down shows: a repository link whose repository has two branches or more.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBranchCard))]
     public partial bool ShowBranches { get; set; }
+
+    /// <summary>Whether the "Branch" card shows: only while the source is a link.</summary>
+    public bool ShowBranchCard => ShowBranches && MonadoFromLink;
 
     /// <summary>Whether the branches are being listed (a ring by the link).</summary>
     [ObservableProperty]
