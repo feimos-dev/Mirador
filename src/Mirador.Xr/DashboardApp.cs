@@ -54,8 +54,8 @@ internal sealed class DashboardApp
     private int shown = -1;
     private bool desktopFailed;
 
-    // The origin asked for and not yet answered: where the stage goes, in the stage as it was.
-    private MonadoPose? recentring;
+    // A recentre asked for and not yet answered.
+    private bool recentring;
     private double confirmUntil;
 
     public static int Run(Link link)
@@ -311,31 +311,26 @@ internal sealed class DashboardApp
     /// <summary>Asks Mirador to put the origin under the head, turned the way it faces.</summary>
     private void AskRecentre()
     {
-        if (recentring is not null || World.OriginMode != OriginMode.Stage)
+        if (recentring || World.OriginMode != OriginMode.Stage)
         {
             return;
         }
 
         var head = FromPose(Input.Head);
-        recentring = DashboardMaths.RecentredOrigin(head);
+        recentring = !link.IsAlone;
         link.Send(XrLink.FormatRecentre([head.Qx, head.Qy, head.Qz, head.Qw, head.X, head.Y, head.Z]));
-        if (link.IsAlone)
-        {
-            recentring = null;
-        }
     }
 
-    /// <summary>Mirador moved the stage, or couldn't: the open bar stays where it is in the room, and both controllers tick.</summary>
+    /// <summary>Mirador moved the stage, or couldn't: the open bar moves with the stage, as the rest of the world does, and both controllers tick.</summary>
     private void Recentred(bool moved)
     {
-        if (recentring is { } origin && moved)
+        if (recentring && moved)
         {
-            bar = ToPose(DashboardMaths.Compose(DashboardMaths.Inverse(origin), FromPose(bar)));
             Input.HapticPulse(InputHaptic.LController, 0, 0.6f, 0.1f);
             Input.HapticPulse(InputHaptic.RController, 0, 0.6f, 0.1f);
         }
 
-        recentring = null;
+        recentring = false;
     }
 
     /// <summary>A short tick on a controller as its laser comes onto a button.</summary>
