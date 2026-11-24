@@ -44,6 +44,9 @@ internal sealed class DashboardApp
     private readonly Dictionary<InteractorSource, IdHash> focused = [];
 
     private bool open;
+
+    // Open, but not yet placed: the head wasn't known yet.
+    private bool unplaced;
     private Pose bar;
     private XrExit exits = XrExit.Monado;
     private IReadOnlyList<XrDevice> devices = [];
@@ -130,7 +133,13 @@ internal sealed class DashboardApp
                 break;
         }
 
-        if (open)
+        if (open && unplaced && HeadPose.Known())
+        {
+            bar = ToPose(DashboardMaths.AheadOfHead(FromPose(Input.Head)));
+            unplaced = false;
+        }
+
+        if (open && !unplaced)
         {
             DrawBar();
             try
@@ -173,7 +182,8 @@ internal sealed class DashboardApp
     {
         if (on && !open)
         {
-            bar = ToPose(DashboardMaths.AheadOfHead(FromPose(Input.Head)));
+            // Placed ahead of the head at the first frame it is known.
+            unplaced = true;
             confirmUntil = 0;
             focused.Clear();
             monitors = OperatingSystem.IsWindows() && !desktopFailed ? DesktopMouse.Monitors() : [];
@@ -311,7 +321,7 @@ internal sealed class DashboardApp
     /// <summary>Asks Mirador to put the origin under the head, turned the way it faces.</summary>
     private void AskRecentre()
     {
-        if (recentring || World.OriginMode != OriginMode.Stage)
+        if (recentring || World.OriginMode != OriginMode.Stage || !HeadPose.Known())
         {
             return;
         }
