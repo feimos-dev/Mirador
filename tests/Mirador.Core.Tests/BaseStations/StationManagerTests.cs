@@ -1668,9 +1668,11 @@ public class StationManagerTests
 
         // Queued behind Identify.
         await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
+        // A try the radio answered at once set no timer, so the count goes on from the ones there are.
+        var tries = h.Time.Created(StationManager.TryLimit);
         var hold = h.Radio.Hold(Right);
         var identify = h.Manager.IdentifyAsync(RightAddress, CancellationToken.None);
-        await h.Time.Set(StationManager.TryLimit, 3).WaitAsync(Limit);
+        await h.Time.Set(StationManager.TryLimit, tries + 1).WaitAsync(Limit);
         h.Clock.Advance(StationManager.StallTime);
         var flush = h.Manager.FlushAsync(TimeSpan.FromSeconds(15));
         hold.SetResult();
@@ -1809,9 +1811,11 @@ public class StationManagerTests
         // The On sent again waits behind Left's Identify, and Right is deselected meanwhile.
         await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         h.Hear(Right, RightName, 0x01);
+        // A try the radio answered at once set no timer, so the count goes on from the ones there are.
+        var tries = h.Time.Created(StationManager.TryLimit);
         var hold = h.Radio.Hold(Left);
         var identify = h.Manager.IdentifyAsync(LeftAddress, CancellationToken.None);
-        await h.Time.Set(StationManager.TryLimit, 2).WaitAsync(Limit);
+        await h.Time.Set(StationManager.TryLimit, tries + 1).WaitAsync(Limit);
         h.Clock.Advance(StationManager.StallTime);
         h.Manager.SetSelected(RightAddress, false);
         var running = new List<StationCommand?>();

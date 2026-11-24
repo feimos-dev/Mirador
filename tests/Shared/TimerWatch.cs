@@ -53,5 +53,14 @@ internal sealed class TimerWatch(FakeTimeProvider clock) : TimeProvider
         }
     }
 
+    /// <summary>How many timers due after <paramref name="dueTime"/> have been set so far.</summary>
+    public int Created(TimeSpan dueTime)
+    {
+        lock (created)
+        {
+            return Count(dueTime);
+        }
+    }
+
     private int Count(TimeSpan dueTime) => created.Count(d => d == dueTime);
 }
