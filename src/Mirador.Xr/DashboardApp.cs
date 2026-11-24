@@ -85,6 +85,7 @@ internal sealed class DashboardApp
         var app = new DashboardApp(link);
         link.Send(XrLink.Running);
         SK.Run(app.Step);
+        app.ShowDesktop(-1); // lets go of a held mouse button
         return 0;
     }
 
@@ -130,7 +131,16 @@ internal sealed class DashboardApp
         if (open)
         {
             DrawBar();
-            panel?.Draw(bar);
+            try
+            {
+                panel?.Draw(bar);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"The desktop panel closed: {e.Message}");
+                ShowDesktop(-1);
+            }
+
             TickOnHover();
         }
     }
