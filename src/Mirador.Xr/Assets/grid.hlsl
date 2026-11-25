@@ -70,13 +70,14 @@ float4 ps(psIn input) : SV_TARGET {
 	float2 at    = input.world.xz;
 	float2 pixel = fwidth(at);
 
-	float dist = length(input.world - input.camera);
+	float3 view = input.world - input.camera;
+	float  dist = length(view);
 	float far  = smoothstep(0, 1, saturate((dist - fade.x) / (fade.y - fade.x)));
 	float near = exp(-dot(at, at) / (pool.x * pool.x));
 
 	float3 color = floor_color.rgb + pool_color.rgb * near;
 	color = lerp(color, line_color.rgb, grid_line(at, pixel) * (pool.y + pool.z * near) * (1 - far));
 	color = lerp(color, mark_color.rgb, centre_mark(at, pixel) * mark.w);
-	color = lerp(color, sky_color(0), far);
+	color = lerp(color, sky_color(view.y / dist), far);
 	return float4(dither(color, input.pos.xy), 1);
 }

@@ -18,6 +18,5 @@ psIn vs(vsIn input, sk_ids_t ids) {
 }
 
 float4 ps(psIn input) : SV_TARGET {
-	float up = saturate(normalize(input.dir).y);
-	return float4(dither(sky_color(up), input.pos.xy), 1);
+	return float4(dither(sky_color(normalize(input.dir).y), input.pos.xy), 1);
 }
