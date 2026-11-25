@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Mirador.Ipc;
+using StereoKit;
 
 namespace Mirador.Xr;
 
@@ -14,20 +15,31 @@ internal sealed class DesktopLayer : IDisposable
     private static readonly TimeSpan QuitLimit = TimeSpan.FromSeconds(3);
 
     private Process? process;
-    private string? last;
+    private string? lastPlacement; // the last SHOW or HIDE sent
+    private string? lastPoint;
     private bool unstarted;
 
     /// <summary>Whether the program ended by itself (it couldn't start its session, or it stopped): it isn't started again.</summary>
     public bool Failed => unstarted || process is { HasExited: true };
 
     /// <summary>Shows <paramref name="placement"/>, starting the program the first time; sends nothing that didn't change.</summary>
-    public void Show(DesktopPlacement placement) => Send(DesktopLayerLink.FormatShow(placement));
+    public void Show(DesktopPlacement placement) => Send(DesktopLayerLink.FormatShow(placement), ref lastPlacement);
 
     public void Hide()
     {
         if (process is { HasExited: false })
         {
-            Send(DesktopLayerLink.Hide);
+            Send(DesktopLayerLink.Hide, ref lastPlacement);
+            lastPoint = null; // a hide drops the hand too
+        }
+    }
+
+    /// <summary>Names the hand whose laser is on the desktop, if any: its trackpad scrolls.</summary>
+    public void Point(Handed? hand)
+    {
+        if (process is { HasExited: false })
+        {
+            Send(DesktopLayerLink.FormatPoint(hand is null ? null : hand == Handed.Left), ref lastPoint);
         }
     }
 
@@ -54,7 +66,7 @@ internal sealed class DesktopLayer : IDisposable
         process = null;
     }
 
-    private void Send(string line)
+    private void Send(string line, ref string? last)
     {
         if (line == last || Failed)
         {

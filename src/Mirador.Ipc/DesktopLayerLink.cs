@@ -9,8 +9,9 @@ public sealed record DesktopPlacement(long Monitor, float[] Pose, float Width, f
 
 /// <summary>
 /// The lines the dashboard sends the desktop program (<c>Mirador.Xr.exe --desktop</c>) on its standard input: a
-/// <see cref="Show"/> whenever the quad should show a monitor or move, a <see cref="Hide"/> when it should go. The end of
-/// its input ends the program. Its standard output is log lines.
+/// <see cref="Show"/> whenever the quad should show a monitor or move, a <see cref="Hide"/> when it should go, and a
+/// <see cref="Point"/> naming the hand whose laser is on it (its trackpad scrolls). The end of its input ends the program.
+/// Its standard output is log lines.
 /// </summary>
 public static class DesktopLayerLink
 {
@@ -19,6 +20,18 @@ public static class DesktopLayerLink
 
     public const string Show = "SHOW";
     public const string Hide = "HIDE";
+    public const string Point = "POINT";
+
+    /// <summary>A <see cref="Point"/> line: "left", "right", or "none" when no laser is on the quad.</summary>
+    public static string FormatPoint(bool? left) => $"{Point} {left switch { true => "left", false => "right", null => "none" }}";
+
+    /// <summary>A <see cref="Point"/> line's hand: true for the left, false for the right, null for none; null too for any other line.</summary>
+    public static bool? ParsePoint(string line) => line switch
+    {
+        "POINT left" => true,
+        "POINT right" => false,
+        _ => null,
+    };
 
     public static string FormatShow(DesktopPlacement placement)
     {

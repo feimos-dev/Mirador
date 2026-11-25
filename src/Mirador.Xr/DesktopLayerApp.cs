@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using Mirador.Core.Xr;
 using Mirador.Ipc;
 using Silk.NET.OpenXR;
 using Silk.NET.OpenXR.Extensions.KHR;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using XrAction = Silk.NET.OpenXR.Action;
 
 namespace Mirador.Xr;
 
@@ -38,6 +40,16 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
 
     private DesktopPlacement? placement;
     private DesktopCapture? capture;
+
+    // The Index controllers' trackpads, which StereoKit's dashboard doesn't bind: the hand whose laser is on the desktop
+    // (true the left) scrolls with its own.
+    private ActionSet scrollSet;
+    private XrAction padAction;
+    private XrAction touchAction;
+    private ulong leftHand;
+    private ulong rightHand;
+    private bool? pointing;
+    private readonly PadScroll padScroll = new();
     private TimeSpan framePeriod = TimeSpan.FromSeconds(1 / 90.0);
     private volatile bool inputEnded;
     private DateTime? exitAsked;
@@ -153,6 +165,16 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
             PoseInReferenceSpace = new Posef(new Quaternionf(0, 0, 0, 1), new Vector3f(0, 0, 0)),
         };
         Check(xr.CreateReferenceSpace(session, &spaceInfo, ref stage), "xrCreateReferenceSpace");
+
+        try
+        {
+            CreateScrollActions();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"The trackpads won't scroll: {e.Message}");
+            scrollSet = default;
+        }
     }
 
     /// <summary>A D3D11 device on the adapter OpenXR names, which the capture writes to and the swapchain lives on.</summary>
@@ -242,7 +264,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         }
     }
 
-    /// <summary>The dashboard's lines so far: the last placement counts, a hide drops it.</summary>
+    /// <summary>The dashboard's lines so far: the last placement and hand count, a hide drops both.</summary>
     private void Take()
     {
         while (lines.TryDequeue(out var line))
@@ -250,12 +272,120 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
             if (line == DesktopLayerLink.Hide)
             {
                 Place(null);
+                pointing = null;
+            }
+            else if (line.StartsWith(DesktopLayerLink.Point + " ", StringComparison.Ordinal))
+            {
+                var hand = DesktopLayerLink.ParsePoint(line);
+                if (hand != pointing)
+                {
+                    padScroll.Update(false, 0); // another hand's finger starts afresh
+                    pointing = hand;
+                }
             }
             else if (DesktopLayerLink.ParseShow(line) is { } next)
             {
                 Place(next);
             }
         }
+    }
+
+    /// <summary>An action set of the trackpads' place and touch, bound for the Index controllers only, attached to the session.</summary>
+    private void CreateScrollActions()
+    {
+        leftHand = PathOf("/user/hand/left");
+        rightHand = PathOf("/user/hand/right");
+
+        var setInfo = new ActionSetCreateInfo(StructureType.ActionSetCreateInfo);
+        Name(setInfo.ActionSetName, "desktop");
+        Name(setInfo.LocalizedActionSetName, "Desktop");
+        var set = default(ActionSet);
+        Check(xr.CreateActionSet(instance, &setInfo, &set), "xrCreateActionSet");
+        scrollSet = set;
+
+        padAction = CreateAction("scroll_pad", "Trackpad", ActionType.Vector2fInput);
+        touchAction = CreateAction("scroll_touch", "Trackpad touch", ActionType.BooleanInput);
+
+        var bindings = stackalloc ActionSuggestedBinding[]
+        {
+            new() { Action = padAction, Binding = PathOf("/user/hand/left/input/trackpad") },
+            new() { Action = padAction, Binding = PathOf("/user/hand/right/input/trackpad") },
+            new() { Action = touchAction, Binding = PathOf("/user/hand/left/input/trackpad/touch") },
+            new() { Action = touchAction, Binding = PathOf("/user/hand/right/input/trackpad/touch") },
+        };
+        var suggested = new InteractionProfileSuggestedBinding(StructureType.InteractionProfileSuggestedBinding)
+        {
+            InteractionProfile = PathOf("/interaction_profiles/valve/index_controller"),
+            CountSuggestedBindings = 4,
+            SuggestedBindings = bindings,
+        };
+        Check(xr.SuggestInteractionProfileBinding(instance, &suggested), "xrSuggestInteractionProfileBindings");
+
+        var attach = new SessionActionSetsAttachInfo(StructureType.SessionActionSetsAttachInfo) { CountActionSets = 1, ActionSets = &set };
+        Check(xr.AttachSessionActionSets(session, &attach), "xrAttachSessionActionSets");
+    }
+
+    private XrAction CreateAction(string name, string localized, ActionType type)
+    {
+        var hands = stackalloc ulong[] { leftHand, rightHand };
+        var info = new ActionCreateInfo(StructureType.ActionCreateInfo) { ActionType = type, CountSubactionPaths = 2, SubactionPaths = hands };
+        Name(info.ActionName, name);
+        Name(info.LocalizedActionName, localized);
+        var action = default(XrAction);
+        Check(xr.CreateAction(scrollSet, &info, &action), "xrCreateAction");
+        return action;
+    }
+
+    /// <summary>The trackpad of the hand whose laser is on the desktop turns the wheel.</summary>
+    private void ScrollWithPad()
+    {
+        if (scrollSet.Handle == 0 || placement is null || pointing is not { } left)
+        {
+            padScroll.Update(false, 0);
+            return;
+        }
+
+        var active = new ActiveActionSet { ActionSet = scrollSet };
+        var sync = new ActionsSyncInfo(StructureType.ActionsSyncInfo) { CountActiveActionSets = 1, ActiveActionSets = &active };
+        if (xr.SyncAction(session, &sync) < 0)
+        {
+            return;
+        }
+
+        var get = new ActionStateGetInfo(StructureType.ActionStateGetInfo) { Action = touchAction, SubactionPath = left ? leftHand : rightHand };
+        var touch = new ActionStateBoolean(StructureType.ActionStateBoolean);
+        var pad = new ActionStateVector2f(StructureType.ActionStateVector2f);
+        var touched = xr.GetActionStateBoolean(session, &get, &touch) >= 0 && touch.IsActive != 0 && touch.CurrentState != 0;
+        get.Action = padAction;
+        touched &= xr.GetActionStateVector2(session, &get, &pad) >= 0 && pad.IsActive != 0;
+        DesktopMouse.Turn(padScroll.Update(touched, pad.CurrentState.Y));
+    }
+
+    private ulong PathOf(string path)
+    {
+        var text = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            ulong value = 0;
+            Check(xr.StringToPath(instance, (byte*)text, &value), "xrStringToPath");
+            return value;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(text);
+        }
+    }
+
+    /// <summary>Copies <paramref name="name"/> into one of OpenXR's fixed name buffers, which are far longer than these names.</summary>
+    private static void Name(byte* buffer, string name)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(name);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            buffer[i] = bytes[i];
+        }
+
+        buffer[bytes.Length] = 0;
     }
 
     private void Place(DesktopPlacement? next)
@@ -304,6 +434,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
 
         Take();
         capture?.TakeNewest(CopyIn);
+        ScrollWithPad();
 
         var quad = new CompositionLayerQuad(StructureType.CompositionLayerQuad);
         var layer = (CompositionLayerBaseHeader*)&quad;

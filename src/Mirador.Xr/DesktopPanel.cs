@@ -108,6 +108,7 @@ internal sealed class DesktopPanel : IDisposable
             pointing = hand;
         }
 
+        layer.Point(hand is { } on && hits[(int)on] is not null ? on : null);
         if (hand is { } h && hits[(int)h] is { } at)
         {
             var pointer = click.Pointer(at, Input.Controller(h).trigger, held is not null || holding is not null, size.x, size.y);

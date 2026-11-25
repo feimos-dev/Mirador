@@ -34,6 +34,18 @@ public class DesktopLayerLinkTests
     }
 
     [Fact]
+    public void A_point_line_names_the_hand_or_none()
+    {
+        Assert.Equal("POINT left", DesktopLayerLink.FormatPoint(true));
+        Assert.Equal("POINT right", DesktopLayerLink.FormatPoint(false));
+        Assert.Equal("POINT none", DesktopLayerLink.FormatPoint(null));
+        Assert.True(DesktopLayerLink.ParsePoint("POINT left"));
+        Assert.False(DesktopLayerLink.ParsePoint("POINT right"));
+        Assert.Null(DesktopLayerLink.ParsePoint("POINT none"));
+        Assert.Null(DesktopLayerLink.ParsePoint("HIDE"));
+    }
+
+    [Fact]
     public void A_pose_must_be_seven_numbers()
     {
         Assert.Throws<ArgumentException>(() => DesktopLayerLink.FormatShow(new DesktopPlacement(1, [0, 0, 0, 1], 2, 1)));

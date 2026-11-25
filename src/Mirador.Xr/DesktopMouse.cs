@@ -50,11 +50,14 @@ internal static class DesktopMouse
     public static void Left(bool down) => Send(new MouseInput { Flags = down ? LeftDown : LeftUp });
 
     /// <summary>Turns the wheel by <paramref name="notches"/>: positive away from the user, which scrolls up.</summary>
-    public static void Scroll(int notches)
+    public static void Scroll(int notches) => Turn(notches * WheelNotch);
+
+    /// <summary>Turns the wheel by <paramref name="units"/>, 120 a notch: positive scrolls up.</summary>
+    public static void Turn(int units)
     {
-        if (notches != 0)
+        if (units != 0)
         {
-            Send(new MouseInput { Data = unchecked((uint)(notches * WheelNotch)), Flags = Wheel });
+            Send(new MouseInput { Data = unchecked((uint)units), Flags = Wheel });
         }
     }
 
