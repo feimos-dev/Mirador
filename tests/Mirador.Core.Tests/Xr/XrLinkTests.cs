@@ -130,14 +130,21 @@ public class XrLinkTests
     public async Task A_program_that_goes_away_closes_miradors_end()
     {
         var name = UniqueName();
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var server = new XrLinkServer(name);
-        server.Connected += connection => connection.Closed += () => closed.TrySetResult();
+        server.Connected += connection =>
+        {
+            connection.Closed += () => closed.TrySetResult();
+            connected.TrySetResult();
+        };
         server.Start();
 
         var program = XrLinkConnection.Connect(name, XrLink.HomeRole, Limit);
         Assert.NotNull(program);
         program.Start();
+        // Gone once Mirador has its end: before that, there would be no end to close.
+        await connected.Task.WaitAsync(Limit);
         program.Dispose();
 
         await closed.Task.WaitAsync(Limit);
