@@ -6,10 +6,6 @@ using Mirador.Core.Monado;
 
 namespace Mirador.Core.Tests.Monado;
 
-/// <summary>
-/// The failures of stopping a process that Windows rarely produces on demand (a tree that can't be ended in full, a
-/// process object that is gone while a kill is under way). The kill is replaced, so these happen when the test says.
-/// </summary>
 public class RunningProcessTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
@@ -28,7 +24,6 @@ public class RunningProcessTests
     private static RunningProcess Wrap(Process started, Action<Process> terminate) =>
         new(started, new SafeFileHandle(IntPtr.Zero, ownsHandle: false), terminate);
 
-    /// <summary>Ends the process for real, then fails the way Process.Kill does when part of the tree stays alive.</summary>
     private static void KillThenFailForTheRestOfTheTree(Process p)
     {
         p.Kill();
@@ -40,11 +35,11 @@ public class RunningProcessTests
     public async Task A_process_that_outlives_dispose_still_reports_its_exit()
     {
         var started = StartPing();
-        var process = Wrap(started, _ => throw new AggregateException(new Win32Exception(5))); // never ends it
+        var process = Wrap(started, _ => throw new AggregateException(new Win32Exception(5)));
 
-        await process.DisposeAsync(); // gives up after its limit, with the process still running
+        await process.DisposeAsync();
         Assert.False(process.Exited.IsCompleted);
-        Process.GetProcessById(started.Id).Kill(); // the job would do this when the launcher goes
+        Process.GetProcessById(started.Id).Kill();
 
         await process.Exited.WaitAsync(Limit);
     }
@@ -68,16 +63,15 @@ public class RunningProcessTests
         {
             if (Interlocked.Increment(ref calls) == 1)
             {
-                throw new AggregateException(new Win32Exception(5)); // still running and not ended: a real failure
+                throw new AggregateException(new Win32Exception(5));
             }
 
             KillThenFailForTheRestOfTheTree(p);
         });
 
-        // Kill() reports a process that is still running.
         Assert.Throws<AggregateException>(() => process.Kill());
 
-        await process.DisposeAsync(); // the second attempt ends it and fails for the tree; dispose swallows that
+        await process.DisposeAsync();
 
         Assert.True(process.Exited.IsCompleted);
     }
@@ -103,7 +97,7 @@ public class RunningProcessTests
 
         var disposing = Task.Run(async () => await process.DisposeAsync());
         await Task.Delay(500);
-        Assert.False(disposing.IsCompleted); // the process object is still in use by the kill
+        Assert.False(disposing.IsCompleted);
 
         release.Set();
 

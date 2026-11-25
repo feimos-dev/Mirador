@@ -34,7 +34,6 @@ public sealed partial class HomePage : Page
         ViewModel.Refresh();
     }
 
-    /// <summary>Leaving Home stops its listening and its device reads at once, before the page unloads.</summary>
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
@@ -42,7 +41,6 @@ public sealed partial class HomePage : Page
         UpdateShown();
     }
 
-    /// <summary>Windows' default graphics settings, where hardware-accelerated GPU scheduling is turned on.</summary>
     private async void OnGraphicsSettings(object sender, RoutedEventArgs e)
     {
         try
@@ -58,10 +56,6 @@ public sealed partial class HomePage : Page
         }
     }
 
-    /// <summary>
-    /// Home listens to the base stations while it is the current page (in the frame) and the window is on screen. The
-    /// window is looked up here, not in OnNavigatedTo: the first navigation happens while the window is being made.
-    /// </summary>
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         current = true;

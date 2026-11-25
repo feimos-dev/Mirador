@@ -3,13 +3,6 @@
 
 #pragma once
 
-// The layer's intercepts driven the way the loader drives them, with no GPU, no loader and no NVAPI:
-//  - FakeDriver: the "next layer" below ours, a driver stand-in with configurable physical devices, displays and
-//    planes, that records every call it gets;
-//  - ChainRig: the test build of the layer DLL (it exports the display-session seam), negotiated, with a display
-//    session on a FakeApi put in place of the process's, and an instance created down a chain to the fake driver.
-// No test here reaches nvdm::process_session(): Pimax may run on the machine.
-
 #include <windows.h>
 
 #include <algorithm>
@@ -39,7 +32,6 @@
 
 namespace dvl_test {
 
-// A dispatchable handle as the loader makes them: the first word points at a dispatch table.
 struct Dispatchable {
     void* table;
 };
@@ -49,13 +41,12 @@ inline constexpr size_t kDeviceSlots = 4;
 
 inline int g_instance_table;
 inline int g_device_tables[kDeviceSlots];
-inline int g_queue_table; // a queue's first word before vkSetDeviceLoaderData gives it its device's
+inline int g_queue_table;
 inline Dispatchable g_instance{&g_instance_table};
 inline Dispatchable g_gpus[kGpuSlots] = {{&g_instance_table}, {&g_instance_table}, {&g_instance_table}};
 inline Dispatchable g_devices[kDeviceSlots] = {
     {&g_device_tables[0]}, {&g_device_tables[1]}, {&g_device_tables[2]}, {&g_device_tables[3]}};
 
-// The driver's own non-dispatchable handles, recognisable in the call log.
 inline VkDisplayKHR driver_display(size_t gpu, uint32_t i)
 {
     return reinterpret_cast<VkDisplayKHR>(static_cast<uintptr_t>(0xD1500000u + gpu * 16 + i));
@@ -64,7 +55,6 @@ inline VkDisplayModeKHR driver_mode(size_t gpu, uint32_t i)
 {
     return reinterpret_cast<VkDisplayModeKHR>(static_cast<uintptr_t>(0xD1600000u + gpu * 16 + i));
 }
-// Monado's peek window: a Win32 surface the loader made (vkCreateWin32SurfaceKHR goes straight down).
 inline const VkSurfaceKHR kPeekSurface = reinterpret_cast<VkSurfaceKHR>(static_cast<uintptr_t>(0x5EE0F000u));
 
 template <class T>
@@ -73,15 +63,14 @@ uint64_t handle_value(T handle)
     return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(handle));
 }
 
-// One physical device of the fake driver.
 struct FakeGpu {
     uint32_t vendor = 0x10de;
     LUID luid{};
     bool luid_valid = true;
     std::vector<VkQueueFamilyProperties> families;
     std::vector<std::string> extensions;
-    uint32_t displays = 0; // the driver's own displays: driver_display(gpu, 0..)
-    uint32_t planes = 0;   // the driver's own planes
+    uint32_t displays = 0;
+    uint32_t planes = 0;
 };
 
 inline VkQueueFamilyProperties queue_family(VkQueueFlags flags, uint32_t count)
@@ -92,7 +81,6 @@ inline VkQueueFamilyProperties queue_family(VkQueueFlags flags, uint32_t count)
     return f;
 }
 
-// A desktop NVIDIA GPU's families as M0 saw them: graphics (16 queues), transfer (2), compute (8).
 inline std::vector<VkQueueFamilyProperties> nvidia_families()
 {
     return {queue_family(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 16),
@@ -112,13 +100,11 @@ inline std::vector<std::string> nvidia_extensions()
             "VK_KHR_image_format_list"};
 }
 
-// The adapter LUID the FakeApi reports for the display: gpu 0 of default_gpus() has it.
 inline LUID session_luid()
 {
     return LUID{0x1234, 0x56};
 }
 
-// Gpu 0: the NVIDIA GPU that drives the display. Gpu 1: another NVIDIA GPU. Gpu 2: an Intel iGPU.
 inline std::vector<FakeGpu> default_gpus()
 {
     FakeGpu ours;
@@ -135,7 +121,6 @@ inline std::vector<FakeGpu> default_gpus()
     return {ours, other, intel};
 }
 
-// The memory types of the fake GPUs: host-visible, device-local, device-local and host-visible.
 inline VkPhysicalDeviceMemoryProperties fake_memory_properties()
 {
     VkPhysicalDeviceMemoryProperties m{};
@@ -149,7 +134,6 @@ inline VkPhysicalDeviceMemoryProperties fake_memory_properties()
     return m;
 }
 
-// The driver's images and memory, recognisable in the call log.
 inline VkImage driver_image(size_t n)
 {
     return reinterpret_cast<VkImage>(static_cast<uintptr_t>(0x1A000000u + n));
@@ -159,37 +143,27 @@ inline VkDeviceMemory driver_memory(size_t n)
     return reinterpret_cast<VkDeviceMemory>(static_cast<uintptr_t>(0xE0000000u + n));
 }
 
-// The driver stand-in. One per process (the C callbacks cannot capture); ChainRig resets it.
 struct FakeDriver {
-    // --- Configuration -----------------------------------------------------------------------------------------------
     std::vector<FakeGpu> gpus;
     VkResult create_device_result = VK_SUCCESS;
     VkResult set_loader_data_result = VK_SUCCESS;
-    std::function<void()> on_device_wait_idle; // runs inside vkDeviceWaitIdle
+    std::function<void()> on_device_wait_idle;
 
-    // The import. What the format query answers for a format with the back-buffers' handle type (features
-    // not in the map: IMPORTABLE); the memory types; the image's memoryTypeBits; the handle's memoryTypeBits.
     std::map<VkFormat, VkExternalMemoryFeatureFlags> import_features;
     VkPhysicalDeviceMemoryProperties memory = fake_memory_properties();
-    uint32_t image_memory_bits = 0b111;  // the image may have any type...
-    uint32_t handle_memory_bits = 0b100; // ...the handle only type 2
+    uint32_t image_memory_bits = 0b111;
+    uint32_t handle_memory_bits = 0b100;
 
-    // Scripted failures: the nth call (from 1, counted since reset()) of a command returns `result` instead of what it
-    // would. For the commands of the import: vkGetPhysicalDeviceImageFormatProperties2KHR, vkCreateImage,
-    // vkGetMemoryWin32HandlePropertiesKHR, vkAllocateMemory, vkBindImageMemory; and for vkQueueSubmit and
-    // vkQueueWaitIdle, which then do nothing (no fence signalled, nothing held released).
     void fail_call(const std::string& name, size_t nth, VkResult result)
     {
         std::lock_guard<std::mutex> lock(mutex);
         failures_[name][nth] = result;
     }
-    // The next call of `name` fails with `result`.
     void fail_next_call(const std::string& name, VkResult result)
     {
         std::lock_guard<std::mutex> lock(mutex);
         failures_[name][seen_[name] + 1] = result;
     }
-    // Counts a call of `name` and returns its scripted result (VK_SUCCESS if none).
     VkResult scripted(const std::string& name)
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -202,23 +176,22 @@ struct FakeDriver {
         return it == per_name->second.end() ? VK_SUCCESS : it->second;
     }
 
-    // --- What the import got -----------------------------------------------------------------------------------------
     struct FormatQuery {
         VkFormat format;
         VkImageType type;
         VkImageTiling tiling;
         VkImageUsageFlags usage;
         VkImageCreateFlags flags;
-        bool external = false; // a VkPhysicalDeviceExternalImageFormatInfo was chained
+        bool external = false;
         VkExternalMemoryHandleTypeFlagBits handle_type{};
-        bool format_list = false; // a VkImageFormatListCreateInfo was chained
+        bool format_list = false;
         std::vector<VkFormat> view_formats;
     };
     struct ImageMade {
         VkImage image;
         VkDevice device;
-        VkImageCreateInfo info; // pNext and pQueueFamilyIndices cleared
-        bool external = false;  // a VkExternalMemoryImageCreateInfo was chained
+        VkImageCreateInfo info;
+        bool external = false;
         VkExternalMemoryHandleTypeFlags handle_types = 0;
         bool format_list = false;
         std::vector<VkFormat> view_formats;
@@ -231,11 +204,11 @@ struct FakeDriver {
         VkDeviceMemory memory;
         VkDeviceSize size;
         uint32_t type;
-        bool imported = false; // a VkImportMemoryWin32HandleInfoKHR was chained
+        bool imported = false;
         VkExternalMemoryHandleTypeFlagBits handle_type{};
         HANDLE handle = nullptr;
         LPCWSTR name = nullptr;
-        bool dedicated = false; // a VkMemoryDedicatedAllocateInfo was chained
+        bool dedicated = false;
         VkImage dedicated_image = VK_NULL_HANDLE;
         VkBuffer dedicated_buffer = VK_NULL_HANDLE;
     };
@@ -249,12 +222,11 @@ struct FakeDriver {
     std::vector<HandleQuery> handle_queries;
     std::vector<Allocation> allocations;
     std::vector<Bind> binds;
-    std::set<uint64_t> live_images; // made and not yet destroyed
-    std::set<uint64_t> live_memory; // allocated and not yet freed
+    std::set<uint64_t> live_images;
+    std::set<uint64_t> live_memory;
     size_t images_destroyed = 0;
     size_t memory_freed = 0;
 
-    // The import calls only, in order, by name (the rest of the call log left out).
     std::vector<std::string> import_calls() const
     {
         static const std::set<std::string> names = {
@@ -271,36 +243,30 @@ struct FakeDriver {
         return out;
     }
 
-    // --- What the driver got -----------------------------------------------------------------------------------------
     struct Call {
         std::string name;
-        uint64_t handle = 0; // the display, mode or surface the call was given, if any
-        uint32_t index = 0;  // the plane index, for plane-indexed calls
+        uint64_t handle = 0;
+        uint32_t index = 0;
     };
 
-    // The last vkCreateDevice.
     std::vector<VkDeviceQueueCreateInfo> queues;
     std::vector<std::vector<float>> priorities;
     std::vector<std::string> device_extensions;
-    std::vector<VkLayerFunction> device_pnext_loader_structs; // the loader structs left in its pNext chain, in order
+    std::vector<VkLayerFunction> device_pnext_loader_structs;
     size_t devices_made = 0;
 
-    std::deque<Dispatchable> queue_objects; // what vkGetDeviceQueue handed out
-    std::vector<void*> loader_data_set;     // the objects vkSetDeviceLoaderData was called on
+    std::deque<Dispatchable> queue_objects;
+    std::vector<void*> loader_data_set;
 
-    // --- Fences, submits and the driver's own swapchains -------------------------------------------------------------
-    // Fences live in `fences` (by handle value) from vkCreateFence to vkDestroyFence. A submit's fence signals at once
-    // (the GPU is done), unless hold_fences: then it signals at the next vkQueueWaitIdle or signal_held(). Every call
-    // that names a fence is in the call log with the fence's handle.
     struct FakeFence {
         bool signalled = false;
-        bool held = false; // submitted, not signalled yet (hold_fences)
+        bool held = false;
     };
     struct Submit {
         VkQueue queue;
         uint32_t batches;
-        uint32_t waits;   // wait semaphores, all batches
-        uint32_t signals; // signal semaphores, all batches
+        uint32_t waits;
+        uint32_t signals;
         std::vector<VkPipelineStageFlags> stages;
         VkFence fence;
     };
@@ -308,7 +274,7 @@ struct FakeDriver {
     size_t fences_made = 0;
     bool hold_fences = false;
     std::vector<Submit> submits;
-    size_t bad_fence_uses = 0; // a call on a fence that is not alive (never made, or destroyed)
+    size_t bad_fence_uses = 0;
 
     std::vector<Submit> submits_on(VkQueue queue) const
     {
@@ -336,7 +302,6 @@ struct FakeDriver {
         std::lock_guard<std::mutex> lock(mutex);
         return fences.size();
     }
-    // Every call of `name` on `handle`, as the call log has it.
     size_t count_on(const std::string& name, uint64_t handle) const
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -346,7 +311,6 @@ struct FakeDriver {
         }
         return n;
     }
-    // The names of the calls in order, leaving out those not in `only` (all if empty).
     std::vector<std::string> names(const std::set<std::string>& only = {}) const
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -358,10 +322,8 @@ struct FakeDriver {
         }
         return out;
     }
-    size_t swapchains_made = 0; // the driver's own (the peek window's)
+    size_t swapchains_made = 0;
 
-    // vkGetCalibratedTimestamps (KHR and EXT), one entry per call: what each info asked for. `swapchain` is the one a
-    // VkSwapchainCalibratedTimestampInfoEXT in its pNext names (0 for none); `chained` says whether pNext was set.
     struct Calibration {
         VkTimeDomainKHR domain;
         uint64_t swapchain;
@@ -369,8 +331,6 @@ struct FakeDriver {
     };
     std::vector<std::vector<Calibration>> calibrations;
 
-    // vkSignalSemaphoreKHR (VK_KHR_timeline_semaphore) is offered to devices made while this is set; the core 1.2
-    // vkSignalSemaphore always is. Both record the semaphore and the value.
     bool offer_signal_semaphore_khr = true;
 
     void reset(std::vector<FakeGpu> new_gpus)
@@ -415,7 +375,6 @@ struct FakeDriver {
         offer_signal_semaphore_khr = true;
     }
 
-    // Handles for new images and memory.
     VkImage next_image() { return driver_image(images_counter_++); }
     VkDeviceMemory next_memory() { return driver_memory(memory_counter_++); }
 
@@ -447,7 +406,6 @@ struct FakeDriver {
         return n;
     }
 
-    // The last call of that name (a default Call if there was none).
     Call last(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -498,7 +456,6 @@ VkResult write_list(uint32_t* count, T* out, const std::vector<T>& items)
     return n < items.size() ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
-// Like write_list for the ...2KHR structs: `set(i, item)` writes the payload.
 template <class T, class Set>
 VkResult fill_list(uint32_t* count, T* out, uint32_t total, Set&& set)
 {
@@ -527,7 +484,6 @@ inline size_t gpu_slot(VkPhysicalDevice pd)
     return i < 0 ? 0 : static_cast<size_t>(i);
 }
 
-// What the driver answers for a surface of its own (the peek window's).
 inline VkSurfaceCapabilitiesKHR driver_caps()
 {
     VkSurfaceCapabilitiesKHR c{};
@@ -543,8 +499,6 @@ inline VkSurfaceCapabilitiesKHR driver_caps()
     c.supportedUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     return c;
 }
-
-// --- Instance level --------------------------------------------------------------------------------------------------
 
 inline VkResult VKAPI_CALL CreateInstance(const VkInstanceCreateInfo*, const VkAllocationCallbacks*, VkInstance* out)
 {
@@ -629,7 +583,6 @@ inline VkResult VKAPI_CALL CreateDevice(VkPhysicalDevice, const VkDeviceCreateIn
     return VK_SUCCESS;
 }
 
-// The loader's callback for objects a layer makes: it gives the object its device's dispatch table.
 inline VkResult VKAPI_CALL SetDeviceLoaderData(VkDevice device, void* object)
 {
     g_driver.record("vkSetDeviceLoaderData");
@@ -862,7 +815,6 @@ inline void VKAPI_CALL GetPhysicalDeviceMemoryProperties(VkPhysicalDevice, VkPhy
     *out = g_driver.memory;
 }
 
-// The VkImageFormatListCreateInfo in an input chain, if there is one.
 inline const VkImageFormatListCreateInfo* format_list_in(const void* next)
 {
     for (auto* s = static_cast<const VkBaseInStructure*>(next); s != nullptr; s = s->pNext) {
@@ -922,8 +874,6 @@ inline VkResult VKAPI_CALL GetPhysicalDeviceImageFormatProperties2KHR(VkPhysical
     }
     return VK_SUCCESS;
 }
-
-// --- Device level ----------------------------------------------------------------------------------------------------
 
 inline void VKAPI_CALL DestroyDevice(VkDevice device, const VkAllocationCallbacks*)
 {
@@ -1029,8 +979,6 @@ inline VkResult VKAPI_CALL BindImageMemory(VkDevice, VkImage image, VkDeviceMemo
     return g_driver.scripted("vkBindImageMemory");
 }
 
-// --- Fences, submits, queues -----------------------------------------------------------------------------------------
-
 inline VkFence driver_fence(size_t n)
 {
     return reinterpret_cast<VkFence>(static_cast<uintptr_t>(0xFE000000u + n));
@@ -1096,7 +1044,6 @@ inline VkResult VKAPI_CALL GetFenceStatus(VkDevice, VkFence fence)
     return signalled ? VK_SUCCESS : VK_NOT_READY;
 }
 
-// Waits in real time, for at most the timeout and never more than 2 s (a test must not hang on a fence nobody signals).
 inline VkResult VKAPI_CALL WaitForFences(VkDevice, uint32_t count, const VkFence* fences, VkBool32 wait_all,
                                          uint64_t timeout)
 {
@@ -1173,7 +1120,6 @@ inline VkResult VKAPI_CALL QueueWaitIdle(VkQueue queue)
     return VK_SUCCESS;
 }
 
-// A host signal of a timeline semaphore: the call log has the semaphore and the value (as its index).
 inline VkResult VKAPI_CALL SignalSemaphore(VkDevice, const VkSemaphoreSignalInfo* info)
 {
     g_driver.record("vkSignalSemaphore", handle_value(info->semaphore), static_cast<uint32_t>(info->value));
@@ -1185,8 +1131,6 @@ inline VkResult VKAPI_CALL SignalSemaphoreKHR(VkDevice, const VkSemaphoreSignalI
     g_driver.record("vkSignalSemaphoreKHR", handle_value(info->semaphore), static_cast<uint32_t>(info->value));
     return VK_SUCCESS;
 }
-
-// --- The driver's own swapchains (Monado's peek window) --------------------------------------------------------------
 
 inline VkSwapchainKHR driver_swapchain(size_t n)
 {
@@ -1252,8 +1196,6 @@ inline VkResult VKAPI_CALL ReleaseSwapchainImagesKHR(VkDevice, const VkReleaseSw
     return VK_SUCCESS;
 }
 
-// VK_EXT_present_timing on the driver's own swapchains: recorded, with fixed answers (a 60 Hz display, no time domain,
-// no timings).
 inline VkResult VKAPI_CALL SetSwapchainPresentTimingQueueSizeEXT(VkDevice, VkSwapchainKHR swapchain, uint32_t)
 {
     g_driver.record("vkSetSwapchainPresentTimingQueueSizeEXT", handle_value(swapchain));
@@ -1292,7 +1234,6 @@ inline VkResult VKAPI_CALL GetPastPresentationTimingEXT(VkDevice, const VkPastPr
     return VK_SUCCESS;
 }
 
-// What the fake's vkGetCalibratedTimestamps reads for a time domain (QPC: 4'000'000 ticks), and its deviation.
 inline uint64_t fake_timestamp(VkTimeDomainKHR domain)
 {
     return 1'000'000ULL * (static_cast<uint64_t>(domain) + 1);
@@ -1434,7 +1375,7 @@ inline PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice, const char* nam
         DVL_FAKE_ENTRY(SignalSemaphoreKHR),
     };
     if (!g_driver.offer_signal_semaphore_khr && std::strcmp(name, "vkSignalSemaphoreKHR") == 0) {
-        return nullptr; // VK_KHR_timeline_semaphore not enabled
+        return nullptr;
     }
     for (const Entry& e : table) {
         if (std::strcmp(e.name, name) == 0) {
@@ -1492,10 +1433,8 @@ inline PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance, const char*
 
 #undef DVL_FAKE_ENTRY
 
-} // namespace fake
+}
 
-// See the file comment. With `running_clock`, the display session's clock (and so the FakeApi's flip counter) runs at
-// the real rate: for tests that run the layer's real display thread.
 class ChainRig {
 public:
     explicit ChainRig(std::vector<FakeGpu> gpus = default_gpus(), bool running_clock = false)
@@ -1512,7 +1451,7 @@ public:
         };
         deps.processes = [this]() { return running; };
         deps.pin_module = []() {};
-        deps.board_present = []() { return false; }; // never this machine's devices
+        deps.board_present = []() { return false; };
         deps.wait_ms = 10000;
         deps.sleep = [this](int64_t ns) { clock.advance(ns); };
         deps.log = [this](const std::string& line) { session_log.push_back(line); };
@@ -1536,8 +1475,6 @@ public:
         create_instance();
     }
 
-    // Monado's retry: the instance destroyed and a new one made, in a process whose display session
-    // stays open. The new instance decides the display again.
     void new_instance()
     {
         if (instance != VK_NULL_HANDLE) {
@@ -1589,7 +1526,6 @@ public:
 
     bool ready() const { return loaded && gipa != nullptr && instance != VK_NULL_HANDLE; }
 
-    // A command as the application gets it from the layer.
     template <class Fn>
     Fn fn(const char* name) const
     {
@@ -1603,7 +1539,6 @@ public:
 
     static VkPhysicalDevice gpu(size_t i) { return reinterpret_cast<VkPhysicalDevice>(&g_gpus[i]); }
 
-    // vkCreateDevice down the chain, with the loader's link and its loader-data callback.
     VkResult create_device(size_t gpu_index, const std::vector<VkDeviceQueueCreateInfo>& queues,
                            const std::vector<const char*>& extensions, VkDevice* out, bool with_callback = true)
     {
@@ -1630,7 +1565,6 @@ public:
 
     void destroy_device(VkDevice device) { device_fn<PFN_vkDestroyDevice>(device, "vkDestroyDevice")(device, nullptr); }
 
-    // vkGetDeviceQueue as the application gets it: the loader's trampoline gives the queue its device's dispatch table.
     VkQueue get_queue(VkDevice device, uint32_t family, uint32_t index)
     {
         VkQueue queue = VK_NULL_HANDLE;
@@ -1641,34 +1575,23 @@ public:
         return queue;
     }
 
-    // What vkCreateSwapchainKHR on our surface asks first: the trial import of a device that
-    // did not exist at the display query, once. Through the test DLL's export; -1 without it.
     int trial_import_at_swapchain(VkDevice device) const
     {
         return swapchain_trial != nullptr ? swapchain_trial(device) : -1;
     }
-    // The layer's trial_import() itself on a device; -1 without the export.
     int trial_import(VkDevice device) const { return direct_trial != nullptr ? direct_trial(device) : -1; }
 
-    // A line put among the presenter's pending lines (made under the display-session lock, written once it is let go),
-    // the way the display thread's frame model and the warnings leave theirs: 1, 0 if there is no presenter yet, -1
-    // without the export.
     int add_pending_line(const char* line) const { return add_pending != nullptr ? add_pending(line) : -1; }
 
-    // The layer's console control handler for `event` (CTRL_C_EVENT...), which runs the display thread's stop hook and
-    // waits up to its 100 ms for it: the handler's answer (0), or -1 without the export.
     int console(DWORD event) const { return console_event != nullptr ? console_event(event) : -1; }
 
-    // The presenter's trace filled up to the first record that does not fit (MIRADOR_DIRECT_MODE_TRACE set): 1, 0 if
-    // there is no trace yet, -1 without the export.
     int fill_trace() const { return fill_trace_fn != nullptr ? fill_trace_fn() : -1; }
 
-    // The display session on a fake NVAPI, as the layer sees it in place of the process's.
     std::unique_ptr<nvdm::FakeClock> clock_owner;
     nvdm::FakeClock& clock;
     nvdm::FakeApi api;
-    std::vector<std::string> running;     // what the session's holder check sees
-    std::vector<std::string> session_log; // what the session logged
+    std::vector<std::string> running;
+    std::vector<std::string> session_log;
     std::unique_ptr<nvdm::DisplaySession> session;
 
     ScopedEnv processes{L"MIRADOR_DIRECT_MODE_PROCESSES", L"dvl_tests.exe"};
@@ -1687,8 +1610,6 @@ public:
     VkInstance instance = VK_NULL_HANDLE;
 };
 
-// The layer's log lines, taken from the test build of the DLL in place of its logger (dvl_test_set_log_sink) for the
-// capture's life, each with the thread that wrote it. Every level is taken; MIRADOR_DIRECT_MODE_LOG=off does not stop it.
 class LogCapture {
 public:
     struct Line {
@@ -1703,7 +1624,6 @@ public:
             set_(&LogCapture::take, this);
         }
     }
-    // The logger is back, and no line is being handed to this capture, once it returns.
     ~LogCapture()
     {
         if (set_ != nullptr) {
@@ -1715,7 +1635,6 @@ public:
 
     bool ready() const { return set_ != nullptr; }
 
-    // The lines that contain `part`, written by any thread, or by `thread` only.
     size_t count(const std::string& part, DWORD thread = 0) const
     {
         std::lock_guard<std::mutex> hold(mutex_);
@@ -1743,8 +1662,6 @@ private:
     std::vector<Line> lines_;
 };
 
-// The queue create info Monado's compute compositor passes: the compute family (2), one queue, with the
-// global-priority pNext.
 struct MonadoQueue {
     VkDeviceQueueGlobalPriorityCreateInfoKHR priority{VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR,
                                                       nullptr, VK_QUEUE_GLOBAL_PRIORITY_REALTIME_KHR};
@@ -1755,4 +1672,4 @@ struct MonadoQueue {
     MonadoQueue& operator=(const MonadoQueue&) = delete;
 };
 
-} // namespace dvl_test
+}

@@ -31,8 +31,6 @@ public sealed class HelperHandlerTests : IDisposable
 
     private static HelperRequest Request(HelperCommand command) => new(command);
 
-    // Ping
-
     [Fact]
     public async Task Ping_returns_the_helper_version()
     {
@@ -52,10 +50,9 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.True(reply.Ok);
         Assert.Equal(@"D:\Portable\Mirador", reply.Value);
 
-        // By default the folder above the helper's own, the folder the elevated start checks the caller against.
         var own = await Handler().HandleAsync(Request(HelperCommand.GetInstallFolder));
         Assert.Equal(HelperHandler.DefaultInstallDir, own.Value);
-        Assert.Equal(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), own.Value); // the app is beside it
+        Assert.Equal(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), own.Value);
     }
 
     [Fact]
@@ -84,8 +81,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.Equal(new HelperReply(true, Value: "1.2.3"), await ping);
         Assert.True((await stopping).Ok);
     }
-
-    // StopPimax
 
     [Fact]
     public async Task StopPimax_stops_the_service_and_kills_the_fixed_list()
@@ -153,8 +148,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.Equal(new HelperReply(false, "stop failed"), r);
         Assert.Equal(PimaxNames.Processes, processes.Killed);
     }
-
-    // The OpenXR runtime
 
     [Fact]
     public async Task SetRuntimeBundled_records_the_previous_runtime_once()
@@ -298,9 +291,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.Null(registry.Recorded);
     }
 
-    // GetPimaxEyeBlob
-
-    /// <summary>Pimax's runtime folder, as a full path on whichever system runs the tests.</summary>
     internal static readonly string PimaxRuntime = Path.GetFullPath("/Program Files/Pimax/Runtime");
 
     internal static readonly string EyeRuntimePath =
@@ -355,7 +345,6 @@ public sealed class HelperHandlerTests : IDisposable
     [Fact]
     public async Task GetPimaxEyeBlob_ignores_a_runtime_that_pimaxs_service_didnt_start()
     {
-        // Pimax's own program file, started by someone else with a command line of their choosing.
         processes.Lines[PimaxNames.EyeRuntimeProcess] = [EyeRuntimeExe + " -x config_XR5PIMAXDA_K10_RAYH.bin"];
         processes.ParentId = 4242;
 
@@ -367,7 +356,6 @@ public sealed class HelperHandlerTests : IDisposable
     [Fact]
     public async Task GetPimaxEyeBlob_ignores_a_runtime_older_than_pimaxs_service()
     {
-        // Its parent id was the service's before: a process id Windows gave out again.
         processes.Lines[PimaxNames.EyeRuntimeProcess] = [EyeRuntimeExe + " -x config_XR5PIMAXDA_K10_RAYH.bin"];
         processes.Started = new DateTime(2026, 11, 4, 9, 0, 0);
 
@@ -443,8 +431,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.Null(r.Value);
     }
 
-    // Failures
-
     [Fact]
     public async Task Exceptions_become_error_replies()
     {
@@ -472,7 +458,6 @@ public sealed class HelperHandlerTests : IDisposable
     [Fact]
     public async Task A_very_long_error_message_outside_ascii_still_fits_one_line()
     {
-        // JSON writes each of these as six bytes (\u00E9), so a cut by characters alone could overflow the line.
         services.StopFails = new InvalidOperationException(new string('\u00e9', 10_000));
 
         var r = await Handler(serviceRunning: true).HandleAsync(Request(HelperCommand.StopPimax));
@@ -498,7 +483,6 @@ public sealed class HelperHandlerTests : IDisposable
     [Fact]
     public async Task Requests_are_handled_one_at_a_time()
     {
-        // The helper changes machine-wide state: two requests must never be inside the registry code together.
         registry.Active = @"C:\Program Files\Pimax\Runtime\PiOpenXR_64.json";
         var handler = Handler();
 
@@ -509,8 +493,6 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.Equal(@"C:\Program Files\Pimax\Runtime\PiOpenXR_64.json", registry.Recorded);
     }
 
-    // RevokeElevatedMonado
-
     private static readonly SecurityIdentifier Alice = new("S-1-5-21-1-2-3-1001");
     private static readonly SecurityIdentifier Bob = new("S-1-5-21-1-2-3-1002");
 
@@ -518,7 +500,7 @@ public sealed class HelperHandlerTests : IDisposable
 
     private HelperHandler ConsentHandler(FakeConsentValues values)
     {
-        Handler(); // writes the bundled manifest
+        Handler();
         return new HelperHandler(services, processes, registry, consent: new ElevatedConsent(values), monado: monado);
     }
 
@@ -531,13 +513,11 @@ public sealed class HelperHandlerTests : IDisposable
         values.FileLines[Alice.Value] = ["ArcturusPerception.dll=" + new string('a', 64)];
         values.FileLines[Bob.Value] = ["ArcturusPerception.dll=" + new string('b', 64)];
 
-        // The request is only a command: there is no way to put another SID in it.
         var reply = await ConsentHandler(values).HandleAsync(Request(HelperCommand.RevokeElevatedMonado), Caller(Alice));
 
         Assert.True(reply.Ok);
         Assert.Equal([Bob.Value], values.Sids);
 
-        // The approved SteamVR files go with the consent, and only the caller's.
         Assert.Equal([Bob.Value], values.FileLines.Keys);
     }
 
@@ -573,13 +553,11 @@ public sealed class HelperHandlerTests : IDisposable
         Assert.True(reply.Ok);
     }
 
-    // StartMonadoElevated / StopMonadoElevated / WaitMonadoElevated
-
     private static readonly ElevatedStart Start = new(3000, 100, 6, "pimax");
 
     private HelperHandler ElevatedHandler(FakeElevated elevated)
     {
-        Handler(); // writes the bundled manifest
+        Handler();
         return new HelperHandler(services, processes, registry, elevated: elevated, monado: monado);
     }
 

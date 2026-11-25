@@ -24,7 +24,6 @@ public class ElevatedEnvironmentTests
     [Fact]
     public void Approved_variables_come_last_and_win()
     {
-        // Every name the helper sets itself is refused (ElevatedVariables), so they only add to it.
         var plain = Build(module: PimaxEnvironment.ModuleId);
         var env = ElevatedEnvironment.Build(
             Start(module: PimaxEnvironment.ModuleId), Folders, ServerDir, SteamVrPath,
@@ -107,7 +106,6 @@ public class ElevatedEnvironmentTests
     {
         var env = Build();
 
-        // PATH is System32, Windows, System32\Wbem and the server folder only: never a folder the user can write to.
         var system32 = Environment.SystemDirectory;
         var expected = $"{system32};{Path.GetDirectoryName(system32)};{Path.Combine(system32, "wbem")};{ServerDir}";
         Assert.Equal(expected, env["PATH"]);
@@ -122,7 +120,6 @@ public class ElevatedEnvironmentTests
         Assert.Equal(Folders.Temp, env["TEMP"]);
         Assert.Equal(Folders.Temp, env["TMP"]);
 
-        // Monado names its pipe from this temp, so the user's games find it.
         Assert.Equal(
             MonadoPipeName.Prefix + Folders.Temp + @"\" + MonadoPipeName.Suffix,
             MonadoPipeName.NameFor(env, AnsiCodePage.RoundTrip));
@@ -131,7 +128,6 @@ public class ElevatedEnvironmentTests
     [Fact]
     public void Temp_and_pipe_name_come_from_the_users_block()
     {
-        // The user's environment block, as CreateEnvironmentBlock gives it (names in Windows' own case).
         var block = new Dictionary<string, string>
         {
             ["USERPROFILE"] = @"C:\Users\finn",
@@ -151,8 +147,6 @@ public class ElevatedEnvironmentTests
         Assert.Equal(block["APPDATA"], env["APPDATA"]);
         Assert.Equal(block["LOCALAPPDATA"], env["LOCALAPPDATA"]);
 
-        // The name Mirador waits for (built from the same block) is the one the elevated Monado opens; never the
-        // helper's own C:\Windows temp.
         var name = MonadoPipeName.NameFor(env, AnsiCodePage.RoundTrip);
         Assert.Equal(MonadoPipeName.NameFor(block, AnsiCodePage.RoundTrip), name);
         Assert.Equal(@"\\.\pipe\C:\Users\finn\AppData\Local\Temp\/monado_comp_ipc", name);
@@ -162,7 +156,6 @@ public class ElevatedEnvironmentTests
     [Fact]
     public void Temp_follows_the_blocks_order()
     {
-        // TMP wins over TEMP, as GetTempPath2 and MonadoPipeName read them; without either, the profile folder.
         var both = UserFolders.FromBlock(new Dictionary<string, string>
         {
             ["USERPROFILE"] = @"C:\Users\u",
@@ -183,12 +176,12 @@ public class ElevatedEnvironmentTests
     }
 
     [Theory]
-    [InlineData(500, 100, 6)]     // lighthouse below range
-    [InlineData(1500, 100, 6)]    // lighthouse off its step
-    [InlineData(3000, 999, 6)]    // scale above range
-    [InlineData(3000, 102, 6)]    // scale off its step
-    [InlineData(3000, 100, 0)]    // compositor below range
-    [InlineData(3000, 100, 21)]   // compositor above range
+    [InlineData(500, 100, 6)]
+    [InlineData(1500, 100, 6)]
+    [InlineData(3000, 999, 6)]
+    [InlineData(3000, 102, 6)]
+    [InlineData(3000, 100, 0)]
+    [InlineData(3000, 100, 21)]
     public void Settings_out_of_range_refused(int lh, int scale, int comp) =>
         Assert.Throws<ArgumentException>(() => Build(Start(lh, scale, comp)));
 
@@ -245,7 +238,6 @@ public class ElevatedEnvironmentTests
         Assert.Equal(["VK_LOADER_LAYERS_ALLOW"], vk);
         Assert.DoesNotContain(env.Keys, k => k.StartsWith("XR_", StringComparison.OrdinalIgnoreCase));
 
-        // A profile without direct mode carries no VK_* or XR_* at all.
         var plain = Build();
         Assert.DoesNotContain(plain.Keys, k => k.StartsWith("VK_", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plain.Keys, k => k.StartsWith("XR_", StringComparison.OrdinalIgnoreCase));

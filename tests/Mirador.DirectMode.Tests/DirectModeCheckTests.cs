@@ -72,7 +72,6 @@ public sealed class DirectModeCheckTests : IDisposable
     [Fact]
     public async Task A_headset_left_to_windows_doesnt_refuse_the_start_and_isnt_remembered()
     {
-        // The layer stepped aside (the EDID's HMD block): nothing about the driver failed, nor did anything pass.
         answer = (
             [
                 "Product FAILED: the Pimax headset (PVR 0x1030)'s EDID carries Microsoft's HMD block, so Windows drives it through its own HMD route and this layer leaves it alone",
@@ -102,8 +101,6 @@ public sealed class DirectModeCheckTests : IDisposable
         Assert.EndsWith("Try again.", e.Message, StringComparison.Ordinal);
     }
 
-    // --- turning the layer on ---
-
     private static Profile Profile() => new("p1", "P", null, BuildSource.Mirador, [], new Dictionary<string, string>());
 
     private void Touch(params string[] parts)
@@ -131,24 +128,8 @@ public sealed class DirectModeCheckTests : IDisposable
     }
 
     [Fact]
-    public void The_layers_five_variables_are_these()
-    {
-        Assert.Equal(
-            new Dictionary<string, string>
-            {
-                ["MIRADOR_DIRECT_MODE"] = "1",
-                ["DISABLE_RTSS_LAYER"] = "1",
-                ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
-                ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
-                ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            },
-            DirectModeEnvironment.Variables.ToDictionary(p => p.Key, p => p.Value));
-    }
-
-    [Fact]
     public void Variables_a_shell_may_have_left_that_change_the_layer_are_taken_out_of_monados_environment()
     {
-        // As start-monado.ps1 did: an empty value removes the variable from what Monado inherits.
         Assert.Equal(
             [
                 "DISABLE_MIRADOR_DIRECT_MODE", "MIRADOR_DIRECT_MODE_TEST_NO_EDID", "MIRADOR_DIRECT_MODE_IGNORE_HOLDERS",

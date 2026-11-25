@@ -2,23 +2,19 @@ using Microsoft.Win32;
 
 namespace Mirador.Core.SignIn;
 
-/// <summary>The current user's "run at sign-in" registry values (64-bit view), behind an interface so tests touch no registry.</summary>
 public interface IRunKeys
 {
-    /// <summary>The command under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, or null.</summary>
     string? GetRun(string name);
 
     void SetRun(string name, string command);
 
     void DeleteRun(string name);
 
-    /// <summary>Task Manager's Startup switch for <paramref name="name"/> (<c>…\Explorer\StartupApproved\Run</c>), or null when it never set one.</summary>
     byte[]? GetApproved(string name);
 
     void DeleteApproved(string name);
 }
 
-/// <summary>The real registry.</summary>
 public sealed class RegistryRunKeys : IRunKeys
 {
     private const string RunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";

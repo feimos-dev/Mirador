@@ -57,7 +57,6 @@ public class AppPipeTests
         var waiting = 0;
         await using var server = new AppPipeServer(name, async (line, ct) =>
         {
-            // Neither answer comes before both requests are in: they are served side by side.
             if (Interlocked.Increment(ref waiting) == 2)
             {
                 both.TrySetResult();
@@ -140,7 +139,7 @@ public class AppPipeTests
     {
         if (!OperatingSystem.IsWindows())
         {
-            return; // first pipe instances are Windows' own
+            return;
         }
 
         var name = UniqueName();

@@ -3,22 +3,13 @@ using Mirador.Core.Xr;
 
 namespace Mirador.Xr;
 
-/// <summary>
-/// The Windows desktop as the dashboard's laser reaches it: its monitors, and the mouse moved, pressed and scrolled as
-/// if by hand (<c>SendInput</c>). Windows doesn't pass such input to a window of a program running as administrator.
-/// </summary>
 internal static class DesktopMouse
 {
     private const uint Move = 0x0001, LeftDown = 0x0002, LeftUp = 0x0004, Wheel = 0x0800, VirtualDesk = 0x4000, Absolute = 0x8000;
     private const int WheelNotch = 120;
 
-    /// <summary>
-    /// Makes this process see the desktop in real pixels, whatever each monitor's scaling: call it once, before
-    /// anything else here, or the laser lands beside the pointer on a scaled monitor.
-    /// </summary>
-    public static void UseRealPixels() => SetProcessDpiAwarenessContext(new IntPtr(-4)); // per monitor, version 2
+    public static void UseRealPixels() => SetProcessDpiAwarenessContext(new IntPtr(-4));
 
-    /// <summary>The monitors of the desktop, the primary one first, then from left to right.</summary>
     public static IReadOnlyList<DesktopMonitor> Monitors()
     {
         var found = new List<DesktopMonitor>();
@@ -38,7 +29,6 @@ internal static class DesktopMouse
         return [.. found.OrderByDescending(m => m.Primary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top)];
     }
 
-    /// <summary>Puts the pointer at (<paramref name="u"/>, <paramref name="v"/>) of <paramref name="monitor"/>, from its top left corner.</summary>
     public static void MoveTo(DesktopMonitor monitor, float u, float v)
     {
         var all = new DesktopRect(GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79));
@@ -46,13 +36,10 @@ internal static class DesktopMouse
         Send(new MouseInput { X = x, Y = y, Flags = Move | Absolute | VirtualDesk });
     }
 
-    /// <summary>Presses or lets go of the left button where the pointer is.</summary>
     public static void Left(bool down) => Send(new MouseInput { Flags = down ? LeftDown : LeftUp });
 
-    /// <summary>Turns the wheel by <paramref name="notches"/>: positive away from the user, which scrolls up.</summary>
     public static void Scroll(int notches) => Turn(notches * WheelNotch);
 
-    /// <summary>Turns the wheel by <paramref name="units"/>, 120 a notch: positive scrolls up.</summary>
     public static void Turn(int units)
     {
         if (units != 0)
@@ -78,7 +65,6 @@ internal static class DesktopMouse
         public IntPtr ExtraInfo;
     }
 
-    /// <summary><c>INPUT</c> for a mouse: on 64-bit Windows its union begins at byte 8, and the mouse's is its largest member.</summary>
     [StructLayout(LayoutKind.Explicit)]
     private struct Input
     {

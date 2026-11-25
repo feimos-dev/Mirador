@@ -57,9 +57,7 @@ uint64_t tolerance(uint64_t expected)
     return std::max<uint64_t>(3, (expected + 99) / 100);
 }
 
-} // namespace
-
-// --- Output ------------------------------------------------------------------------------------------------------
+}
 
 void StdoutOutput::line(const std::string& text)
 {
@@ -102,13 +100,10 @@ void say(Output& out, _Printf_format_string_ const char* format, ...)
     out.line(buffer);
 }
 
-// --- Holder checks -----------------------------------------------------------------------------------------------
-
 HolderFindings holder_findings(const std::vector<std::string>& processes)
 {
     HolderFindings findings;
     if (processes.empty()) {
-        // A machine always runs something: an empty list is a failed snapshot, and Pimax cannot be ruled out.
         findings.list_unreadable = true;
         findings.blockers.push_back("the process list cannot be read, so Pimax cannot be ruled out");
         return findings;
@@ -140,8 +135,6 @@ HolderFindings holder_findings(const std::vector<std::string>& processes)
     return findings;
 }
 
-// --- The verdict -------------------------------------------------------------------------------------------------
-
 uint64_t expected_flips(double seconds, double refresh_hz)
 {
     return seconds <= 0 || refresh_hz <= 0 ? 0 : static_cast<uint64_t>(std::llround(refresh_hz * seconds));
@@ -151,7 +144,6 @@ Verdict judge(bool steps_ok, const std::string& failed_step, const RunCounts& c)
 {
     Verdict verdict;
     if (!steps_ok && failed_step.find(nvdm::kWindowsDrivesIt) != std::string::npos) {
-        // The step-aside: Windows drives this headset, so this driver's direct mode is neither shown working nor broken.
         verdict.not_used = true;
         verdict.line = "NOT USED: " + failed_step;
         return verdict;
@@ -201,8 +193,6 @@ Verdict judge(bool steps_ok, const std::string& failed_step, const RunCounts& c)
     return verdict;
 }
 
-// --- Lines about the session and the layer ------------------------------------------------------------------------
-
 std::vector<std::string> describe_open_result(const nvdm::OpenResult& result)
 {
     std::vector<std::string> lines;
@@ -229,8 +219,6 @@ std::string driver_version_from_lines(const std::vector<std::string>& lines)
     constexpr const char key[] = "driver version ";
     for (const std::string& line : lines) {
         const size_t at = line.find(key);
-        // "driver version 621.01" and "warning: untested driver version 700.12; trying it anyway ...". Not "the driver
-        // version could not be read".
         if (at == std::string::npos) {
             continue;
         }
@@ -271,7 +259,7 @@ std::vector<std::string> explain_failure(const std::string& line)
                     "what to do: update the NVIDIA driver, connect the headset alone and run this tool again; if it "
                     "still fails, send this output, with the driver version, to the maintainer"};
         }
-        if (line.find("unknown display product") == std::string::npos) { // no EDID: unreadable, or skipped (a test)
+        if (line.find("unknown display product") == std::string::npos) {
             return {"what it means: the layer cannot tell which headset this is. No EDID (the display's description of "
                     "itself) could be read through NVAPI or the registry, and the line says why the Dream Air could "
                     "not be assumed instead",
@@ -308,9 +296,8 @@ std::vector<std::string> explain_failure(const std::string& line)
         return {"what to do: another program holds the display (Pimax, SteamVR or a second Monado): stop it and try "
                 "again; if it persists, restart Windows"};
     }
-    // CheckIds (the driver moved a call), CreateBackBuffers and SetDisplayMode (the driver refused the mode).
     return {"what to do: this NVIDIA driver doesn't do what the layer needs: send this output, with the driver "
             "version, to the maintainer"};
 }
 
-} // namespace dvl
+}

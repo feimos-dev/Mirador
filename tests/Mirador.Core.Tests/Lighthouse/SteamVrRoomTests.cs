@@ -10,11 +10,6 @@ namespace Mirador.Core.Tests.Lighthouse;
 
 public class SteamVrRoomTests
 {
-    /// <summary>
-    /// A lighthousedb.json as SteamVR writes one: universe ids as strings, base station serial numbers as integers (some
-    /// above int32), a station list per universe, other keys that have to be ignored. The first universe has no room
-    /// setup.
-    /// </summary>
     private const string Lighthousedb = """
         {
            "base_stations" : [
@@ -50,7 +45,6 @@ public class SteamVrRoomTests
         }
         """;
 
-    /// <summary>A chaperone_info.vrchap as SteamVR writes one: universe ids as strings, other keys that have to be ignored.</summary>
     private const string Vrchap = """
         {
            "jsonid" : "chaperone_info",
@@ -117,7 +111,6 @@ public class SteamVrRoomTests
     {
         Assert.Equal(new HashSet<string> { "2", "30", "31", "1500000004" }, SteamVrRoom.RoomSetups(Vrchap));
 
-        // Numbers are kept in their written form too.
         Assert.Equal(
             new HashSet<string> { "18446744073709551615", "5" },
             SteamVrRoom.RoomSetups("""{ "universes" : [ { "universeID" : 18446744073709551615 }, { "universeID" : "5" }, { "seated" : {} } ] }"""));
@@ -126,7 +119,6 @@ public class SteamVrRoomTests
     [Fact]
     public void Steamvr_lh_picks_the_first_universe_with_a_room_setup()
     {
-        // In the database's order, not the room setups' order: 30 comes before 2 there.
         Assert.Equal("30", SteamVrRoom.SteamVrLhPick(SteamVrRoom.Universes(Lighthousedb), SteamVrRoom.RoomSetups(Vrchap)));
     }
 
@@ -164,7 +156,6 @@ public class SteamVrRoomTests
         Assert.Equal(@"C:\Steam\config\chaperone_info.vrchap", SteamVrRoom.ChaperoneInfoPath(@"C:\Steam"));
     }
 
-    /// <summary>A chaperone_info.vrchap shaped as SteamVR writes one: bounds, play area, seated, standing, time, id.</summary>
     private const string TwoSpaces = """
         {
            "jsonid" : "chaperone_info",
@@ -204,7 +195,6 @@ public class SteamVrRoomTests
         Assert.Equal([3, 3], two["play_area"]!.AsArray().Select(n => (int)n!));
         Assert.Equal("Tue Nov 18 09:31:00 2026", (string?)two["time"]);
 
-        // The other universe and everything around it as they were.
         Assert.True(JsonNode.DeepEquals(Entry(TwoSpaces, "30"), Entry(written, "30")));
         var root = JsonNode.Parse(written)!;
         Assert.Equal("chaperone_info", (string?)root["jsonid"]);
@@ -250,7 +240,6 @@ public class SteamVrRoomTests
         Assert.Equal([0f, -0.1f, 0f], added["standing"]!["translation"]!.AsArray().Select(n => (float)n!));
         Assert.Equal(-1.5f, (float)added["standing"]!["yaw"]!);
 
-        // A copy of the first entry with only its id and standing changed.
         var first = Entry(TwoSpaces, "30").DeepClone().AsObject();
         first["universeID"] = "1500000001";
         first["standing"] = added["standing"]!.DeepClone();
@@ -285,11 +274,9 @@ public class SteamVrRoomTests
         Assert.Equal("0.25 -1.5 0.125 / 1", Standing(TwoSpaces, "30"));
         Assert.Null(SteamVrRoom.Standing(TwoSpaces, "1500000001"));
 
-        // Missing numbers count as 0, as in the driver.
         Assert.Equal("0.5 0 0 / 0", Standing("""{ "universes" : [ { "universeID" : "9", "standing" : { "translation" : [ 0.5 ] } } ] }""", "9"));
     }
 
-    /// <summary>The standing as "x y z / yaw", for comparing.</summary>
     private static string Standing(string json, string universe)
     {
         var (translation, yaw) = SteamVrRoom.Standing(json, universe)!.Value;
@@ -299,8 +286,6 @@ public class SteamVrRoomTests
     [Fact]
     public void The_chaperone_pose_is_steamvr_lhs()
     {
-        // init_chaperone: orientation = yaw about (0, −1, 0); position = translation turned by that orientation.
-        // A yaw of π/2 is a quarter turn clockwise seen from above, so +X goes to +Z.
         var pose = SteamVrRoom.ChaperonePose([1, 0, 0], MathF.PI / 2);
 
         Assert.Equal(0, pose.Qx, 1e-5f);
@@ -318,12 +303,10 @@ public class SteamVrRoomTests
     [InlineData(1.1f, -1.6f, -0.4f, 0.2f, 0.9f, -2.9f)]
     public void The_exported_offset_reproduces_the_applied_one(float offsetYaw, float offsetY, float tx, float ty, float tz, float yaw)
     {
-        // Mirador applied its offset on top of SteamVR's standing: device in stage = offset * chaperone * device in the driver.
         var offset = RoomSetupMath.Correct(MonadoPose.Identity with { X = 0.3f, Z = -0.2f }, -offsetY, -offsetYaw);
         float[] before = [tx, ty, tz];
         var (translation, newYaw) = SteamVrRoom.StandingFor(offset, before, yaw);
 
-        // After the export Mirador's offset is gone and steamvr_lh applies the new standing alone.
         MonadoPose[] devices = [MonadoPose.Identity, new(0.1f, 0.6f, 0.05f, 0.79f, -0.3f, 1.6f, 0.2f), new(0, 0, 0, 1, 1, 0.05f, -2)];
         foreach (var raw in devices)
         {
@@ -401,7 +384,6 @@ public class SteamVrRoomTests
         Assert.False(File.Exists(SteamVrRoom.ChaperoneInfoPath(steam.Path)));
     }
 
-    /// <summary>A lighthousedb.json listing <paramref name="ids"/> in that order.</summary>
     private static void KnownUniverses(TempDir steam, params string[] ids)
     {
         var path = SteamVrRoom.LighthousedbPath(steam.Path);
@@ -423,7 +405,6 @@ public class SteamVrRoomTests
     [Fact]
     public void An_export_that_makes_steamvr_use_this_space_goes_ahead()
     {
-        // The space in use is listed first and has no entry: steamvr_lh falls back to 30 now, and takes it after the export.
         using var steam = SteamWith(TwoSpaces, "1500000001", "30", "2");
         var (universes, roomSetups) = SteamVrRoom.Read(steam.Path);
         Assert.Equal("30", SteamVrRoom.SteamVrLhPick(universes, roomSetups));
@@ -440,8 +421,6 @@ public class SteamVrRoomTests
     [Fact]
     public void An_export_builds_on_the_room_setup_steamvr_uses_now()
     {
-        // The space in use has no entry; steamvr_lh applies 30's (translation [0.25, −1.5, 0.125], yaw 1) now, and Mirador's
-        // offset was measured on top of that. After the export steamvr_lh applies the new entry alone.
         using var steam = SteamWith(TwoSpaces, "1500000001", "30", "2");
         var (usedTranslation, usedYaw) = SteamVrRoom.Standing(TwoSpaces, "30")!.Value;
         var offset = RoomSetupMath.Correct(MonadoPose.Identity, -0.08f, 0.4f);
@@ -461,7 +440,6 @@ public class SteamVrRoomTests
             Assert.Equal(1, MathF.Abs(dot), 1e-4f);
         }
 
-        // 30's own entry is as it was.
         Assert.Equal(TwoSpacesEntry30(), Entry(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), "30").ToJsonString());
     }
 
@@ -470,7 +448,6 @@ public class SteamVrRoomTests
     [Fact]
     public void An_export_steamvr_still_wouldnt_use_is_refused()
     {
-        // 30 is listed before the space in use and has an entry: steamvr_lh would still take 30.
         using var steam = SteamWith(TwoSpaces, "30", "1500000001", "2");
         const string refusal =
             "SteamVR's room setup of another space is used: the floor and forward direction may be wrong in games. Exporting wouldn't change that: SteamVR would still use the room setup of an earlier space.";
@@ -485,7 +462,6 @@ public class SteamVrRoomTests
         Assert.Equal(TwoSpaces, File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)));
         Assert.False(Directory.Exists(steam.File("backups")));
 
-        // A space SteamVR doesn't know at all is refused the same way.
         Assert.Equal(refusal, SteamVrRoom.ExportRefusal(steam.Path, "99"));
     }
 

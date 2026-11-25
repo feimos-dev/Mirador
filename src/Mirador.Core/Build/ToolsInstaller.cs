@@ -4,31 +4,20 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Build;
 
-/// <summary>
-/// Installs Mirador's own build tools under <c>%LOCALAPPDATA%\Mirador\tools</c>: each pinned
-/// zip from its GitHub release, checked by its SHA-256 before anything is unpacked, no entry leaving its folder; and
-/// vcpkg, cloned whole over https and checked out at Mirador's pinned commit. A failure leaves the old copy as it was.
-/// </summary>
 public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, string toolsDir, string vcpkgCommit, Action<string, string>? moveDirectory = null)
 {
-    /// <summary>How often a folder move is tried (a virus scanner may hold a fresh file for a moment), 200 ms apart.</summary>
     public const int MoveAttempts = 5;
 
     private readonly Action<string, string> move = moveDirectory ?? Directory.Move;
 
-    /// <summary>The most a tool's zip may be.</summary>
     public const long MaxDownloadBytes = 256L * 1024 * 1024;
 
-    /// <summary>The most a tool's zip may unpack to.</summary>
     public const long MaxUnpackedBytes = 1024L * 1024 * 1024;
 
     private static MiradorException Fail(string message) => new(message);
 
-    /// <summary>Where vcpkg comes from.</summary>
     public const string VcpkgUrl = "https://github.com/microsoft/vcpkg.git";
 
-    /// <summary>Downloads, checks and unpacks <paramref name="pin"/> into its folder, replacing an older copy.</summary>
-    /// <exception cref="MiradorException">It can't be fetched or trusted; the message says why. The old copy stays.</exception>
     public async Task InstallAsync(ToolPin pin, Action<string> onLine, CancellationToken ct)
     {
         var url = Downloads.GitHubUrl(pin.Url, pin.Name);
@@ -55,8 +44,6 @@ public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, strin
                 JsonSerializer.Serialize(new BuildToolsCheck.Marker(pin.Version, pin.Sha256.ToLowerInvariant())),
                 CancellationToken.None).ConfigureAwait(false);
 
-            // The old copy goes aside whole first: something may be using it (a build), and then nothing changes. If the
-            // new one then can't take its place, the old one goes back.
             DeleteFolder(old);
             var hadOld = Directory.Exists(final);
             if (hadOld && !TryMove(final, old))
@@ -112,11 +99,6 @@ public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, strin
         }
     }
 
-    /// <summary>
-    /// Clones vcpkg whole (its manifests need its history) with <paramref name="git"/>, or fetches an existing clone,
-    /// and checks out Mirador's pinned commit; the commit reached is checked, so a clone elsewhere isn't used.
-    /// </summary>
-    /// <exception cref="MiradorException">A git step failed, or vcpkg isn't at the pinned commit; the message says which.</exception>
     public async Task InstallVcpkgAsync(string git, Action<string> onLine, CancellationToken ct)
     {
         if (!BuildToolsCheck.Commit().IsMatch(vcpkgCommit))
@@ -135,7 +117,6 @@ public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, strin
             onLine(line);
         }
 
-        // Never a prompt for a name or password, no helper of the user's asked, and https only (as branch builds).
         var environment = new Dictionary<string, string?> { ["GIT_TERMINAL_PROMPT"] = "0", ["GCM_INTERACTIVE"] = "never" };
         async Task Git(string step, string? where, params string[] args)
         {
@@ -174,8 +155,6 @@ public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, strin
 
             if (existing)
             {
-                // vcpkg's own program was built from the sources of the commit before: the recipe bootstraps it again
-                // from these when it is missing, so the new ports never run under an older vcpkg.
                 File.Delete(Path.Combine(work, "vcpkg.exe"));
             }
 
@@ -209,26 +188,12 @@ public sealed class ToolsInstaller(HttpClient http, ICommandRunner runner, strin
 
 }
 
-/// <summary>
-/// Microsoft's Build Tools bootstrapper (<c>vs_buildtools.exe</c>), downloaded from Microsoft as upstream's CI does and
-/// run only when Windows says Microsoft signed it.
-/// </summary>
 public static class VsBootstrapper
 {
-    /// <summary>The Build Tools for Visual Studio 2022, as upstream's CI installs them.</summary>
     public const string Url = "https://aka.ms/vs/17/release/vs_buildtools.exe";
 
-    /// <summary>The most the bootstrapper may be.</summary>
     public const long MaxBytes = 64L * 1024 * 1024;
 
-    /// <summary>
-    /// Downloads the bootstrapper into a new, empty folder of its own under <paramref name="downloadRoot"/> (so no DLL
-    /// planted earlier sits beside it when it runs elevated), opens it without write or delete sharing, and only then
-    /// checks its signer with <paramref name="signerOf"/> (<c>WinTrustSigner.SubjectOf</c>): its CN and O must both be
-    /// Microsoft Corporation. The file stays held until the returned handle is disposed, after the installer has ended,
-    /// so the bytes checked are the bytes that run; the folder then goes.
-    /// </summary>
-    /// <exception cref="MiradorException">It couldn't be fetched or isn't Microsoft's; nothing is kept.</exception>
     public static async Task<BootstrapperFile> DownloadAsync(HttpClient http, string downloadRoot, Func<string, string?> signerOf, CancellationToken ct)
     {
         var folder = Path.Combine(downloadRoot, Guid.NewGuid().ToString("N"));
@@ -255,7 +220,6 @@ public static class VsBootstrapper
     }
 }
 
-/// <summary>The checked bootstrapper, held open (read sharing only) until disposed; then its folder is deleted.</summary>
 public sealed class BootstrapperFile(string path, FileStream held) : IDisposable
 {
     public string Path { get; } = path;
@@ -268,10 +232,8 @@ public sealed class BootstrapperFile(string path, FileStream held) : IDisposable
 
 }
 
-/// <summary>Mirador's checked downloads for the build tools.</summary>
 internal static class Downloads
 {
-    /// <summary><paramref name="url"/> when it is https on github.com (the address asked for, not where GitHub redirects).</summary>
     public static Uri GitHubUrl(string url, string name) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps

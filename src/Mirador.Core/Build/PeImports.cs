@@ -3,20 +3,13 @@ using System.Text;
 
 namespace Mirador.Core.Build;
 
-/// <summary>
-/// Reads which DLLs a Windows program or DLL imports, from its PE import table, without loading it, so that
-/// every DLL each needs is found. Delay-loaded imports are left out: a missing one fails only when it is used.
-/// </summary>
 public static class PeImports
 {
     private const int ImportDirectory = 1;
     private const int MaxImports = 4096;
 
-    /// <summary>The names of the DLLs <paramref name="path"/> imports, as written in it.</summary>
-    /// <exception cref="InvalidDataException">The file is not a PE file, or its import table is broken.</exception>
     public static IReadOnlyList<string> Read(string path) => Parse(File.ReadAllBytes(path));
 
-    /// <inheritdoc cref="Read"/>
     public static IReadOnlyList<string> Parse(ReadOnlySpan<byte> pe)
     {
         if (pe.Length < 0x40 || pe[0] != 'M' || pe[1] != 'Z')
@@ -97,7 +90,6 @@ public static class PeImports
         throw new InvalidDataException("The import table doesn't end.");
     }
 
-    /// <summary>The file offset of <paramref name="rva"/>, from the section that holds it.</summary>
     private static int Offset(ReadOnlySpan<byte> pe, int sections, int count, uint rva)
     {
         for (var i = 0; i < count; i++)

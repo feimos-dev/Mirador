@@ -20,23 +20,16 @@ public class HelperProcessLauncherTests
         public ElevatedStart? StartSent { get; private set; }
         public string StartPid { get; set; } = "1234";
 
-        /// <summary>The replies for successive <see cref="HelperCommand.WaitMonadoElevated"/> polls; the last repeats.</summary>
         public ConcurrentQueue<HelperReply> WaitReplies { get; } = new();
 
         public Task<HelperReply> SendAsync(HelperCommand command, CancellationToken ct) => SendAsync(new HelperRequest(command), ct);
 
-        /// <summary>
-        /// When set, Monado "ends" only after a Stop, and only once this many Wait polls after it have said it still runs
-        /// (as the helper's job takes a moment to end the process); <see cref="WaitReplies"/> is then not used.
-        /// </summary>
         public int? PollsAfterStop { get; set; }
 
-        /// <summary>Whether the Stop has reached the helper.</summary>
         public bool Stopped { get; private set; }
 
         private int pollsSinceStop;
 
-        /// <summary>The Clean flag of each Stop sent.</summary>
         public ConcurrentQueue<bool> StopsClean { get; } = new();
 
         public Task<HelperReply> SendAsync(HelperRequest request, CancellationToken ct)
@@ -68,7 +61,6 @@ public class HelperProcessLauncherTests
                 ? new HelperReply(true, Value: "0")
                 : new HelperReply(true);
 
-        /// <summary>What the helper answers a Start with instead of starting Monado; null: it starts it.</summary>
         public HelperReply? StartRefusal { get; set; }
 
         private HelperReply Started(ElevatedStart? start)
@@ -78,7 +70,6 @@ public class HelperProcessLauncherTests
         }
     }
 
-    /// <summary>The job launcher, which runs Monado as the user: records what it was asked to start.</summary>
     private sealed class FakeUserLauncher : IProcessLauncher
     {
         public List<ProcessSpec> Specs { get; } = [];
@@ -136,12 +127,10 @@ public class HelperProcessLauncherTests
 
         await using var process = Launcher(client, dir.File("log"), asUser, (changed, why) => told.Add((changed, why))).Start(Spec);
 
-        // The same Start, through the job launcher with the spec the session built, instead of failing.
         Assert.Same(asUser.Started, process);
         Assert.Same(Spec, Assert.Single(asUser.Specs));
-        Assert.Equal([HelperCommand.StartMonadoElevated], client.Commands); // no wait or stop for a Monado that isn't the helper's
+        Assert.Equal([HelperCommand.StartMonadoElevated], client.Commands);
 
-        // Mirador hears why, with the files the helper named, for Home's "Runs as you" line.
         var (changed, why) = Assert.Single(told);
         Assert.True(changed);
         Assert.Contains("ArcturusPerception.dll", why);
@@ -214,7 +203,6 @@ public class HelperProcessLauncherTests
             }
         };
 
-        // Append a line while Monado "runs".
         await File.AppendAllTextAsync(log, "after the handler\n", new UTF8Encoding(false));
 
         await got.Task.WaitAsync(Limit);
@@ -226,9 +214,9 @@ public class HelperProcessLauncherTests
     {
         using var dir = new TempDir();
         var client = new FakeElevatedClient();
-        client.WaitReplies.Enqueue(new HelperReply(true));              // still running
-        client.WaitReplies.Enqueue(new HelperReply(true));              // still running
-        client.WaitReplies.Enqueue(new HelperReply(true, Value: "7"));  // ended, exit code 7
+        client.WaitReplies.Enqueue(new HelperReply(true));
+        client.WaitReplies.Enqueue(new HelperReply(true));
+        client.WaitReplies.Enqueue(new HelperReply(true, Value: "7"));
 
         await using var process = Launcher(client, dir.File("log")).Start(Spec);
 
@@ -245,7 +233,6 @@ public class HelperProcessLauncherTests
         await using var process = Launcher(client, dir.File("log")).Start(Spec);
         process.Kill();
 
-        // The stop reaches the helper (the kill returns at once; disposing waits for the exit).
         var deadline = DateTime.UtcNow + Limit;
         while (!client.Commands.Contains(HelperCommand.StopMonadoElevated) && DateTime.UtcNow < deadline)
         {
@@ -266,7 +253,7 @@ public class HelperProcessLauncherTests
 
         Assert.True(await process.EndCleanlyAsync(TimeSpan.FromSeconds(3)).WaitAsync(Limit));
         Assert.Equal([true], client.StopsClean);
-        process.Kill(); // after the clean stop: nothing more is sent
+        process.Kill();
         Assert.Single(client.StopsClean);
     }
 
@@ -280,8 +267,6 @@ public class HelperProcessLauncherTests
         process.Kill();
         await process.DisposeAsync().AsTask().WaitAsync(Limit);
 
-        // Disposing returned only once the helper reported Monado's real exit (not the "unknown" -1 at once), so the
-        // next Start (Restart) finds no elevated Monado still running.
         Assert.True(process.Exited.IsCompleted);
         Assert.Equal(0, await process.Exited);
         var commands = client.Commands.ToList();
@@ -294,13 +279,11 @@ public class HelperProcessLauncherTests
     public async Task Dispose_after_kill_gives_up_at_the_limit()
     {
         using var dir = new TempDir();
-        var client = new FakeElevatedClient { PollsAfterStop = int.MaxValue }; // never ends
+        var client = new FakeElevatedClient { PollsAfterStop = int.MaxValue };
 
         var process = Launcher(client, dir.File("log"), stopLimit: TimeSpan.FromMilliseconds(300)).Start(Spec);
         process.Kill();
 
-        // The stop goes out on the thread pool, which a busy test run (CI) may start later than the limit: wait for it
-        // to reach the helper, so that the limit is what Dispose then waits for Monado's exit.
         var until = DateTime.UtcNow + Limit;
         while (!client.Stopped && DateTime.UtcNow < until)
         {

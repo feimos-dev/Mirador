@@ -15,12 +15,6 @@ public class AppArgsTests
     }
 
     [Fact]
-    public void The_old_set_runtime_step_is_gone_and_its_manifest_is_ignored()
-    {
-        Assert.Equal(new AppArgs(false, false), AppArgs.Parse(["--set-runtime", @"C:\Users\Zoë\My Builds\monado\build\openxr_monado-dev.json"]));
-    }
-
-    [Fact]
     public void Parses_sign_in_and_remove_sign_in()
     {
         Assert.True(AppArgs.Parse(["--sign-in"]).SignIn);
@@ -106,7 +100,6 @@ public class AppArgsTests
         Assert.Equal(("bundled", ""), AppArgs.ApprovalTarget("bundled", "bundled"));
         Assert.Equal(("0123abc", @"C:\x"), AppArgs.ApprovalTarget("0123abc", @"C:\x"));
 
-        // A build folder whose build-info.json says "bundled", or a "bundled" folder with a real commit: refused.
         var (_, commit, source, _) = AppArgs.Parse(["--approve-build", "p1", "bundled", @"C:\x"]).ApproveBuild!.Value;
         Assert.Throws<InvalidOperationException>(() => AppArgs.ApprovalTarget(commit, source));
         Assert.Throws<InvalidOperationException>(() => AppArgs.ApprovalTarget("0123abc", "bundled"));

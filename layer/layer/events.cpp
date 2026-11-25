@@ -1,13 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// VK_EXT_display_control, the layer's own extension, and the fence commands that answer for its display
-// events. vkRegisterDisplayEventEXT hands out a real driver fence that is never submitted; vkWaitForFences,
-// vkGetFenceStatus and vkResetFences answer for it from the event table (dvl::EventTable), which the display thread
-// sets at the first refresh after the registration; lists that mix event and ordinary fences are split, and ordinary
-// fences go down alone. vkDestroyFence forgets the event and passes the fence down. Fences of a process that has no
-// display event go down without the lock.
-
 #include <vulkan/vulkan.h>
 
 #include <memory>
@@ -24,15 +17,12 @@
 namespace dvl {
 namespace {
 
-// The presenter, if the process has any display event now: the fence commands' look before they take the lock.
 Presenter* with_events()
 {
     Presenter* const p = presenter_if_any();
     return p != nullptr && p->event_count.load() != 0 ? p : nullptr;
 }
 
-// vkWaitForFences' host for dvl::wait_for_fences: the device's call down, the session's clock, and the condition
-// variable the display thread notifies at each refresh.
 class LayerFenceWaitHost : public FenceWaitHost {
 public:
     LayerFenceWaitHost(Presenter& p, DeviceData& d) : p_(p), d_(d) {}
@@ -55,7 +45,7 @@ private:
     DeviceData& d_;
 };
 
-} // namespace
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, VkDisplayKHR display,
                                                              const VkDisplayEventInfoEXT* info,
@@ -63,7 +53,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, Vk
 {
     return guarded("vkRegisterDisplayEventEXT", [&] {
         if (!is_our_display(display)) {
-            // Design 6.1: the only error the registry allows besides out of memory. Monado never does this.
             log(Level::Error, "vkRegisterDisplayEventEXT: display %p is not the layer's", static_cast<void*>(display));
             return VK_ERROR_UNKNOWN;
         }
@@ -72,7 +61,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, Vk
                 static_cast<int>(info->displayEvent));
         }
         DeviceData& d = device_data(device);
-        // A real driver fence, never submitted: the layer answers for it.
         VkFenceCreateInfo create{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         VkFence made = VK_NULL_HANDLE;
         const VkResult r = call_down(d.CreateFence, "vkCreateFence", device, &create, alloc, &made);
@@ -83,7 +71,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, Vk
         Presenter& p = presenter();
         {
             Locked lk(p);
-            const int64_t now = p.clock.now_ns(); // set by the first refresh after this
+            const int64_t now = p.clock.now_ns();
             p.events.add(device, made, now);
             if (p.trace) {
                 p.trace->add(nvdm::TraceKind::EventRegister, now, handle_key(made));
@@ -92,7 +80,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDisplayEventEXT(VkDevice device, Vk
             p.warnings.on_event_registered(handle_key(made), now);
             p.warnings.check(now);
         }
-        // The display thread watches the next refresh closely while an event waits.
         p.waiter.signal_frame_queued();
         *fence = made;
         return VK_SUCCESS;
@@ -103,8 +90,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_RegisterDeviceEventEXT(VkDevice, const VkDe
                                                             const VkAllocationCallbacks*, VkFence*)
 {
     return guarded("vkRegisterDeviceEventEXT", [&] {
-        // Design 6.9: not supported (the only device event, DISPLAY_HOTPLUG, has nothing to say about the headset).
-        // Monado never calls it.
         log(Level::Warn, "vkRegisterDeviceEventEXT: device event %d is not supported",
             info != nullptr ? static_cast<int>(info->deviceEvent) : -1);
         return VK_ERROR_UNKNOWN;
@@ -119,7 +104,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_DisplayPowerControlEXT(VkDevice, VkDisplayK
             log(Level::Error, "vkDisplayPowerControlEXT: display %p is not the layer's", static_cast<void*>(display));
             return VK_ERROR_UNKNOWN;
         }
-        // Success, a no-op: the headset's power is the board's business.
         log(Level::Debug, "vkDisplayPowerControlEXT: power state %d on the layer's display: nothing to do",
             info != nullptr ? static_cast<int>(info->powerState) : -1);
         return VK_SUCCESS;
@@ -136,7 +120,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetSwapchainCounterEXT(VkDevice device, VkS
                     static_cast<unsigned>(counter));
                 return VK_ERROR_UNKNOWN;
             }
-            // The 64-bit flip count: every counter increment, continued across link drops.
             Presenter& p = presenter();
             Locked lk(p);
             *value = p.model.counters().refreshes;
@@ -156,7 +139,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_WaitForFences(VkDevice device, uint32_t cou
         if (p == nullptr) {
             return call_down(d.WaitForFences, "vkWaitForFences", device, count, fences, wait_all, timeout);
         }
-        // Monado's vblank thread stamps the refresh when this returns: pending lines are left for later.
         Locked lk(*p, Locked::Flush::Later);
         const EventTable::Split split = p->events.split(device, fences, count);
         if (split.events.empty()) {
@@ -164,13 +146,12 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_WaitForFences(VkDevice device, uint32_t cou
             return call_down(d.WaitForFences, "vkWaitForFences", device, count, fences, wait_all, timeout);
         }
         for (const VkFence f : split.events) {
-            p->warnings.on_event_waited(handle_key(f)); // the 2 s rule: the fence calls reach the layer
+            p->warnings.on_event_waited(handle_key(f));
         }
         LayerFenceWaitHost host(*p, d);
         const EventWait w =
             wait_for_fences(p->events, lk.hold, device, fences, count, wait_all == VK_TRUE, timeout, host);
         if (w.result == VK_SUCCESS && w.set_ns) {
-            // The stats' display-event wake time: when the wait returns minus NVAPI's refresh time.
             const int64_t woke = p->clock.now_ns();
             p->stats.on_wake(woke - *w.set_ns);
             if (p->trace) {
@@ -186,7 +167,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetFenceStatus(VkDevice device, VkFence fen
     return guarded("vkGetFenceStatus", [&] {
         DeviceData& d = device_data(device);
         if (Presenter* const p = with_events()) {
-            Locked lk(*p, Locked::Flush::Later); // a look for the refresh, as the wait is
+            Locked lk(*p, Locked::Flush::Later);
             if (p->events.is_event(device, fence)) {
                 p->warnings.on_event_waited(handle_key(fence));
                 return p->events.is_set(device, fence) ? VK_SUCCESS : VK_NOT_READY;
@@ -237,7 +218,6 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyFence(VkDevice device, VkFence fence, co
                 p->warnings.on_event_gone(handle_key(fence));
             }
         }
-        // The real fence goes down either way.
         if (d.DestroyFence == nullptr) {
             missing_below("vkDestroyFence");
             return;
@@ -246,4 +226,4 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyFence(VkDevice device, VkFence fence, co
     });
 }
 
-} // namespace dvl
+}

@@ -10,16 +10,13 @@ using Mirador.Ipc;
 
 namespace Mirador.App.Services;
 
-/// <summary>Versions, for Diagnostics, Settings' About and the update check.</summary>
 public static class AppInfo
 {
-    /// <summary>Mirador's version, such as <c>0.1.0</c>.</summary>
     public static string Version { get; } =
         typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
         ?? typeof(AppInfo).Assembly.GetName().Version?.ToString(3)
         ?? "0.0.0";
 
-    /// <summary>Windows' name, version and build, such as <c>Windows 11 Pro 25H2 (build 26200.7171)</c>.</summary>
     public static string Windows()
     {
         try
@@ -28,7 +25,6 @@ public static class AppInfo
             var product = key?.GetValue("ProductName") as string ?? "Windows";
             var build = key?.GetValue("CurrentBuild") as string ?? "";
 
-            // ProductName still says "Windows 10" on Windows 11; the build number tells them apart.
             if (int.TryParse(build, out var number) && number >= 22000)
             {
                 product = product.Replace("Windows 10", "Windows 11", StringComparison.Ordinal);
@@ -44,10 +40,6 @@ public static class AppInfo
         }
     }
 
-    /// <summary>
-    /// Which Monado the profile runs: the bundled Monado's version, a branch with the commit it was built from, or a
-    /// build folder.
-    /// </summary>
     public static string Monado(Profile profile, string appDir)
     {
         switch (profile.Monado.Kind)
@@ -63,14 +55,12 @@ public static class AppInfo
         return profile.Monado.Describe();
     }
 
-    /// <summary>The commit and compiler of a branch profile's build, from its <c>build-info.json</c>.</summary>
     private static string BuiltCommit(Profile profile)
     {
         var info = BuildInfo.Load(Path.Combine(AppPaths.Default.BuildsDir, profile.Id, "install"));
         return info is null ? " (not built yet)" : $" at {info.ShortCommit}, {info.Compiler}";
     }
 
-    /// <summary>The lines of versions.txt and the Diagnostics page.</summary>
     public static string Versions(Profile profile, string appDir) =>
         $"Mirador {Version}\n{Windows()}\nMonado: {Monado(profile, appDir)}\n" +
         $"{new OpenCompositeInstall(OpenCompositeInstall.DefaultFolder).VersionLine()}\n" +

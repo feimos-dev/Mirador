@@ -21,10 +21,8 @@ public sealed partial class ProfilesPage : Page
 
     public ProfilesViewModel ViewModel { get; }
 
-    /// <summary>The link was left: offer the repository's branches.</summary>
     private void OnMonadoLinkLostFocus(object sender, RoutedEventArgs e) => _ = ViewModel.ListBranchesAsync();
 
-    /// <summary>Enter in the link: offer the repository's branches.</summary>
     private void OnMonadoLinkKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Enter)
@@ -33,7 +31,6 @@ public sealed partial class ProfilesPage : Page
         }
     }
 
-    /// <summary>A build that ends closes its card; only the arrow opens it.</summary>
     private void OnBuildChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(BuildViewModel.IsBuilding) && !ViewModel.Build.IsBuilding)
@@ -54,14 +51,8 @@ public sealed partial class ProfilesPage : Page
         base.OnNavigatedFrom(e);
     }
 
-    /// <summary>
-    /// The closed picker moves its pick with the keyboard, and picking "Add a profile…" adds one: there the keys stop at
-    /// the last profile, so a profile is only ever added from the open drop-down. (Typing to find an item is off for the
-    /// same reason: it could land on "Add a profile…".)
-    /// </summary>
     private void OnPickerPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // Alt+Down opens the drop-down: left to the picker.
         if (sender is not ComboBox { IsDropDownOpen: false } picker
             || InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(CoreVirtualKeyStates.Down))
         {

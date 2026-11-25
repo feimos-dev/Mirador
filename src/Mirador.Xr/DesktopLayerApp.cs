@@ -11,16 +11,8 @@ using XrAction = Silk.NET.OpenXR.Action;
 
 namespace Mirador.Xr;
 
-/// <summary>
-/// The desktop program (<c>--desktop</c>): one monitor as an OpenXR quad layer, from an overlay session of its own on
-/// D3D11, placed just under the dashboard's. The dashboard starts it and says on its standard input which monitor to
-/// show and where (<see cref="DesktopLayerLink"/>). Each new picture of the monitor is copied on the GPU into the quad's
-/// swapchain and Monado samples it once, at the size the quad is in the headset: no copy through memory, no renderer of
-/// its own. Monado's D3D11 client shares the swapchain's images with its Vulkan compositor.
-/// </summary>
 internal sealed unsafe class DesktopLayerApp : IDisposable
 {
-    // The capture's own layout, so a frame is copied as it is; sRGB first, which is how the desktop is encoded.
     private static readonly long[] Formats = [(long)Format.B8G8R8A8_UNorm_SRgb, (long)Format.B8G8R8A8_UNorm];
 
     private readonly XR xr = XR.GetApi();
@@ -36,13 +28,11 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
     private long format;
     private (int Width, int Height) swapchainSize;
     private ID3D11Texture2D[] images = [];
-    private bool pictured; // a picture has been released into the swapchain since it was made
+    private bool pictured;
 
     private DesktopPlacement? placement;
     private DesktopCapture? capture;
 
-    // The Index controllers' trackpads, which StereoKit's dashboard doesn't bind: the hand whose laser is on the desktop
-    // (true the left) scrolls with its own.
     private ActionSet scrollSet;
     private XrAction padAction;
     private XrAction touchAction;
@@ -56,7 +46,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
     private bool running;
     private bool exiting;
 
-    /// <summary>How long the runtime gets to end the session once the dashboard has gone.</summary>
     private static readonly TimeSpan ExitLimit = TimeSpan.FromSeconds(2);
 
     public static int Run(TextReader input)
@@ -64,7 +53,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         DesktopLayerApp? app = null;
         try
         {
-            app = new DesktopLayerApp(); // loads openxr_loader.dll
+            app = new DesktopLayerApp();
             app.Start();
         }
         catch (Exception e)
@@ -118,7 +107,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
                     EnabledExtensionCount = (uint)names.Length,
                     EnabledExtensionNames = namesPointer,
                 };
-                info.ApplicationInfo.ApiVersion = 1ul << 48; // OpenXR 1.0
+                info.ApplicationInfo.ApiVersion = 1ul << 48;
                 info.ApplicationInfo.ApplicationVersion = 1;
                 var appName = System.Text.Encoding.UTF8.GetBytes(DesktopLayerLink.AppName);
                 for (var i = 0; i < appName.Length; i++)
@@ -152,7 +141,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         var binding = new GraphicsBindingD3D11KHR(StructureType.GraphicsBindingD3D11Khr) { Device = (void*)device!.NativePointer };
         var overlay = new SessionCreateInfoOverlayEXTX(StructureType.SessionCreateInfoOverlayExtx)
         {
-            // Just under the dashboard (the top), so its lasers and controllers are drawn over the desktop.
             SessionLayersPlacement = uint.MaxValue - 1,
         };
         binding.Next = &overlay;
@@ -177,17 +165,15 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         }
     }
 
-    /// <summary>A D3D11 device on the adapter OpenXR names, which the capture writes to and the swapchain lives on.</summary>
     private void CreateDevice(ulong luid)
     {
         using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory4>();
-        using var adapter = factory.EnumAdapterByLuid<IDXGIAdapter>(*(Vortice.Luid*)&luid); // a LUID is the same 8 bytes
+        using var adapter = factory.EnumAdapterByLuid<IDXGIAdapter>(*(Vortice.Luid*)&luid);
         FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0];
         D3D11.D3D11CreateDevice(adapter, DriverType.Unknown, DeviceCreationFlags.BgraSupport, levels, out ID3D11Device created, out ID3D11DeviceContext immediate).CheckError();
         device = created;
         context = immediate;
 
-        // Windows.Graphics.Capture uses the device from its own threads, beside the copies made here.
         using var multithread = created.QueryInterface<ID3D11Multithread>();
         multithread.SetMultithreadProtected(true);
     }
@@ -199,7 +185,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
             PollEvents();
             if (inputEnded && exitAsked is null)
             {
-                // The dashboard has gone: the session ends the way OpenXR asks, then the loop.
                 exitAsked = DateTime.UtcNow;
                 if (!running)
                 {
@@ -216,7 +201,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
 
             if (!running)
             {
-                // The dashboard's lines wait for the first frame, which gives the frame period the capture follows.
                 Thread.Sleep(10);
                 continue;
             }
@@ -264,7 +248,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         }
     }
 
-    /// <summary>The dashboard's lines so far: the last placement and hand count, a hide drops both.</summary>
     private void Take()
     {
         while (lines.TryDequeue(out var line))
@@ -279,7 +262,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
                 var hand = DesktopLayerLink.ParsePoint(line);
                 if (hand != pointing)
                 {
-                    padScroll.Update(false, 0); // another hand's finger starts afresh
+                    padScroll.Update(false, 0);
                     pointing = hand;
                 }
             }
@@ -290,7 +273,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         }
     }
 
-    /// <summary>An action set of the trackpads' place and touch, bound for the Index controllers only, attached to the session.</summary>
     private void CreateScrollActions()
     {
         leftHand = PathOf("/user/hand/left");
@@ -336,7 +318,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         return action;
     }
 
-    /// <summary>The trackpad of the hand whose laser is on the desktop turns the wheel.</summary>
     private void ScrollWithPad()
     {
         if (scrollSet.Handle == 0 || placement is null || pointing is not { } left)
@@ -376,7 +357,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         }
     }
 
-    /// <summary>Copies <paramref name="name"/> into one of OpenXR's fixed name buffers, which are far longer than these names.</summary>
     private static void Name(byte* buffer, string name)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(name);
@@ -403,7 +383,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
                 }
                 catch (Exception e)
                 {
-                    // The program ends, which takes the dashboard's desktop buttons away.
                     Console.WriteLine($"Monitor {next.Monitor} can't be captured: {e.Message}");
                     exiting = true;
                     next = null;
@@ -420,7 +399,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         var state = new FrameState(StructureType.FrameState);
         if (xr.WaitFrame(session, &waitInfo, &state) != Result.Success)
         {
-            Thread.Sleep(10); // a session that is going: the events say so soon
+            Thread.Sleep(10);
             return;
         }
 
@@ -463,7 +442,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
         xr.EndFrame(session, &endInfo);
     }
 
-    /// <summary>A new picture of the monitor: copied into the next image of the swapchain, made again for a new size.</summary>
     private void CopyIn(ID3D11Texture2D picture, int width, int height)
     {
         if (swapchain.Handle == 0 || swapchainSize != (width, height))
@@ -478,7 +456,7 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
             return;
         }
 
-        var wait = new SwapchainImageWaitInfo(StructureType.SwapchainImageWaitInfo) { Timeout = long.MaxValue }; // XR_INFINITE_DURATION
+        var wait = new SwapchainImageWaitInfo(StructureType.SwapchainImageWaitInfo) { Timeout = long.MaxValue };
         if (xr.WaitSwapchainImage(swapchain, &wait) != Result.Success)
         {
             return;
@@ -536,7 +514,6 @@ internal sealed unsafe class DesktopLayerApp : IDisposable
             Check(xr.EnumerateSwapchainImages(swapchain, imageCount, &imageCount, (SwapchainImageBaseHeader*)first), "xrEnumerateSwapchainImages");
         }
 
-        // The runtime owns the textures: a reference of our own for each wrapper, given back with it.
         images = d3dImages.Select(image =>
         {
             Marshal.AddRef((IntPtr)image.Texture);

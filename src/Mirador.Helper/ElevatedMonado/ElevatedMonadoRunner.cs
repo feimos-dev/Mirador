@@ -9,13 +9,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.ElevatedMonado;
 
-/// <summary>
-/// The real <see cref="IElevatedMonado"/>: one per machine, keyed by the caller's
-/// SID. It runs only the bundled <c>monado\server\monado-service.exe</c> found from the helper's own install folder,
-/// with the environment the helper builds (<see cref="ElevatedEnvironment"/>), in the caller's session with the
-/// caller's linked (elevated) token, inside a kill-on-close job that also ends when the caller process exits. Its
-/// Win32 path runs only on a PC; the decision logic it leans on is unit-tested.
-/// </summary>
 public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
 {
     private const string BundledMissing =
@@ -36,10 +29,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
     private readonly ConcurrentDictionary<string, ElevatedService> sessions = new();
     private readonly object gate = new();
 
-    /// <param name="consent">Where users' consent lives, with the SteamVR files each allowed; the caller's SID must be allowed.</param>
-    /// <param name="signer">The Authenticode signer subject of a file; the real one is <see cref="WinTrustSigner.SubjectOf"/>.</param>
-    /// <param name="monado">The bundled Monado: its current version is the one started.</param>
-    /// <param name="approved">The builds owners approved (to run as administrator, or to be the OpenXR runtime).</param>
     public ElevatedMonadoRunner(ElevatedConsent consent, Func<string, string?>? signer = null, IMonadoInstaller? monado = null, IApprovedBuildStore? approved = null)
     {
         this.approved = approved;
@@ -79,7 +68,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
     {
         if (!sessions.TryGetValue(caller.Sid.Value, out var service))
         {
-            // Nothing started (or it ended and was replaced): report ended so the caller stops polling.
             return new HelperReply(true, Value: "0");
         }
 
@@ -102,7 +90,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         var sid = caller.Sid.Value;
         var consented = consent.IsAllowed(caller.Sid);
 
-        // Cheap checks first, before touching any token: consent and that the caller is the installed Mirador.
         if (ElevatedRequestCheck.Check(consented, caller.ImagePath, installDir, hasLinkedToken: true, running: false) is { } pre)
         {
             return Fail(pre);
@@ -116,7 +103,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
 
         using (userToken)
         {
-            // The caller's SID must be the session user's, checked before the linked token is used.
             using (var identity = new WindowsIdentity(userToken.DangerousGetHandle()))
             {
                 if (identity.User != caller.Sid)
@@ -132,18 +118,14 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                 return Fail(refusal);
             }
 
-            // The profile's own variables run only as the caller approved them, read from the helper's own record.
             if (ElevatedRequestCheck.ApprovedVariables(start, sid, approved, out var variables) is { } notApproved)
             {
                 return Fail(notApproved);
             }
 
-            // Mirador's Monado's current version, read at each Start: an update or a roll back may have changed it. Or a
-            // profile's approved build, every file checked against its approval at each Start.
             string serverDir;
             if (start.Build is { Length: > 0 } buildProfile)
             {
-                // The caller's own approval only: the record is per user.
                 if (approved is null || !ApprovedBuilds.IsProfileId(buildProfile) || approved.Get(caller.Sid.Value, buildProfile) is not { } build)
                 {
                     return Fail("This profile's build isn't approved to run as administrator.");
@@ -186,8 +168,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                     return Fail(NoSteamVr);
                 }
 
-                // Each DLL must be Valve's, or the very copy this caller allowed: the list is read for the pipe client's
-                // own SID (never from the request), and each hash is taken from the handle that is held until Monado is up.
                 var check = SteamVrDriverCheck.Verify(found, signer, consent.ApprovedFiles(caller.Sid));
                 if (check.Refusal is not null || check.SteamVrPath is null)
                 {
@@ -195,14 +175,11 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                     return check.Refusal ?? Fail("Mirador couldn't tell where SteamVR's Lighthouse driver really is.");
                 }
 
-                // Monado is told the folder the held files are really in, never the path found through the user's Steam
-                // settings: a junction on that path could be pointed elsewhere after the check.
                 hold = check.Hold;
                 steamVrPath = check.SteamVrPath;
             }
             else
             {
-                // A path that doesn't exist, under the server folder: Monado never finds SteamVR through the user's HKCU.
                 steamVrPath = Path.Combine(serverDir, "SteamVR-not-used");
             }
 
@@ -222,7 +199,7 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
                 var pipeName = MonadoPipeName.NameFor(env, AnsiCodePage.RoundTrip);
                 var service = ElevatedService.Launch(
                     serviceExe, serverDir, env, linked!, caller.ProcessId, logFile, hold, pipeName, Environment.ProcessPath);
-                hold = EmptyHold.Instance; // the service owns the hold now
+                hold = EmptyHold.Instance;
                 if (sessions.TryRemove(sid, out var previous))
                 {
                     previous.Dispose();
@@ -238,10 +215,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         }
     }
 
-    /// <summary>
-    /// The caller's own folders and temp, from its environment block (<see cref="UserFolders.FromBlock"/>). Not
-    /// <c>GetTempPath2</c> while impersonating: that reads the helper's own (SYSTEM) environment, never the user's.
-    /// </summary>
     private static UserFolders ReadUserFolders(SafeAccessTokenHandle userToken) =>
         UserFolders.FromBlock(EnvironmentBlock(userToken));
 
@@ -282,7 +255,7 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
     private static string? ReadCallerSteamPath(SafeAccessTokenHandle userToken) =>
         AsUser(userToken, () =>
         {
-            if (RegOpenCurrentUser(0x20019 /* KEY_READ */, out var hive) != 0)
+            if (RegOpenCurrentUser(0x20019, out var hive) != 0)
             {
                 return null;
             }
@@ -299,7 +272,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
             }
         });
 
-    /// <summary>Runs <paramref name="read"/> while impersonating the caller, then reverts; null when impersonation fails.</summary>
     private static T? AsUser<T>(SafeAccessTokenHandle userToken, Func<T?> read)
     {
         if (!ImpersonateLoggedOnUser(userToken))
@@ -317,7 +289,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         }
     }
 
-    /// <summary>The caller's linked (elevated) token as a primary token, or null when there is none (a standard account).</summary>
     private static SafeAccessTokenHandle? LinkedPrimaryToken(SafeAccessTokenHandle userToken)
     {
         const int TokenLinkedToken = 19;
@@ -365,20 +336,12 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         }
     }
 
-    /// <summary>
-    /// Makes <c>%ProgramData%\Mirador\monado</c> with SYSTEM and Administrators full control and the caller read only,
-    /// inheritance off, and empties <c>&lt;sid&gt;.log</c>. A folder that already exists but isn't a plain directory
-    /// owned by SYSTEM or Administrators is refused (never followed, deleted or recreated by SYSTEM).
-    /// </summary>
     private string PrepareLogFile(SecurityIdentifier sid)
     {
         var parent = Directory.GetParent(logDir)!.FullName;
         var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
         var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
 
-        // A missing folder is made with its protected DACL in the same call, so it never has a moment with
-        // %ProgramData%'s inherited rights (Users may write data and attributes there, enough to turn an empty folder
-        // into a junction). Each folder is checked again after it is made: one someone else made first is refused.
         var parentSecurity = AdminOnly(system, admins);
         parentSecurity.AddAccessRule(new FileSystemAccessRule(
             new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), FileSystemRights.ReadAndExecute,
@@ -401,8 +364,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
 
         CheckNotTampered(logDir);
 
-        // Only now, on a plain directory owned by SYSTEM or Administrators that no user can write to, is the DACL
-        // applied again (to add this caller's read).
         new DirectoryInfo(logDir).SetAccessControl(security);
 
         var logFile = Path.Combine(logDir, sid.Value + ".log");
@@ -410,7 +371,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         return logFile;
     }
 
-    /// <summary>SYSTEM and Administrators full control, inheritance off, owner SYSTEM.</summary>
     private static DirectorySecurity AdminOnly(SecurityIdentifier system, SecurityIdentifier admins)
     {
         var security = new DirectorySecurity();
@@ -421,7 +381,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
         return security;
     }
 
-    /// <summary>Refuses a folder that is a link/junction or isn't owned by SYSTEM or Administrators.</summary>
     private static void CheckNotTampered(string folder)
     {
         if (!Directory.Exists(folder))
@@ -479,7 +438,6 @@ public sealed class ElevatedMonadoRunner : IElevatedMonado, IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyEnvironmentBlock(IntPtr environment);
 
-    /// <summary>A hold that holds nothing (no SteamVR to keep).</summary>
     private sealed class EmptyHold : IDisposable
     {
         public static EmptyHold Instance { get; } = new();

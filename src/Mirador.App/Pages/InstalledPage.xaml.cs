@@ -4,7 +4,6 @@ using Mirador.App.ViewModels;
 
 namespace Mirador.App.Pages;
 
-/// <summary>What Mirador has installed, and at which version.</summary>
 public sealed partial class InstalledPage : Page
 {
     public InstalledPage()

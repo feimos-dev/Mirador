@@ -6,10 +6,6 @@ using Mirador.Core.Native;
 
 namespace Mirador.Core.Monado;
 
-/// <summary>
-/// Starts processes inside one Windows job object that ends all of them when it closes: when the launcher is
-/// disposed, and also when Mirador itself is killed or crashes, so Monado never outlives Mirador.
-/// </summary>
 public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
 {
     private readonly object gate = new();
@@ -17,11 +13,6 @@ public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
     private readonly Func<int, bool>? exitKey;
     private bool disposed;
 
-    /// <param name="exitKey">
-    /// Writes the key that ends a process cleanly into its console (<see cref="Mirador.Ipc.ConsoleExitKey.RunSender"/>):
-    /// true when written. Null: <see cref="IRunningProcess.EndCleanlyAsync"/> never ends one.
-    /// </param>
-    /// <exception cref="MiradorException">Windows would not create the job.</exception>
     public JobProcessLauncher(Func<int, bool>? exitKey = null)
     {
         this.exitKey = exitKey;
@@ -36,15 +27,8 @@ public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
         }
     }
 
-    /// <summary>
-    /// Starts the program with the environment, working directory and command line of <paramref name="spec"/>, no
-    /// window, and its output on <see cref="IRunningProcess.Line"/>.
-    /// </summary>
-    /// <exception cref="MiradorException">The program could not be started.</exception>
-    /// <exception cref="ObjectDisposedException">The launcher has been disposed.</exception>
     public IRunningProcess Start(ProcessSpec spec)
     {
-        // One lock for starting and disposing: the job handle must not close between Start and the assignment.
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
@@ -53,7 +37,7 @@ public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
             try
             {
                 var error = Mirador.Ipc.ProcessJobs.AssignToJob(job, process.SafeHandle);
-                if (error != 0 && !process.HasExited) // a process that already ended needs no group
+                if (error != 0 && !process.HasExited)
                 {
                     throw new MiradorException(
                         $"Couldn't start {spec.FileName}: Windows wouldn't put it in the group that stops it when Mirador closes ({Reason(new Win32Exception(error))}).");
@@ -69,7 +53,6 @@ public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
         }
     }
 
-    /// <summary>Closes the job, which ends every process started through this launcher that is still running.</summary>
     public void Dispose()
     {
         lock (gate)
@@ -128,17 +111,11 @@ public sealed class JobProcessLauncher : IProcessLauncher, IDisposable
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception)
         {
-            // Already gone.
         }
 
         process.Dispose();
     }
 
-    /// <summary>
-    /// The system's own wording of why, without the full stop the caller adds. For a failed start that is Windows' text
-    /// for the error code, because .NET's message repeats the file and folder the user's text already names; a few of
-    /// Windows' texts have a <c>%1</c> where the file name goes.
-    /// </summary>
     private static string Reason(Exception e, string fileName = "") =>
         (e is Win32Exception win ? new Win32Exception(win.NativeErrorCode).Message : e.Message)
             .Replace("%1", fileName).TrimEnd().TrimEnd('.');

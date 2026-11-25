@@ -30,7 +30,6 @@ public class DashboardMathsTests
     [Fact]
     public void A_head_turned_left_and_looking_down_gets_an_upright_dashboard_to_its_left()
     {
-        // Yaw +90° turns −Z to −X.
         var panel = DashboardMaths.AheadOfHead(Head(90, -30, 0, 1.6f, 0));
 
         Near(new Vector3(-1.5f, 1.25f, 0), new Vector3(panel.X, panel.Y, panel.Z));
@@ -59,7 +58,6 @@ public class DashboardMathsTests
     [Fact]
     public void Looking_straight_down_the_recentre_turns_the_way_the_heads_top_points()
     {
-        // Pitched 90° down after a yaw of 90°: the head's top points where it faced, −X.
         var origin = DashboardMaths.RecentredOrigin(Head(90, -90, 0, 1.7f, 0));
 
         Near(-Vector3.UnitX, Rotate(origin, -Vector3.UnitZ));

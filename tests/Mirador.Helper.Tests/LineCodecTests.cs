@@ -142,8 +142,6 @@ public class LineCodecTests
     [Fact]
     public async Task A_request_cant_carry_a_list()
     {
-        // A caller that adds a file list, a path or a SID, at the top or inside the settings, sends only the command and
-        // the typed settings: the approved files come from the consent of whoever connected, never from a request.
         const string line =
             "{\"command\":\"StartMonadoElevated\","
             + "\"start\":{\"lighthouseWaitMs\":3000,\"renderScalePercent\":100,\"compositorMinTimeMs\":6,"
@@ -155,16 +153,10 @@ public class LineCodecTests
 
         Assert.Equal(new HelperRequest(HelperCommand.StartMonadoElevated, new ElevatedStart(3000, 100, 6, "dreamair")), request);
 
-        // Nor could a later field hold one: a request is a command word, settings of plain numbers, switches and the
-        // module's name, and a version's name (InstallMonado), which the helper looks up in Mirador's own release list.
-        // A profile's id (SetRuntimeApproved), which the helper looks up in its own record of approved builds, and a
-        // switch (StopMonadoElevated). A direct-mode layer's kind (RegisterLayer), which the helper maps to its own path.
         Assert.Equal(["Build", "Clean", "Command", "Layer", "Start", "Version"], typeof(HelperRequest).GetProperties().Select(p => p.Name).Order());
         Assert.Equal(typeof(string), typeof(HelperRequest).GetProperty("Version")!.PropertyType);
         Assert.Equal(typeof(string), typeof(HelperRequest).GetProperty("Build")!.PropertyType);
         Assert.Equal(typeof(string), typeof(HelperRequest).GetProperty("Layer")!.PropertyType);
-        // The one list is the profile's variables, which the helper runs only when they equal its own record of what
-        // the user approved (ElevatedRequestCheck.ApprovedVariables): it can't widen what runs.
         foreach (var property in typeof(ElevatedStart).GetProperties().Where(p => p.Name != nameof(ElevatedStart.Variables)))
         {
             Assert.True(

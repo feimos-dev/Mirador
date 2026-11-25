@@ -2,10 +2,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>
-/// The real <see cref="WinTrustSigner"/> (WinVerifyTrust and the crypto API) on real files: a broken marshalling or a
-/// wrong constant makes every file look unsigned (or throws), which would refuse every consent and every elevated Start.
-/// </summary>
 public class WinTrustSignerTests
 {
     [Fact]
@@ -23,7 +19,6 @@ public class WinTrustSignerTests
     [Fact]
     public void Microsoft_signed_runtime_dll_has_a_subject()
     {
-        // The runtime's own CoreLib carries an Authenticode signature in the file, as Valve's DLLs carry Valve's.
         var subject = WinTrustSigner.SubjectOf(typeof(object).Assembly.Location);
 
         Assert.NotNull(subject);
@@ -35,7 +30,6 @@ public class WinTrustSignerTests
     {
         using var dir = new TempDir();
 
-        // This test assembly is a real PE file with no signature.
         var unsigned = dir.File("unsigned.dll");
         File.Copy(typeof(WinTrustSignerTests).Assembly.Location, unsigned);
 

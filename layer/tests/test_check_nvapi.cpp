@@ -1,11 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// mirador-display-check, default mode, run against a display session on a fake NVAPI whose clock runs at
-// the real rate: the tool's frame loop drives the real frame model, display loop and display thread, and the fake's
-// counter flips every 1/90 s. Nothing here reaches the real NVAPI, the real D3D11 device or the real display session
-// (Pimax runs on this machine).
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -30,8 +25,8 @@ namespace {
 struct NvapiRig {
     nvdm::RunningClock clock;
     nvdm::FakeApi api{clock};
-    std::vector<std::string> running; // what the session's holder check sees
-    bool board = false;               // what the session's board check sees
+    std::vector<std::string> running;
+    bool board = false;
     std::vector<std::string> session_log;
     std::unique_ptr<nvdm::DisplaySession> session;
     dvl::CaptureOutput out;
@@ -57,8 +52,8 @@ struct NvapiRig {
         dvl::NvapiEnv e;
         e.session = session.get();
         e.adapters = std::move(adapters);
-        e.clear_back_buffers = false; // the fake's handles are not D3D11 textures
-        e.warm_up_ns = 0;             // real time: the tests that are not about the warm-up do not wait for one
+        e.clear_back_buffers = false;
+        e.warm_up_ns = 0;
         e.session_lines = [this] { return session_log; };
         return e;
     }
@@ -75,7 +70,7 @@ struct NvapiRig {
     }
 };
 
-} // namespace
+}
 
 TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
 {
@@ -84,7 +79,6 @@ TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
     INFO(rig.out.text());
     REQUIRE(result.steps_ok);
 
-    // 2 s at 90 Hz: 180 presents and flips, counted over the same window.
     const uint64_t expected = dvl::expected_flips(result.counts.seconds);
     CHECK(result.counts.seconds >= 1.99);
     CHECK(result.counts.presents >= expected * 9 / 10);
@@ -96,7 +90,6 @@ TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
     INFO(verdict.line);
     CHECK(verdict.pass);
 
-    // The fake NVAPI got the Presents, of the session's three back-buffers.
     CHECK(rig.api.count("present") >= expected * 9 / 10);
     for (const nvdm::FakeApi::Call& c : rig.api.calls()) {
         if (c.name == "present") {
@@ -106,7 +99,6 @@ TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
         }
     }
 
-    // What it printed: the driver version, every step, the EDID route, the display.
     CHECK(rig.printed("NVIDIA driver version: 621.01"));
     CHECK(rig.printed("EDID route: NVAPI"));
     CHECK(rig.printed("Pimax Dream Air"));
@@ -119,8 +111,6 @@ TEST_CASE("nvapi_mode_presents_and_counts_flips_against_the_fake")
 TEST_CASE("nvapi_mode_does_not_count_a_stuttering_start_against_the_display")
 {
     using namespace std::chrono_literals;
-    // A display that works but stutters for its first moments: the counter stands still for 300 ms, then runs. The
-    // warm-up (500 ms here) is presented but not counted, so the counted window is a clean 90 Hz.
     NvapiRig rig(2);
     rig.api.stop_counter();
     std::thread thaw([&rig] {
@@ -159,7 +149,6 @@ TEST_CASE("nvapi_mode_reports_the_board_route_and_the_sessions_warning_when_no_e
     INFO(rig.out.text());
     REQUIRE(result.steps_ok);
     CHECK(rig.printed("EDID route: board"));
-    // The session's warning, which run_nvapi_mode's sink prints as it comes ("  session: warning: ...").
     CHECK(std::any_of(rig.session_log.begin(), rig.session_log.end(), [](const std::string& line) {
         return line.rfind("warning: ", 0) == 0 && line.find("34A4:0044") != std::string::npos;
     }));
@@ -198,7 +187,6 @@ TEST_CASE("nvapi_mode_fails_at_luid_when_no_adapter_drives_the_display")
     CHECK(result.failed_step.find("not the queried device's") != std::string::npos);
     CHECK(rig.api.count("present") == 0);
 
-    // No NVIDIA adapter at all: one try that still names the display's adapter.
     NvapiRig none(1);
     const dvl::ModeResult nothing = none.run({});
     CHECK_FALSE(nothing.steps_ok);
@@ -212,7 +200,7 @@ TEST_CASE("nvapi_mode_stops_at_the_holder_check_of_the_session_without_touching_
     const dvl::ModeResult result = rig.run();
     CHECK_FALSE(result.steps_ok);
     CHECK(result.failed_step.find("Pimax or SteamVR is running") != std::string::npos);
-    CHECK(rig.api.calls().empty()); // not one NVAPI call
+    CHECK(rig.api.calls().empty());
     CHECK(rig.printed("Holders"));
     CHECK(rig.printed("FAILED"));
     const dvl::Verdict verdict = dvl::judge(result.steps_ok, result.failed_step, result.counts);
@@ -228,7 +216,7 @@ TEST_CASE("nvapi_mode_names_a_missing_private_id")
     CHECK_FALSE(result.steps_ok);
     CHECK(result.failed_step.find("CheckIds") != std::string::npos);
     CHECK(result.failed_step.find("'Present'") != std::string::npos);
-    CHECK(rig.printed("NVIDIA driver version: 621.01")); // known by then, and printed
+    CHECK(rig.printed("NVIDIA driver version: 621.01"));
 }
 
 TEST_CASE("nvapi_mode_names_the_step_and_status_of_a_refused_bind")
@@ -251,7 +239,6 @@ TEST_CASE("enable-direct-mode reports PASS when NVAPI succeeds")
     CHECK(rig.printed("PASS: direct mode is on for the headset."));
     CHECK(rig.api.count("initialize") == 1);
     CHECK(rig.api.count("enable_direct_mode") == 1);
-    // No display session: nothing is enumerated, bound or presented.
     CHECK(rig.api.count("enumerate") == 0);
     CHECK(rig.api.count("bind_device") == 0);
     CHECK(rig.api.count("present") == 0);
@@ -300,14 +287,11 @@ TEST_CASE("nvapi_mode_gives_a_failing_verdict_instead_of_hanging_when_the_displa
     rig.api.stop_counter();
     const dvl::ModeResult result = rig.run();
     INFO(rig.out.text());
-    // Whether it ends in a failed step or in counts, it ends, and it is not a pass.
     const dvl::Verdict verdict = dvl::judge(result.steps_ok, result.failed_step, result.counts);
     CHECK_FALSE(verdict.pass);
     CHECK(result.counts.flips == 0);
-    CHECK(result.counts.presents <= 2); // NVAPI is given one Present while flips are stopped, no more
+    CHECK(result.counts.presents <= 2);
 }
-
-// --- Closing the console ---------------------------------------------------------------------------------------------
 
 TEST_CASE("closing_the_console_runs_the_stop_hook_and_waits_at_most_100_ms")
 {
@@ -321,15 +305,13 @@ TEST_CASE("closing_the_console_runs_the_stop_hook_and_waits_at_most_100_ms")
         }
     } clean;
 
-    // The process ends when the handler returns: the hook runs first, and the loops see the flag.
     std::atomic<int> runs{0};
     dvl::set_interrupt_stop_hook([&] { runs++; });
-    CHECK(dvl::on_interrupt_event(CTRL_CLOSE_EVENT) == FALSE); // the default handler then ends the process
+    CHECK(dvl::on_interrupt_event(CTRL_CLOSE_EVENT) == FALSE);
     CHECK(runs == 1);
     CHECK(dvl::interrupted());
     dvl::clear_interrupted_for_tests();
 
-    // A hook that does not come back (a display thread stuck inside NVAPI): the handler gives up after 100 ms.
     std::atomic<bool> release{false};
     dvl::set_interrupt_stop_hook([&] {
         while (!release) {
@@ -342,10 +324,8 @@ TEST_CASE("closing_the_console_runs_the_stop_hook_and_waits_at_most_100_ms")
     CHECK(took >= 95ms);
     CHECK(took < 400ms);
     release = true;
-    dvl::set_interrupt_stop_hook({}); // waits for that run to end
+    dvl::set_interrupt_stop_hook({});
 
-    // Ctrl+C leaves the stopping to the loops (they wind down and join the thread) and keeps the process; a second one
-    // ends it like closing the console does.
     runs = 0;
     dvl::clear_interrupted_for_tests();
     dvl::set_interrupt_stop_hook([&] { runs++; });
@@ -358,9 +338,6 @@ TEST_CASE("closing_the_console_runs_the_stop_hook_and_waits_at_most_100_ms")
 
 TEST_CASE("nvapi_mode_stops_the_display_thread_when_the_console_is_closed")
 {
-    // Closing the console ends the process as soon as the console handler returns. The NVAPI mode's display thread is
-    // stopped by then (waited for up to 100 ms, as the layer does in Monado), so it is not killed inside
-    // NVAPI, and the run winds down as on Ctrl+C.
     using namespace std::chrono_literals;
     using Clock = std::chrono::steady_clock;
     struct Clean {
@@ -379,7 +356,7 @@ TEST_CASE("nvapi_mode_stops_the_display_thread_when_the_console_is_closed")
     const BOOL handled = dvl::on_interrupt_event(CTRL_CLOSE_EVENT);
     const Clock::duration took = Clock::now() - start;
     const size_t calls = rig.api.calls().size();
-    std::this_thread::sleep_for(60ms); // five refreshes
+    std::this_thread::sleep_for(60ms);
     const size_t calls_later = rig.api.calls().size();
     const bool flagged = dvl::interrupted();
     run.join();
@@ -387,7 +364,7 @@ TEST_CASE("nvapi_mode_stops_the_display_thread_when_the_console_is_closed")
     REQUIRE(presenting);
     CHECK(handled == FALSE);
     CHECK(took < 400ms);
-    CHECK(calls_later == calls); // no NVAPI call once the handler returned: the display thread had stopped
+    CHECK(calls_later == calls);
     CHECK(flagged);
     CHECK(result.failed_step == "interrupted");
 }

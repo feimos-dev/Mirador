@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The trial import and the import it runs, through the layer's chain to a fake driver that
-// records every import call and can fail any of them, with the display session on a fake NVAPI.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -32,7 +29,6 @@ uint32_t display_count(ChainRig& rig, size_t gpu)
     return n;
 }
 
-// A device as Monado's compute compositor makes it (the layer adds the import extensions).
 VkDevice monado_device(ChainRig& rig, size_t gpu = 0)
 {
     dvl_test::MonadoQueue monado;
@@ -41,7 +37,6 @@ VkDevice monado_device(ChainRig& rig, size_t gpu = 0)
     return device;
 }
 
-// Our display's mode, as an application finds it (the display must be listed).
 VkDisplayModeKHR our_mode(ChainRig& rig)
 {
     const auto query = rig.fn<PFN_vkGetPhysicalDeviceDisplayPropertiesKHR>("vkGetPhysicalDeviceDisplayPropertiesKHR");
@@ -68,7 +63,6 @@ VkResult create_surface(ChainRig& rig, VkDisplayModeKHR mode, VkSurfaceKHR* surf
                                                                                         surface);
 }
 
-// The usage our surface offers, from a surface on our mode.
 VkImageUsageFlags surface_usage(ChainRig& rig)
 {
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -80,8 +74,6 @@ VkImageUsageFlags surface_usage(ChainRig& rig)
     return caps.supportedUsageFlags;
 }
 
-// The import calls of one configuration in the trial: three imports, then the three
-// images and their memory released, before the next configuration starts.
 std::vector<std::string> one_config()
 {
     std::vector<std::string> calls;
@@ -95,7 +87,6 @@ std::vector<std::string> one_config()
     return calls;
 }
 
-// One device's trial: the compute configuration, then the graphics one.
 std::vector<std::string> one_trial()
 {
     std::vector<std::string> calls = one_config();
@@ -141,7 +132,6 @@ void check_image(const FakeDriver::ImageMade& made, const dvl::ImportConfig& con
     CHECK(made.view_formats == *dvl::view_formats(config.format, config.usage));
 }
 
-// Everything the trial made was released again.
 void check_nothing_left()
 {
     CHECK(g_driver.live_images.empty());
@@ -167,24 +157,22 @@ size_t images_on(VkDevice device)
     return n;
 }
 
-} // namespace
+}
 
 TEST_CASE("trial_import_at_the_display_query_both_configs_three_buffers")
 {
     ChainRig rig;
     REQUIRE(rig.ready());
-    const VkDevice device = monado_device(rig); // Monado's device exists before it asks for displays
-    CHECK(g_driver.import_calls().empty());     // nothing at vkCreateDevice: NVAPI is not loaded yet
+    const VkDevice device = monado_device(rig);
+    CHECK(g_driver.import_calls().empty());
 
     CHECK(display_count(rig, 0) == 1);
 
-    // The format queries for the surface's usage, then the trial on the device.
     std::vector<std::string> expected = {kFormatQuery, kFormatQuery};
     const std::vector<std::string> trial = one_trial();
     expected.insert(expected.end(), trial.begin(), trial.end());
     CHECK(g_driver.import_calls() == expected);
 
-    // The format queries: the first check, with the image's format, flags, usage and view formats.
     REQUIRE(g_driver.format_queries.size() == 8);
     check_query(g_driver.format_queries[0], dvl::kComputeConfig);
     check_query(g_driver.format_queries[1], dvl::kGraphicsConfig);
@@ -193,7 +181,6 @@ TEST_CASE("trial_import_at_the_display_query_both_configs_three_buffers")
         check_query(g_driver.format_queries[2 + i], i < 3 ? dvl::kComputeConfig : dvl::kGraphicsConfig);
     }
 
-    // Six images: the three back-buffers in each configuration.
     REQUIRE(g_driver.images_made.size() == 6);
     REQUIRE(g_driver.handle_queries.size() == 6);
     REQUIRE(g_driver.allocations.size() == 6);
@@ -205,7 +192,6 @@ TEST_CASE("trial_import_at_the_display_query_both_configs_three_buffers")
         const FakeDriver::ImageMade& made = g_driver.images_made[i];
         check_image(made, config, device);
 
-        // The handle's memory types, then a dedicated import of the handle into a type both allow.
         CHECK(g_driver.handle_queries[i].type == kKmt);
         CHECK(g_driver.handle_queries[i].handle == shared);
         const FakeDriver::Allocation& a = g_driver.allocations[i];
@@ -216,18 +202,16 @@ TEST_CASE("trial_import_at_the_display_query_both_configs_three_buffers")
         CHECK(a.dedicated);
         CHECK(a.dedicated_image == made.image);
         CHECK(a.dedicated_buffer == VK_NULL_HANDLE);
-        CHECK(a.type == 2u); // the handle allows type 2 only; the image all three
+        CHECK(a.type == 2u);
 
         CHECK(g_driver.binds[i].image == made.image);
         CHECK(g_driver.binds[i].memory == a.memory);
         CHECK(g_driver.binds[i].offset == 0);
     }
 
-    // Destroyed before the query returned.
     check_nothing_left();
     CHECK(g_driver.images_destroyed == 6);
 
-    // The surface offers what the format queries allowed: both configurations' usage.
     CHECK(surface_usage(rig) == dvl::kSurfaceUsage);
     rig.destroy_device(device);
 }
@@ -240,7 +224,6 @@ TEST_CASE("trial_import_runs_once_per_device")
     CHECK(display_count(rig, 0) == 1);
     g_driver.clear_calls();
 
-    // Every later query in the instance, our surface, and the device's first swapchain: no import again.
     CHECK(display_count(rig, 0) == 1);
     const auto planes =
         rig.fn<PFN_vkGetPhysicalDeviceDisplayPlanePropertiesKHR>("vkGetPhysicalDeviceDisplayPlanePropertiesKHR");
@@ -249,7 +232,6 @@ TEST_CASE("trial_import_runs_once_per_device")
     CHECK(surface_usage(rig) == dvl::kSurfaceUsage);
     CHECK(rig.trial_import_at_swapchain(device) == 1);
     CHECK(rig.trial_import_at_swapchain(device) == 1);
-    // trial_import() itself keeps its answer too.
     CHECK(rig.trial_import(device) == 1);
     CHECK(g_driver.import_calls().empty());
     rig.destroy_device(device);
@@ -257,16 +239,15 @@ TEST_CASE("trial_import_runs_once_per_device")
 
 TEST_CASE("trial_import_itself_runs_once")
 {
-    // Its first call on a device runs the trial; every later one gives that answer without a call, a failure too.
     ChainRig rig;
     REQUIRE(rig.ready());
-    CHECK(display_count(rig, 0) == 1); // no device yet: nothing tried
+    CHECK(display_count(rig, 0) == 1);
     const VkDevice passing = monado_device(rig);
     const VkDevice failing = monado_device(rig);
     g_driver.clear_calls();
     CHECK(rig.trial_import(passing) == 1);
     CHECK(g_driver.import_calls() == one_trial());
-    g_driver.fail_call("vkBindImageMemory", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY); // the second device's first bind
+    g_driver.fail_call("vkBindImageMemory", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY);
     CHECK(rig.trial_import(failing) == 0);
     check_nothing_left();
     g_driver.clear_calls();
@@ -284,7 +265,7 @@ TEST_CASE("trial_import_on_every_device_of_the_gpu")
     REQUIRE(rig.ready());
     const VkDevice first = monado_device(rig);
     const VkDevice second = monado_device(rig);
-    const VkDevice other_gpu = monado_device(rig, 1); // another NVIDIA adapter: not the display's
+    const VkDevice other_gpu = monado_device(rig, 1);
     const VkDevice intel = monado_device(rig, 2);
 
     CHECK(display_count(rig, 0) == 1);
@@ -293,7 +274,6 @@ TEST_CASE("trial_import_on_every_device_of_the_gpu")
     CHECK(images_on(second) == 6);
     check_nothing_left();
 
-    // The other GPUs never list the display, so nothing is imported there.
     g_driver.clear_calls();
     CHECK(display_count(rig, 1) == 0);
     CHECK(display_count(rig, 2) == 0);
@@ -310,12 +290,10 @@ TEST_CASE("trial_import_failure_at_any_step_hides_the_display")
 {
     struct Failure {
         const char* name;
-        size_t nth; // counted from the first call of the decision
+        size_t nth;
         VkResult result;
         const char* what;
     };
-    // The decision's two format queries come first; the trial's imports follow (six calls each of the four checks,
-    // the format queries numbered 3 to 8).
     const Failure failures[] = {
         {kFormatQuery, 3, VK_ERROR_FORMAT_NOT_SUPPORTED, "the first import's format query"},
         {kFormatQuery, 5, VK_ERROR_FORMAT_NOT_SUPPORTED, "the third compute import's format query"},
@@ -334,11 +312,10 @@ TEST_CASE("trial_import_failure_at_any_step_hides_the_display")
         const VkDevice device = monado_device(rig);
         g_driver.fail_call(f.name, f.nth, f.result);
 
-        CHECK(display_count(rig, 0) == 0); // the driver's displays only (none)
-        CHECK(rig.session->is_open());     // the session is fine; the import is not
+        CHECK(display_count(rig, 0) == 0);
+        CHECK(rig.session->is_open());
         check_nothing_left();
 
-        // The answer is kept: no second trial, from a query or from the device's swapchain.
         const size_t calls = g_driver.import_calls().size();
         CHECK(display_count(rig, 0) == 0);
         CHECK(rig.trial_import_at_swapchain(device) == 0);
@@ -349,18 +326,17 @@ TEST_CASE("trial_import_failure_at_any_step_hides_the_display")
 
 TEST_CASE("trial_import_stops_at_the_first_failure")
 {
-    // The second compute image fails: the first one is released, and nothing more is tried.
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkDevice device = monado_device(rig);
     g_driver.fail_call("vkCreateImage", 2, VK_ERROR_OUT_OF_DEVICE_MEMORY);
     CHECK(display_count(rig, 0) == 0);
     const std::vector<std::string> expected = {
-        kFormatQuery,      kFormatQuery,      // the decision's
+        kFormatQuery,      kFormatQuery,
         kFormatQuery,      "vkCreateImage",   "vkGetImageMemoryRequirements",
-        "vkGetMemoryWin32HandlePropertiesKHR", "vkAllocateMemory", "vkBindImageMemory", // back-buffer 0
-        kFormatQuery,      "vkCreateImage",   // back-buffer 1 fails
-        "vkDestroyImage",  "vkFreeMemory",    // back-buffer 0 released
+        "vkGetMemoryWin32HandlePropertiesKHR", "vkAllocateMemory", "vkBindImageMemory",
+        kFormatQuery,      "vkCreateImage",
+        "vkDestroyImage",  "vkFreeMemory",
     };
     CHECK(g_driver.import_calls() == expected);
     check_nothing_left();
@@ -373,14 +349,13 @@ TEST_CASE("one_failing_device_hides_the_display_for_all")
     REQUIRE(rig.ready());
     const VkDevice first = monado_device(rig);
     const VkDevice second = monado_device(rig);
-    g_driver.fail_call("vkCreateImage", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY); // the second device's first image
+    g_driver.fail_call("vkCreateImage", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY);
     CHECK(display_count(rig, 0) == 0);
     check_nothing_left();
-    // Both devices had their trial at the decision: neither is tried again.
     const size_t calls = g_driver.import_calls().size();
     const int a = rig.trial_import_at_swapchain(first);
     const int b = rig.trial_import_at_swapchain(second);
-    CHECK(a + b == 1); // one passed, one failed
+    CHECK(a + b == 1);
     CHECK(g_driver.import_calls().size() == calls);
     rig.destroy_device(first);
     rig.destroy_device(second);
@@ -396,7 +371,6 @@ TEST_CASE("format_query_refused_at_the_decision_hides_the_display")
         g_driver.fail_call(kFormatQuery, nth, VK_ERROR_FORMAT_NOT_SUPPORTED);
         CHECK(display_count(rig, 0) == 0);
         check_nothing_left();
-        // The device had its trial at the decision all the same: not again at a swapchain.
         const size_t calls = g_driver.import_calls().size();
         rig.trial_import_at_swapchain(device);
         CHECK(g_driver.import_calls().size() == calls);
@@ -413,7 +387,6 @@ TEST_CASE("not_importable_hides_the_display")
         const VkDevice device = monado_device(rig);
         g_driver.import_features[format] = VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT;
         CHECK(display_count(rig, 0) == 0);
-        // The trial stopped at the query, before any image of that format.
         for (const FakeDriver::ImageMade& made : g_driver.images_made) {
             CHECK(made.info.format != format);
         }
@@ -453,7 +426,7 @@ TEST_CASE("memory_type_falls_back_to_the_image_bits")
         CHECK(display_count(rig, 0) == 1);
         REQUIRE(g_driver.allocations.size() == 6);
         for (const FakeDriver::Allocation& a : g_driver.allocations) {
-            CHECK(a.type == 1u); // the first device-local type among the image's
+            CHECK(a.type == 1u);
         }
         rig.destroy_device(device);
     }
@@ -478,7 +451,7 @@ TEST_CASE("memory_type_falls_back_to_the_image_bits")
         g_driver.handle_memory_bits = 0b001;
         g_driver.image_memory_bits = 0b110;
         CHECK(display_count(rig, 0) == 0);
-        CHECK(g_driver.allocations.empty()); // no type to allocate with
+        CHECK(g_driver.allocations.empty());
         check_nothing_left();
         rig.destroy_device(device);
     }
@@ -494,7 +467,7 @@ TEST_CASE("device_without_the_import_extensions_fails_the_trial")
     const VkDevice device = monado_device(rig);
     CHECK(display_count(rig, 0) == 0);
     for (const std::string& name : g_driver.import_calls()) {
-        CHECK(name == kFormatQuery); // the decision's format queries; no image on that device
+        CHECK(name == kFormatQuery);
     }
     CHECK(g_driver.images_made.empty());
     rig.destroy_device(device);
@@ -504,12 +477,10 @@ TEST_CASE("no_device_at_the_display_query_defers_the_trial_to_the_swapchain")
 {
     ChainRig rig;
     REQUIRE(rig.ready());
-    // No device yet (a caller other than Monado): listed, after the format queries alone.
     CHECK(display_count(rig, 0) == 1);
     CHECK(g_driver.import_calls() == std::vector<std::string>{kFormatQuery, kFormatQuery});
     CHECK(surface_usage(rig) == dvl::kSurfaceUsage);
 
-    // A device made now gets its trial at its first vkCreateSwapchainKHR, once.
     const VkDevice late = monado_device(rig);
     g_driver.clear_calls();
     CHECK(rig.trial_import_at_swapchain(late) == 1);
@@ -520,7 +491,6 @@ TEST_CASE("no_device_at_the_display_query_defers_the_trial_to_the_swapchain")
     CHECK(rig.trial_import_at_swapchain(late) == 1);
     CHECK(g_driver.import_calls().empty());
 
-    // Another late device whose import fails: the swapchain is refused (a failure Monado never hits), once.
     const VkDevice failing = monado_device(rig);
     g_driver.fail_call("vkCreateImage", 7, VK_ERROR_OUT_OF_DEVICE_MEMORY);
     CHECK(rig.trial_import_at_swapchain(failing) == 0);
@@ -528,7 +498,6 @@ TEST_CASE("no_device_at_the_display_query_defers_the_trial_to_the_swapchain")
     g_driver.clear_calls();
     CHECK(rig.trial_import_at_swapchain(failing) == 0);
     CHECK(g_driver.import_calls().empty());
-    // The display stays listed for the instance.
     CHECK(display_count(rig, 0) == 1);
 
     rig.destroy_device(late);
@@ -546,7 +515,6 @@ TEST_CASE("no_device_and_a_format_query_refused_hides_the_display")
 
 TEST_CASE("a_retry_trials_its_new_device_on_the_open_session")
 {
-    // Monado's retry: a new instance and device in a process whose display session is open.
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkDevice first = monado_device(rig);
@@ -559,7 +527,7 @@ TEST_CASE("a_retry_trials_its_new_device_on_the_open_session")
     const size_t made = g_driver.images_made.size();
     const size_t api_calls = rig.api.calls().size();
     CHECK(display_count(rig, 0) == 1);
-    CHECK(rig.api.calls().size() == api_calls); // the session was open: no NVAPI call
+    CHECK(rig.api.calls().size() == api_calls);
     CHECK(g_driver.images_made.size() == made + 6);
     CHECK(images_on(second) == 6);
     check_nothing_left();
@@ -571,7 +539,7 @@ TEST_CASE("our_mode_in_an_instance_that_does_not_list_it_is_refused")
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkDisplayModeKHR mode = our_mode(rig);
-    rig.new_instance(); // has asked for no display yet: the surface has no usage to offer
+    rig.new_instance();
     REQUIRE(rig.ready());
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     CHECK(create_surface(rig, mode, &surface) == VK_ERROR_UNKNOWN);

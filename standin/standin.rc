@@ -1,5 +1,3 @@
-// The stand-in's version resource. Mirador tells its stand-in from a real monado-service by FileDescription
-// (Mirador.Core.Monado.StandIn.FileDescription): keep it exactly "Mirador stand-in".
 #include <winver.h>
 
 VS_VERSION_INFO VERSIONINFO

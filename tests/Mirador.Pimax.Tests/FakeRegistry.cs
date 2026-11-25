@@ -1,6 +1,5 @@
 namespace Mirador.Pimax.Tests;
 
-/// <summary>A registry in memory: keys with string values, written as <c>HKLM\…</c> like the real one is read.</summary>
 public sealed class FakeRegistry : IRegistryReader
 {
     private readonly Dictionary<string, Dictionary<string, string>> keys = new(StringComparer.OrdinalIgnoreCase);

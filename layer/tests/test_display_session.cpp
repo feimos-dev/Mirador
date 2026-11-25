@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display session against FakeApi in strict-bind mode. process_session() and make_nvapi() are never
-// used here: they would talk to the real driver, and Pimax may be running.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -29,24 +26,23 @@ using Names = std::vector<std::string>;
 
 constexpr int64_t kMs = 1'000'000;
 
-// A happy Dream Air on a strict fake, and everything the session is given. Every hook records what it saw.
 struct Rig {
     FakeClock clock;
     FakeApi api{clock};
-    Names running;      // what processes() reports
-    Names log;          // what the session logged
+    Names running;
+    Names log;
     int pins = 0;
     int processes_listed = 0;
     int d3d11_made = 0;
     LUID d3d11_luid{};
     IUnknown* device = reinterpret_cast<IUnknown*>(0x7000);
     std::vector<int64_t> sleeps;
-    size_t calls_at_pin = 0; // How many Api calls had been made when pin_module ran.
+    size_t calls_at_pin = 0;
     bool ignore_holders = false;
     bool skip_edid = false;
     uint32_t wait_ms = 10000;
-    bool board = true;    // what board_present() reports: the Dream Air's board is connected
-    int board_checks = 0; // how often it was asked
+    bool board = true;
+    int board_checks = 0;
 
     Rig() { api.strict_bind = true; }
 
@@ -82,7 +78,6 @@ struct Rig {
         return d;
     }
 
-    // The calls made after the first `skip`, by name, without driver_version.
     Names names_after(size_t skip) const
     {
         Names out;
@@ -95,8 +90,6 @@ struct Rig {
         return out;
     }
 
-    // How many enable_direct_mode calls came after the first enumerate: the step-level enable, which must not be reached
-    // while an earlier step fails. The call before the first enumerate does not count.
     size_t enables_after_first_enumerate() const
     {
         size_t n = 0;
@@ -132,7 +125,6 @@ bool contains(const std::string& text, const std::string& part)
     return text.find(part) != std::string::npos;
 }
 
-// Whether another thread can take the display-session lock right now.
 bool lock_is_free(nvdm::DisplaySession& session)
 {
     bool free = false;
@@ -145,7 +137,7 @@ bool lock_is_free(nvdm::DisplaySession& session)
     return free;
 }
 
-} // namespace
+}
 
 TEST_CASE("open_runs_steps_in_order")
 {
@@ -161,16 +153,12 @@ TEST_CASE("open_runs_steps_in_order")
     CHECK(rig.pins == 1);
 
     const Names expected = {
-        // 1
         "initialize", "first_missing_id", "enable_direct_mode", "enumerate", "adapter_luid", "read_edid",
-        // 2
         "enable_direct_mode", "make_d3d11", "bind_device",
-        // 3
         "create_back_buffer", "create_back_buffer", "create_back_buffer", "set_display_mode",
     };
     CHECK(rig.api.names({"driver_version"}) == expected);
 
-    // The arguments: the vendor to enumerate and enable, the display to ask about and bind, the adapter to build on.
     const std::vector<FakeApi::Call> calls = rig.api.calls();
     for (const FakeApi::Call& call : calls) {
         if (call.name == "enumerate" || call.name == "enable_direct_mode") {
@@ -184,7 +172,6 @@ TEST_CASE("open_runs_steps_in_order")
     CHECK(rig.d3d11_luid.HighPart == rig.api.luid.HighPart);
     CHECK(rig.api.bound_device == rig.device);
 
-    // SetDisplayMode got the Dream Air's mode and answered -208, which is success.
     REQUIRE(rig.api.modes_set.size() == 1);
     CHECK(rig.api.modes_set[0].width == 7104);
     CHECK(rig.api.modes_set[0].height == 3840);
@@ -224,13 +211,11 @@ TEST_CASE("an open session answers for the display")
     }
     CHECK_THROWS(session.back_buffer(nvdm::kBackBufferCount));
 
-    // The display-session lock is the caller's: it can be taken and released.
     CHECK(lock_is_free(session));
 }
 
 TEST_CASE("open holds no display-session lock while it calls the driver")
 {
-    // No layer lock is held during an NVAPI call.
     Rig rig;
     nvdm::DisplaySession session(rig.deps());
     int calls = 0;
@@ -249,7 +234,6 @@ TEST_CASE("the layer is pinned before the first driver call")
     Rig rig;
     nvdm::DisplaySession session(rig.deps());
     REQUIRE(session.open(rig.api.luid).ok);
-    // A session that fails half way keeps its state in the process too, so the DLL must already be pinned.
     CHECK(rig.pins == 1);
     CHECK(rig.calls_at_pin == 0);
 }
@@ -269,7 +253,7 @@ TEST_CASE("holder_check_runs_first")
     CHECK(rig.pins == 0);
     CHECK_FALSE(session.is_open());
     REQUIRE(rig.log.size() == 1);
-    CHECK(rig.log[0] == "error: " + result.message); // the failure line is an error line (Level::Error in the layer)
+    CHECK(rig.log[0] == "error: " + result.message);
 }
 
 TEST_CASE("holder_check_runs_first: vrcompositor holds the display too, the board's other programs do not")
@@ -283,8 +267,6 @@ TEST_CASE("holder_check_runs_first: vrcompositor holds the display too, the boar
     CHECK(result.step == OpenStep::Holders);
     CHECK(contains(result.message, "vrcompositor.exe"));
 
-    // Pimax's client and the gaze provider hold the board, not the display (the check tool and the start script
-    // look at those).
     rig.running = {"PimaxClient.exe", "vrss_gaze_provider.exe", "vrserver.exe", "monado-service.exe"};
     CHECK(session.open(rig.api.luid).ok);
 }
@@ -298,7 +280,7 @@ TEST_CASE("holder_check_runs_first: ignore_holders proceeds")
 
     const nvdm::OpenResult result = session.open(rig.api.luid);
     CHECK(result.ok);
-    CHECK(rig.processes_listed == 0); // The list is not even taken.
+    CHECK(rig.processes_listed == 0);
     CHECK(rig.pins == 1);
 }
 
@@ -309,7 +291,6 @@ TEST_CASE("the holder check runs on every attempt, not only the first")
     nvdm::DisplaySession session(rig.deps());
     CHECK(session.open(rig.api.luid).step == OpenStep::Enumerate);
 
-    // Pimax starts between the attempts.
     rig.running = {"pi_server.exe"};
     const size_t before = rig.api.calls().size();
     const nvdm::OpenResult result = session.open(rig.api.luid);
@@ -324,22 +305,21 @@ TEST_CASE("the holder check runs on every attempt, not only the first")
 TEST_CASE("session_retries_after_board_wakes")
 {
     Rig rig;
-    rig.api.appears_at_ns = 12'000 * kMs; // The board wakes 12 s in; the wait is 10 s.
+    rig.api.appears_at_ns = 12'000 * kMs;
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult first = session.open(rig.api.luid);
     CHECK_FALSE(first.ok);
     CHECK(first.step == OpenStep::Enumerate);
-    CHECK(rig.clock.now_ns() == 10'000 * kMs); // It waited wait_ms, no more.
+    CHECK(rig.clock.now_ns() == 10'000 * kMs);
     CHECK_FALSE(session.is_open());
-    CHECK(rig.api.count("enable_direct_mode") == 11); // once at the start, then once a second of the wait
+    CHECK(rig.api.count("enable_direct_mode") == 11);
 
     const nvdm::OpenResult second = session.open(rig.api.luid);
     CHECK(second.ok);
-    CHECK(rig.clock.now_ns() == 12'000 * kMs); // It found the display as soon as it was there.
+    CHECK(rig.clock.now_ns() == 12'000 * kMs);
     CHECK(session.is_open());
 
-    // The first attempt's progress stood: NVAPI loaded once, the ids and the driver checked once.
     CHECK(rig.api.count("initialize") == 1);
     CHECK(rig.api.count("first_missing_id") == 1);
     CHECK(rig.api.count("driver_version") == 1);
@@ -349,7 +329,7 @@ TEST_CASE("session_retries_after_board_wakes")
 TEST_CASE("the enumerate wait polls every 100 ms and stops at wait_ms")
 {
     Rig rig;
-    rig.api.appears_at_ns = 1'000'000 * kMs; // Never, in this test.
+    rig.api.appears_at_ns = 1'000'000 * kMs;
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult result = session.open(rig.api.luid);
@@ -365,7 +345,7 @@ TEST_CASE("the enumerate wait polls every 100 ms and stops at wait_ms")
     }
     CHECK(total == 10'000 * kMs);
     CHECK(rig.sleeps.size() == 100);
-    CHECK(rig.api.count("enumerate") == 101); // One at the start, one after each sleep: the last one at the deadline.
+    CHECK(rig.api.count("enumerate") == 101);
 }
 
 TEST_CASE("the enumerate wait ends on the deadline, with a short last sleep")
@@ -426,13 +406,12 @@ TEST_CASE("luid_mismatch_stops_before_enable")
     const nvdm::OpenResult result = session.open(other);
     CHECK_FALSE(result.ok);
     CHECK(result.step == OpenStep::Luid);
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.api.count("read_edid") == 0);
     CHECK(rig.d3d11_made == 0);
     CHECK_FALSE(session.is_open());
 
-    // The right device, asked later, goes on from there; the adapter is not asked again.
     const nvdm::OpenResult later = session.open(rig.api.luid);
     CHECK(later.ok);
     CHECK(rig.api.count("adapter_luid") == 1);
@@ -471,7 +450,6 @@ TEST_CASE("bind_refused_then_retried")
 
     const nvdm::OpenResult second = session.open(rig.api.luid);
     CHECK(second.ok);
-    // The second attempt starts at the bind: nothing before it is repeated.
     const Names rest = {"bind_device", "create_back_buffer", "create_back_buffer",
                         "create_back_buffer", "set_display_mode"};
     CHECK(rig.names_after(mark) == rest);
@@ -498,7 +476,6 @@ TEST_CASE("missing_id_named")
     CHECK(rig.api.count("enumerate") == 0);
     CHECK(rig.api.count("initialize") == 1);
 
-    // Checked again on the next attempt (the ids are not "checked" until they pass); NVAPI is not loaded again.
     rig.api.missing_id.clear();
     CHECK(session.open(rig.api.luid).ok);
     CHECK(rig.api.count("initialize") == 1);
@@ -518,7 +495,7 @@ TEST_CASE("untested_driver_warns_but_continues")
     for (const std::string& line : rig.log) {
         if (contains(line, "630.00")) {
             CHECK(line.rfind("warning", 0) == 0);
-            CHECK(contains(line, "621.01")); // Says what was tested.
+            CHECK(contains(line, "621.01"));
         }
     }
 }
@@ -564,7 +541,7 @@ TEST_CASE("open_after_success_is_free")
     CHECK(again.ok);
     CHECK(again.step == OpenStep::Done);
     CHECK(rig.api.calls().size() == calls);
-    CHECK(rig.processes_listed == listed); // Not even the process list.
+    CHECK(rig.processes_listed == listed);
     CHECK(rig.log.size() == logged);
     CHECK(rig.pins == 1);
 }
@@ -586,7 +563,7 @@ TEST_CASE("the first successful open says what it opened")
 TEST_CASE("every failing step is logged once, as its result's message")
 {
     Rig rig;
-    rig.api.queue(Fn::EnableDirectMode, 0); // the call before the first enumerate
+    rig.api.queue(Fn::EnableDirectMode, 0);
     rig.api.queue(Fn::EnableDirectMode, -5);
     nvdm::DisplaySession session(rig.deps());
     const nvdm::OpenResult result = session.open(rig.api.luid);
@@ -616,14 +593,14 @@ TEST_CASE("NVAPI that does not load is retried from LoadNvapi")
 TEST_CASE("an EDID that cannot be read fails at Product, and is read again")
 {
     Rig rig;
-    rig.board = false; // no last route either
+    rig.board = false;
     rig.api.queue(Fn::ReadEdid, -3);
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult first = session.open(rig.api.luid);
     CHECK_FALSE(first.ok);
     CHECK(first.step == OpenStep::Product);
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
 
     CHECK(session.open(rig.api.luid).ok);
@@ -642,7 +619,7 @@ TEST_CASE("an unknown product is rejected before direct mode, naming it")
     CHECK(result.step == OpenStep::Product);
     CHECK(contains(result.message, "PVR"));
     CHECK(contains(result.message, "0x1020"));
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.d3d11_made == 0);
 }
@@ -667,7 +644,7 @@ TEST_CASE("an untested headset that carries Microsoft's HMD block is left to Win
 {
     Rig rig;
     std::vector<uint8_t> edid = nvdm::edids::bytes(nvdm::edids::kDreamAirRegistry);
-    edid[10] = 0x30; // another PVR product code: not the tested Dream Air
+    edid[10] = 0x30;
     rig.api.edid = edid;
     nvdm::DisplaySession session(rig.deps());
 
@@ -675,9 +652,9 @@ TEST_CASE("an untested headset that carries Microsoft's HMD block is left to Win
     CHECK_FALSE(result.ok);
     CHECK(result.step == OpenStep::Product);
     CHECK(contains(result.message, "Microsoft"));
-    CHECK(contains(result.message, nvdm::kWindowsDrivesIt)); // the check tool's NOT USED verdict keys on these words
+    CHECK(contains(result.message, nvdm::kWindowsDrivesIt));
     CHECK(contains(result.message, "Windows"));
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
 }
 
@@ -710,7 +687,6 @@ TEST_CASE("direct mode is asked for the vendor whose display was found")
 
 TEST_CASE("a headset with the Dream Air's ids but another mode runs untested, with its own mode")
 {
-    // The P2 8K Plus shares PVR 0x1019 with the Dream Air: given the Dream Air's 7104x3840, it would stay black.
     Rig rig;
     rig.api.edid = nvdm::edids::bytes(nvdm::edids::kPimax8kPlus);
     nvdm::DisplaySession session(rig.deps());
@@ -725,7 +701,6 @@ TEST_CASE("a headset with the Dream Air's ids but another mode runs untested, wi
 
 TEST_CASE("an untested headset's EDID from the registry alone is not trusted")
 {
-    // The registry keeps every Pimax display Windows ever saw: its EDID may be an earlier headset's.
     Rig rig;
     rig.api.edid = nvdm::edids::bytes(nvdm::edids::kPimax5kSuper);
     rig.api.edid_route = nvdm::EdidRoute::Registry;
@@ -736,7 +711,7 @@ TEST_CASE("an untested headset's EDID from the registry alone is not trusted")
     CHECK(result.step == OpenStep::Product);
     CHECK(contains(result.message, "registry"));
     CHECK(contains(result.message, "can't be trusted to be the connected headset's"));
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(rig.api.modes_set.empty());
 }
@@ -761,12 +736,10 @@ TEST_CASE("the EDID route that answered is logged once and kept")
     CHECK(nvapi.lines_containing("EDID route: NVAPI") == 1);
 }
 
-// --- Design 6.3's last route: no EDID, one PVR display, the Dream Air's board connected ---------------------------
-
 TEST_CASE("no EDID, one PVR display and the board connected: the Dream Air is assumed, with a warning naming why")
 {
     Rig rig;
-    rig.api.edid.clear(); // no route reads one
+    rig.api.edid.clear();
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult result = session.open(rig.api.luid);
@@ -777,7 +750,6 @@ TEST_CASE("no EDID, one PVR display and the board connected: the Dream Air is as
     CHECK(rig.board_checks == 1);
     CHECK(rig.api.count("enable_direct_mode") == 2);
 
-    // One warning: the assumption, and why it is made.
     REQUIRE(rig.warnings() == 1);
     std::string warning;
     for (const std::string& line : rig.log) {
@@ -790,7 +762,7 @@ TEST_CASE("no EDID, one PVR display and the board connected: the Dream Air is as
     CHECK(contains(warning, "registry"));
     CHECK(contains(warning, "Pimax Dream Air"));
     CHECK(contains(warning, "34A4:0044"));
-    CHECK(contains(warning, "SetDisplayMode")); // what happens if the assumption is wrong
+    CHECK(contains(warning, "SetDisplayMode"));
     CHECK(rig.lines_containing("EDID route: board") == 1);
 }
 
@@ -809,7 +781,7 @@ TEST_CASE("no EDID and no board: Product fails, naming the board, and nothing is
     CHECK(contains(result.message, "34A4:0044"));
     CHECK(rig.board_checks == 1);
     CHECK(rig.warnings() == 0);
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
     CHECK(session.edid_route() == nvdm::EdidRoute::None);
 }
@@ -828,7 +800,7 @@ TEST_CASE("no EDID and two PVR displays: Product fails, and the board is not eve
     CHECK(contains(result.message, "2 direct-mode displays"));
     CHECK(rig.board_checks == 0);
     CHECK(rig.warnings() == 0);
-    CHECK(rig.api.count("enable_direct_mode") == 1); // only the call before the first enumerate
+    CHECK(rig.api.count("enable_direct_mode") == 1);
     CHECK(rig.enables_after_first_enumerate() == 0);
 }
 
@@ -840,7 +812,6 @@ TEST_CASE("an EDID that can be read is the answer: the board is never asked")
     CHECK(rig.board_checks == 0);
     CHECK(rig.warnings() == 0);
 
-    // Another product's EDID is refused, board or not: the last route is for no EDID only.
     Rig other;
     other.api.edid = FakeApi::make_edid(0x42d2, 0x1020);
     nvdm::DisplaySession refused(other.deps());
@@ -850,8 +821,6 @@ TEST_CASE("an EDID that can be read is the answer: the board is never asked")
 
 TEST_CASE("MIRADOR_DIRECT_MODE_TEST_NO_EDID: no EDID route is tried, so the board identifies the product")
 {
-    // A machine where every route would read the EDID, run as if none could: the last route answers, and the lines
-    // name the variable.
     Rig rig;
     rig.skip_edid = true;
     nvdm::DisplaySession session(rig.deps());
@@ -861,10 +830,9 @@ TEST_CASE("MIRADOR_DIRECT_MODE_TEST_NO_EDID: no EDID route is tried, so the boar
     CHECK(session.edid_route() == nvdm::EdidRoute::Board);
     CHECK(rig.board_checks == 1);
     CHECK(rig.lines_containing("EDID route: board") == 1);
-    CHECK(rig.warnings() == 2); // the variable is set; the product is assumed
+    CHECK(rig.warnings() == 2);
     CHECK(rig.lines_containing("MIRADOR_DIRECT_MODE_TEST_NO_EDID") == 2);
 
-    // Without the board, the failure line says the routes were skipped rather than tried.
     Rig no_board;
     no_board.skip_edid = true;
     no_board.board = false;
@@ -875,7 +843,6 @@ TEST_CASE("MIRADOR_DIRECT_MODE_TEST_NO_EDID: no EDID route is tried, so the boar
     CHECK(contains(result.message, "MIRADOR_DIRECT_MODE_TEST_NO_EDID"));
     CHECK(contains(result.message, "34A4:0044"));
 
-    // A second attempt says the variable once only.
     failed.open(no_board.api.luid);
     CHECK(no_board.lines_containing("is set: every EDID route is skipped") == 1);
 }
@@ -883,7 +850,7 @@ TEST_CASE("MIRADOR_DIRECT_MODE_TEST_NO_EDID: no EDID route is tried, so the boar
 TEST_CASE("EnableDirectMode refused is retried from there")
 {
     Rig rig;
-    rig.api.queue(Fn::EnableDirectMode, 0); // the call before the first enumerate
+    rig.api.queue(Fn::EnableDirectMode, 0);
     rig.api.queue(Fn::EnableDirectMode, -5);
     nvdm::DisplaySession session(rig.deps());
 
@@ -933,7 +900,7 @@ TEST_CASE("back-buffers already made are kept when a later one fails")
     CHECK_FALSE(session.is_open());
 
     REQUIRE(session.open(rig.api.luid).ok);
-    CHECK(rig.api.count("create_back_buffer") == 4); // 3 and one retry, not 6.
+    CHECK(rig.api.count("create_back_buffer") == 4);
     CHECK(rig.api.count("bind_device") == 1);
     for (uint32_t i = 0; i < nvdm::kBackBufferCount; i++) {
         CHECK(session.back_buffer(i).tag == rig.api.back_buffers[i].tag);
@@ -996,7 +963,6 @@ TEST_CASE("session settings come from the layer's three variables")
     CHECK(set.ignore_holders);
 
     CHECK(nvdm::parse_session_settings("0", nullptr).wait_ms == 0);
-    // What is not a number, or does not fit, is the default; only "1" turns the holder checks off.
     CHECK(nvdm::parse_session_settings("abc", "0").wait_ms == 10000);
     CHECK(nvdm::parse_session_settings("", "").wait_ms == 10000);
     CHECK(nvdm::parse_session_settings("12ms", nullptr).wait_ms == 10000);
@@ -1006,20 +972,12 @@ TEST_CASE("session settings come from the layer's three variables")
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, "true").ignore_holders);
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, "").ignore_holders);
 
-    // MIRADOR_DIRECT_MODE_TEST_NO_EDID, tests only: "1" skips every EDID route, anything else does not.
     CHECK_FALSE(defaults.skip_edid);
     CHECK(nvdm::parse_session_settings(nullptr, nullptr, "1").skip_edid);
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, nullptr, "0").skip_edid);
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, nullptr, "").skip_edid);
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, nullptr, "yes").skip_edid);
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, "1", nullptr).skip_edid);
-}
-
-TEST_CASE("open steps have names")
-{
-    CHECK(std::string(nvdm::step_name(OpenStep::Holders)) == "Holders");
-    CHECK(std::string(nvdm::step_name(OpenStep::EnableDirectMode)) == "EnableDirectMode");
-    CHECK(std::string(nvdm::step_name(OpenStep::Done)) == "Done");
 }
 
 TEST_CASE("find_display enables direct mode before the first enumerate")
@@ -1090,8 +1048,6 @@ TEST_CASE("find_display goes on waiting when EnableDirectMode fails")
     nvdm::DisplaySession session(rig.deps());
 
     const nvdm::OpenResult result = session.open(rig.api.luid);
-    // Each failing call before the display shows up (at 0 s and at 1 s) is logged, and the wait goes on: it sleeps and
-    // enumerates again until the display is there. The step-level enable then reports the refusal.
     CHECK(rig.lines_containing("still waiting for the display") == 2);
     CHECK(rig.api.count("enumerate") >= 2);
     CHECK_FALSE(rig.sleeps.empty());

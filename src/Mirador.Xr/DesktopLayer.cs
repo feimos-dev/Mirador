@@ -4,25 +4,17 @@ using StereoKit;
 
 namespace Mirador.Xr;
 
-/// <summary>
-/// The dashboard's end of the desktop program (<see cref="DesktopLayerApp"/>): started the first time a monitor is
-/// shown and kept for the dashboard's life, so that showing one again is at once. Its log lines go to the dashboard's,
-/// which Mirador writes into its own. Disposing it ends the program by closing its input.
-/// </summary>
 internal sealed class DesktopLayer : IDisposable
 {
-    /// <summary>How long the program gets to end its session once its input closes.</summary>
     private static readonly TimeSpan QuitLimit = TimeSpan.FromSeconds(3);
 
     private Process? process;
-    private string? lastPlacement; // the last SHOW or HIDE sent
+    private string? lastPlacement;
     private string? lastPoint;
     private bool unstarted;
 
-    /// <summary>Whether the program ended by itself (it couldn't start its session, or it stopped): it isn't started again.</summary>
     public bool Failed => unstarted || process is { HasExited: true };
 
-    /// <summary>Shows <paramref name="placement"/>, starting the program the first time; sends nothing that didn't change.</summary>
     public void Show(DesktopPlacement placement) => Send(DesktopLayerLink.FormatShow(placement), ref lastPlacement);
 
     public void Hide()
@@ -30,11 +22,10 @@ internal sealed class DesktopLayer : IDisposable
         if (process is { HasExited: false })
         {
             Send(DesktopLayerLink.Hide, ref lastPlacement);
-            lastPoint = null; // a hide drops the hand too
+            lastPoint = null;
         }
     }
 
-    /// <summary>Names the hand whose laser is on the desktop, if any: its trackpad scrolls.</summary>
     public void Point(Handed? hand)
     {
         if (process is { HasExited: false })

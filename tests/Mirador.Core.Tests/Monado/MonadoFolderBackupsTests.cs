@@ -16,7 +16,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
 
     private MonadoFolderBackups Backups(long maxBytes = 200_000_000) => new(MonadoDir, BackupsDir, time, () => running, maxBytes: maxBytes);
 
-    /// <summary>A clock at <paramref name="utc"/> in a time zone five hours west of UTC, so that local and UTC names differ.</summary>
     private static FakeTimeProvider NewClock(DateTimeOffset utc)
     {
         var clock = new FakeTimeProvider(utc);
@@ -33,7 +32,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         File.WriteAllText(path, text);
     }
 
-    /// <summary>What a folder holds: each file's path below it and its text.</summary>
     private static Dictionary<string, string> Contents(string folder) =>
         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(folder, f), File.ReadAllText);
@@ -54,12 +52,11 @@ public sealed class MonadoFolderBackupsTests : IDisposable
 
         Assert.Null(problem);
         Assert.NotNull(backup);
-        Assert.Equal(Path.Combine(BackupsDir, "monado", "20261104-120000"), backup.Dir); // named in UTC
+        Assert.Equal(Path.Combine(BackupsDir, "monado", "20261104-120000"), backup.Dir);
         Assert.Equal(time.GetUtcNow(), backup.Taken);
         Assert.True(File.Exists(Path.Combine(backup.Dir, "manifest.json")));
         Assert.Equal([backup], backups.Backups());
 
-        // Restoring it after the folder went brings back exactly what was there.
         Directory.Delete(MonadoDir, recursive: true);
         Directory.CreateDirectory(MonadoDir);
         backups.Restore(backup);
@@ -129,7 +126,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         var all = backups.Backups();
         Assert.Equal(2, all.Count);
 
-        // The newest copy is the state the restore replaced, so that it can be put back too.
         backups.Restore(all[0]);
         Assert.Equal("replaced", File.ReadAllText(Path.Combine(MonadoDir, "driver", "calibration_1.bin")));
         Assert.Equal("new", File.ReadAllText(Path.Combine(MonadoDir, "added.json")));
@@ -194,7 +190,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         Assert.Equal("first", File.ReadAllText(Path.Combine(MonadoDir, "driver", "calibration_1.bin")));
         Assert.Equal("{ \"active\": \"tracking\" }", File.ReadAllText(Path.Combine(MonadoDir, "config_v0.json")));
 
-        // The folder the import replaced is kept.
         Assert.Contains(backups.Backups(), b => File.ReadAllText(Path.Combine(b.Dir, "files", "driver", "calibration_1.bin")) == "other PC");
     }
 
@@ -227,7 +222,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
             time.Advance(TimeSpan.FromSeconds(1));
         }
 
-        // The clock was corrected: every copy so far looks newer than now.
         var earlier = new MonadoFolderBackups(MonadoDir, BackupsDir, NewClock(time.GetUtcNow() - TimeSpan.FromDays(1)), () => running);
         Write("config_v0.json", "after the correction");
 
@@ -239,7 +233,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         Assert.Contains(made, earlier.Backups());
         Assert.Equal(10, earlier.Backups().Count);
 
-        // A restore under that clock keeps its safety copy too.
         Write("config_v0.json", "replaced by the restore");
         earlier.Restore(earlier.Backups()[0]);
         Assert.Contains(earlier.Backups(), b => File.ReadAllText(Path.Combine(b.Dir, "files", "config_v0.json")) == "replaced by the restore");
@@ -260,7 +253,6 @@ public sealed class MonadoFolderBackupsTests : IDisposable
         Assert.NotNull(made);
     }
 
-    /// <summary>A zip with <paramref name="manifest"/> (path → the text it says the file holds) and <paramref name="entries"/> (zip name → text).</summary>
     private string Zip(IReadOnlyDictionary<string, string> manifest, IReadOnlyDictionary<string, string> entries)
     {
         static string Sha(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));

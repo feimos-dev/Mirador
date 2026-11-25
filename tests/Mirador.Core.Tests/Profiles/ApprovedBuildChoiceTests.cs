@@ -12,7 +12,6 @@ public class ApprovedBuildChoiceTests
     {
         Assert.Equal(Mirador.Core.Elevation.ElevatedChoice.BuildFolder, Mirador.Core.Elevation.ElevatedChoice.RunsAsYouReason(Branch(false), null, true, approvedBuild: true));
         Assert.Equal(Mirador.Core.Elevation.ElevatedChoice.NotApproved, Mirador.Core.Elevation.ElevatedChoice.RunsAsYouReason(Branch(true), null, true, approvedBuild: false));
-        // The approval covers the build and its variables (here none) together.
         Assert.Null(Mirador.Core.Elevation.ElevatedChoice.RunsAsYouReason(Branch(true), null, true, approvedBuild: true, variablesApproved: true));
     }
 
@@ -40,7 +39,7 @@ public class ApprovedBuildChoiceTests
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.SameVariables([new("pimax_p3c_log", "info"), new("XRT_LOG", "debug")], Approved));
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.SameVariables([new("PIMAX_P3C_LOG", "debug"), new("XRT_LOG", "debug")], Approved));
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.SameVariables([new("XRT_LOG", "debug"), new("PIMAX_P3C_LOG", "info")], Approved));
-        Assert.False(Mirador.Core.Elevation.ElevatedChoice.SameVariables([new("PIMAX_P3C_LOG", "info")], Approved)); // fewer
+        Assert.False(Mirador.Core.Elevation.ElevatedChoice.SameVariables([new("PIMAX_P3C_LOG", "info")], Approved));
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.SameVariables([], Approved));
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.SameVariables([], []));
     }
@@ -74,18 +73,15 @@ public class ApprovedBuildChoiceTests
     {
         var log = new EnvVar("PIMAX_P3C_LOG", "info");
 
-        // Turned on: approve, and a cancelled prompt saves it off.
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(false), Saved(true)));
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.KeepsSwitchWhenDeclined(Saved(false)));
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(null, Saved(true)));
 
-        // Already on: a rename or any other edit asks nothing; a change of the variables asks, and declining keeps it on.
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true, log) with { Name = "Renamed" }));
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true, log with { Value = "debug" })));
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true, log), Saved(true)));
         Assert.True(Mirador.Core.Elevation.ElevatedChoice.KeepsSwitchWhenDeclined(Saved(true, log)));
 
-        // Off stays off: nothing to approve.
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(true), Saved(false)));
         Assert.False(Mirador.Core.Elevation.ElevatedChoice.ApprovesOnSave(Saved(false), Saved(false, log)));
     }

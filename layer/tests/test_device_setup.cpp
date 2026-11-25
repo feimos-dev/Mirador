@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Device setup: the plan alone (plan_device), then vkCreateDevice, vkDeviceWaitIdle and vkDestroyDevice
-// through the layer's chain to a fake driver.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -24,7 +21,6 @@ namespace {
 using dvl_test::ChainRig;
 using dvl_test::g_driver;
 
-// A VkDeviceCreateInfo and what it points at.
 struct DeviceInfo {
     std::vector<VkDeviceQueueCreateInfo> queues;
     std::vector<const char*> extensions;
@@ -60,11 +56,10 @@ size_t count_of(const std::vector<std::string>& names, const char* name)
 
 const float kPriorities[8] = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
 
-} // namespace
+}
 
 TEST_CASE("private_queue_added_to_first_info")
 {
-    // Monado's compute compositor: the compute family (8 queues), one queue, the global-priority pNext.
     dvl_test::MonadoQueue monado;
     const float other_priority = 1.0f;
     DeviceInfo info;
@@ -77,22 +72,19 @@ TEST_CASE("private_queue_added_to_first_info")
     const VkDeviceQueueCreateInfo& first = plan->queues[0];
     CHECK(first.queueFamilyIndex == 2);
     CHECK(first.queueCount == 2);
-    CHECK(first.pNext == &monado.priority); // the global priority applies to the private queue too
+    CHECK(first.pNext == &monado.priority);
     REQUIRE(first.pQueuePriorities != nullptr);
     CHECK(first.pQueuePriorities[0] == 0.5f);
     CHECK(first.pQueuePriorities[1] == 0.5f);
     CHECK(plan->private_family == 2);
     CHECK(plan->private_index == 1);
     CHECK_FALSE(plan->new_info);
-    // The other info goes down as it came.
     CHECK(plan->queues[1].queueFamilyIndex == 0);
     CHECK(plan->queues[1].queueCount == 1);
     CHECK(plan->queues[1].pQueuePriorities == &other_priority);
-    // The application's own info is not touched.
     CHECK(monado.info.queueCount == 1);
     CHECK(monado.info.pQueuePriorities == monado.priorities);
 
-    // The plan moves without its priorities moving under the info.
     dvl::DevicePlan moved = std::move(*plan);
     CHECK(moved.queues[0].pQueuePriorities[1] == 0.5f);
 }
@@ -106,13 +98,13 @@ TEST_CASE("private_queue_skips_flagged_info")
         dvl::plan_device(info.ci(), dvl_test::nvidia_families(), dvl_test::nvidia_extensions(), dvl::kNvidiaVendorId);
     REQUIRE(plan.has_value());
     REQUIRE(plan->queues.size() == 2);
-    CHECK(plan->queues[0].queueCount == 1); // the protected info is left alone
+    CHECK(plan->queues[0].queueCount == 1);
     CHECK(plan->queues[0].flags == VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT);
     const VkDeviceQueueCreateInfo& added = plan->queues[1];
     CHECK(added.sType == VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO);
     CHECK(added.pNext == nullptr);
     CHECK(added.flags == 0);
-    CHECK(added.queueFamilyIndex == 0); // the first family not listed
+    CHECK(added.queueFamilyIndex == 0);
     CHECK(added.queueCount == 1);
     REQUIRE(added.pQueuePriorities != nullptr);
     CHECK(added.pQueuePriorities[0] == 1.0f);
@@ -123,7 +115,6 @@ TEST_CASE("private_queue_skips_flagged_info")
 
 TEST_CASE("private_queue_full_family_uses_other")
 {
-    // Every queue of the compute family taken: a family that is not listed.
     DeviceInfo info;
     info.queues = {queue_info(2, 8, kPriorities), queue_info(0, 1, kPriorities)};
     std::optional<dvl::DevicePlan> plan =
@@ -131,7 +122,7 @@ TEST_CASE("private_queue_full_family_uses_other")
     REQUIRE(plan.has_value());
     REQUIRE(plan->queues.size() == 3);
     CHECK(plan->queues[0].queueCount == 8);
-    CHECK(plan->queues[2].queueFamilyIndex == 1); // 0 and 2 are listed
+    CHECK(plan->queues[2].queueFamilyIndex == 1);
     CHECK(plan->private_family == 1);
     CHECK(plan->private_index == 0);
     CHECK(plan->new_info);
@@ -174,7 +165,6 @@ TEST_CASE("import_extensions_added_once")
     }
     CHECK(plan->extensions.size() == 6);
     CHECK(plan->missing_extensions.empty());
-    // The application's names are passed on as they are (the same strings).
     CHECK(plan->extensions[0] == info.extensions[0]);
 
     SECTION("an import extension the device lacks is not added (the call down would fail), and is named")
@@ -201,7 +191,6 @@ TEST_CASE("display_control_removed_before_call_down")
     CHECK(plan->display_control);
     CHECK(count_of(plan->extensions, "VK_KHR_present_wait") == 1);
 
-    // Through the layer: the driver never sees it, and gets the import extensions.
     ChainRig rig;
     REQUIRE(rig.ready());
     dvl_test::MonadoQueue monado;
@@ -225,7 +214,6 @@ TEST_CASE("create_device_sets_up_the_private_queue")
     REQUIRE(rig.create_device(0, {monado.info}, {"VK_KHR_swapchain"}, &device) == VK_SUCCESS);
     CHECK(device == reinterpret_cast<VkDevice>(&dvl_test::g_devices[0]));
 
-    // What went down: Monado's info, one queue more, priorities extended, its pNext kept; the loader's structs too.
     REQUIRE(g_driver.queues.size() == 1);
     CHECK(g_driver.queues[0].queueFamilyIndex == 2);
     CHECK(g_driver.queues[0].queueCount == 2);
@@ -234,8 +222,6 @@ TEST_CASE("create_device_sets_up_the_private_queue")
     CHECK(g_driver.device_pnext_loader_structs ==
           std::vector<VkLayerFunction>{VK_LAYER_LINK_INFO, VK_LOADER_DATA_CALLBACK});
 
-    // The private queue: taken with vkGetDeviceQueue (Vulkan 1.0), given to the loader's callback, which made it one
-    // of the device's dispatchable objects.
     const dvl_test::FakeDriver::Call get = g_driver.last("vkGetDeviceQueue");
     CHECK(get.handle == 2);
     CHECK(get.index == 1);
@@ -244,12 +230,11 @@ TEST_CASE("create_device_sets_up_the_private_queue")
     CHECK(g_driver.loader_data_set[0] == &g_driver.queue_objects[0]);
     CHECK(g_driver.queue_objects[0].table == dvl_test::g_devices[0].table);
 
-    // The device is known by its dispatch key: names it does not intercept go to the driver.
     CHECK(rig.device_fn<PFN_vkVoidFunction>(device, "vkGetDeviceQueue") ==
           reinterpret_cast<PFN_vkVoidFunction>(&dvl_test::fake::GetDeviceQueue));
     rig.destroy_device(device);
     CHECK(g_driver.count("vkDestroyDevice") == 1);
-    CHECK(rig.device_fn<PFN_vkVoidFunction>(device, "vkGetDeviceQueue") == nullptr); // forgotten
+    CHECK(rig.device_fn<PFN_vkVoidFunction>(device, "vkGetDeviceQueue") == nullptr);
 }
 
 TEST_CASE("non_nvidia_device_passed_down_untouched")
@@ -272,7 +257,6 @@ TEST_CASE("non_nvidia_device_passed_down_untouched")
 
 TEST_CASE("failed_create_device_returns_the_driver_code_and_keeps_nothing")
 {
-    // Monado retries with a lower priority after VK_ERROR_NOT_PERMITTED (comp_vulkan.c).
     ChainRig rig;
     REQUIRE(rig.ready());
     dvl_test::MonadoQueue monado;
@@ -285,7 +269,6 @@ TEST_CASE("failed_create_device_returns_the_driver_code_and_keeps_nothing")
     CHECK(rig.device_fn<PFN_vkVoidFunction>(reinterpret_cast<VkDevice>(&dvl_test::g_devices[0]), "vkGetDeviceQueue") ==
           nullptr);
 
-    // The retry works as a first attempt would.
     g_driver.create_device_result = VK_SUCCESS;
     monado.priority.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR;
     REQUIRE(rig.create_device(0, {monado.info}, {}, &device) == VK_SUCCESS);
@@ -303,7 +286,7 @@ TEST_CASE("loader_data_failure_undoes_the_device")
     VkDevice device = VK_NULL_HANDLE;
     CHECK(rig.create_device(0, {monado.info}, {}, &device) == VK_ERROR_OUT_OF_HOST_MEMORY);
     CHECK(device == VK_NULL_HANDLE);
-    CHECK(g_driver.count("vkDestroyDevice") == 1); // the driver's device is not leaked
+    CHECK(g_driver.count("vkDestroyDevice") == 1);
     CHECK(g_driver.last("vkDestroyDevice").handle == dvl_test::handle_value(&dvl_test::g_devices[0]));
     CHECK(rig.device_fn<PFN_vkVoidFunction>(reinterpret_cast<VkDevice>(&dvl_test::g_devices[0]), "vkGetDeviceQueue") ==
           nullptr);
@@ -329,7 +312,6 @@ TEST_CASE("wait_idle_and_destroy_hold_the_private_queue_mutex")
     REQUIRE(wait_idle != nullptr);
     CHECK(wait_idle != reinterpret_cast<PFN_vkDeviceWaitIdle>(&dvl_test::fake::DeviceWaitIdle));
 
-    // The first vkDeviceWaitIdle stays inside the driver until released.
     std::mutex m;
     std::condition_variable cv;
     bool release = false;
@@ -346,7 +328,6 @@ TEST_CASE("wait_idle_and_destroy_hold_the_private_queue_mutex")
     }
     REQUIRE(inside.load() == 1);
 
-    // A second wait and a destroy from other threads do not reach the driver while it runs.
     std::thread second([&] { CHECK(wait_idle(device) == VK_SUCCESS); });
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     CHECK(inside.load() == 1);
@@ -382,8 +363,6 @@ TEST_CASE("wait_idle_and_destroy_hold_the_private_queue_mutex")
 
 TEST_CASE("destroy_of_unknown_handles_still_calls_down")
 {
-    // A handle the registry does not have: passed down through the one destroy function the layer below has, so the
-    // driver's object is not leaked.
     ChainRig rig;
     REQUIRE(rig.ready());
     dvl_test::MonadoQueue monado;

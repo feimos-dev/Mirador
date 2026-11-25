@@ -8,23 +8,11 @@ using Mirador.Ipc;
 
 namespace Mirador.App.Services;
 
-/// <summary>
-/// The user's consent to run Monado as administrator: giving it takes one UAC prompt,
-/// taking it back goes through the helper without one.
-/// </summary>
 public static class ElevatedMonado
 {
-    /// <summary>Whether the current user has consented (read from the registry; any user can read it).</summary>
     public static bool IsAllowed() =>
         AllowElevatedCommand.CurrentUser() is { } user && new ElevatedConsent(new RegistryConsentValues()).IsAllowed(user);
 
-    /// <summary>
-    /// Runs <c>Mirador.exe --allow-elevated-monado</c> through the UAC prompt.
-    /// The step records the consent and, with it, SteamVR's Lighthouse DLLs that Valve didn't sign as they are now
-    /// (a profile's Run as administrator at Save, and Home's "Allow" or "Allow again"). Returns the elevated step's exit code (0 when
-    /// consent is recorded), <see cref="ElevatedRuntime.PromptCancelled"/> when the user said no to the prompt, or -1
-    /// when it couldn't be started.
-    /// </summary>
     public static async Task<int> AllowAsync()
     {
         var info = new ProcessStartInfo(Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Mirador.exe"))
@@ -55,10 +43,6 @@ public static class ElevatedMonado
         }
     }
 
-    /// <summary>
-    /// Whether this is an account with no administrator token at all: not an administrator, and Windows has no
-    /// elevated token to offer it. An administrator in Admin Approval Mode has a linked (limited) token and is not one.
-    /// </summary>
     public static bool IsStandardAccount()
     {
         const int TokenElevationType = 18;

@@ -2,56 +2,32 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper;
 
-/// <summary>Installs, updates and rolls back Mirador's Monado; the seam that lets the handler be tested without it.</summary>
 public interface IMonadoInstaller
 {
-    /// <summary>The runtime manifest of the current version, or null when none is installed.</summary>
     string? CurrentManifest();
 
-    /// <summary>Whether <paramref name="manifest"/> is one of Mirador's Monado's (any version, installed or not).</summary>
     bool IsMiradors(string manifest);
 
-    /// <summary>The service's folder of the current version, or null when none is installed.</summary>
     string? CurrentServerDir();
 
-    /// <summary>Installs <paramref name="version"/>, which must be one of Mirador's releases, and makes it current.</summary>
     Task<HelperReply> InstallAsync(string version, CancellationToken ct);
 
-    /// <summary>Makes the previous version current again, and the current one the previous.</summary>
     HelperReply RollBack();
 }
 
-/// <summary>
-/// Mirador's Monado in the helper: the weekly builds of upstream
-/// <c>main</c> from Mirador's own releases, installed in <c>{app}\monado\&lt;version&gt;\</c>, which only administrators
-/// can change, so that this Monado may run elevated and be the machine's runtime without any further approval.
-/// The request names only a version. The list, the download address and the SHA-256 all come from GitHub, read here;
-/// nothing is unpacked before the hash matches, no entry may leave its folder, and the version in use stays until the
-/// new one is complete. One previous version is kept for "Roll back"; older ones go.
-/// </summary>
-/// <param name="http">For GitHub.</param>
-/// <param name="monadoRoot"><c>{app}\monado</c>.</param>
-/// <param name="standInExe">Mirador's stand-in (<c>{app}\standin\mirador-standin.exe</c>), put below each version's DLL.</param>
-/// <param name="registry">OpenXR's runtime entries.</param>
-/// <param name="userAgentVersion">The helper's version, for GitHub's User-Agent.</param>
 public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string standInExe, IRuntimeRegistry registry, string userAgentVersion)
     : IMonadoInstaller
 {
-    /// <summary>The most a build's zip, and what it unpacks to, may be.</summary>
     public const long MaxZipBytes = 512L * 1024 * 1024;
 
-    /// <summary>The most a build may unpack to.</summary>
     public const long MaxUnpackedBytes = 2L * 1024 * 1024 * 1024;
 
-    /// <summary>How long GitHub may say nothing before a download is given up.</summary>
     public static TimeSpan IdleTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     private readonly object gate = new();
 
-    // One install at a time: two would share the download's file names (the launch's and the Profiles page's, say).
     private readonly SemaphoreSlim installing = new(1, 1);
 
-    /// <summary>The installer of a normal install: <c>{app}\monado</c> and <c>{app}\standin</c>, beside the helper.</summary>
     public static MonadoInstaller ForInstall(HttpClient http, IRuntimeRegistry registry, string userAgentVersion) => new(
         http,
         Path.Combine(HelperHandler.DefaultInstallDir, "monado"),
@@ -91,7 +67,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
 
     private async Task<HelperReply> InstallOneAsync(string version, CancellationToken ct)
     {
-        // The version kept for "Roll back", still whole: going back to it needs no download.
         lock (gate)
         {
             var kept = MiradorMonado.Read(monadoRoot);
@@ -172,7 +147,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
         }
     }
 
-    /// <summary>Moves the unpacked <paramref name="part"/> into place as <paramref name="version"/> and makes it current.</summary>
     private HelperReply MakeCurrent(string version, string part)
     {
         var versions = MiradorMonado.Read(monadoRoot);
@@ -184,7 +158,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
 
         if (Directory.Exists(folder))
         {
-            // Moved aside first: a folder a game still holds fails here whole, rather than half deleted.
             var aside = Path.Combine(monadoRoot, ".download", version + ".old");
             Cleanup.TryDeleteDirectory(aside);
             Directory.Move(folder, aside);
@@ -200,9 +173,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
         return new HelperReply(true, Value: version);
     }
 
-    /// <summary>
-    /// The bundled Monado stays the active runtime across an update or a roll back, when it was.
-    /// </summary>
     private void FollowActive(string? from, string to)
     {
         if (registry.GetActive() is not { } active)
@@ -218,12 +188,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
         }
     }
 
-    /// <summary>
-    /// Every version but the current and the previous goes, with its runtime entry. Each is moved aside whole before it
-    /// is deleted: a Monado running from it (its working folder is inside) or a file held open there keeps it whole and
-    /// listed until a later install, never half deleted where it is listed. A game that has only loaded its DLL doesn't
-    /// stop the move; that DLL stays behind in the folder moved aside, and goes at a later install.
-    /// </summary>
     private void Prune(string current, string? previous)
     {
         var work = Path.Combine(monadoRoot, ".download");
@@ -251,7 +215,7 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                continue; // held: it stays whole, and listed, until a later install
+                continue;
             }
 
             registry.SetAvailable(MiradorMonado.ManifestOf(monadoRoot, name), available: false);
@@ -275,11 +239,6 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
         }
     }
 
-    /// <summary>
-    /// Why the download's runtime manifest can't be the machine's runtime, or null: every OpenXR program loads what it
-    /// names, so it must name the download's own <c>bin\openxr_monado.dll</c>, and any other path in it (Monado's
-    /// <c>MND_libmonado_path</c>) must stay inside the download's folder, relative as CI builds it.
-    /// </summary>
     internal static string? ManifestProblem(string folder)
     {
         var root = Path.GetFullPath(folder) + Path.DirectorySeparatorChar;
@@ -312,6 +271,5 @@ public sealed class MonadoInstaller(HttpClient http, string monadoRoot, string s
         }
     }
 
-    /// <summary>A failure whose message is meant for the user as it is.</summary>
     private sealed class MiradorInstallException(string message) : Exception(message);
 }

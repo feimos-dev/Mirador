@@ -2,32 +2,21 @@ using System.Runtime.InteropServices;
 
 namespace Mirador.Core.Gpu;
 
-/// <summary>Whether Windows' hardware-accelerated GPU scheduling (HAGS) is on, as the display adapters report it.</summary>
 public enum GpuSchedulingState
 {
-    /// <summary>Every adapter that offers it has it on.</summary>
     On,
 
-    /// <summary>An adapter offers it, but it is off (Windows' graphics settings turn it on, after a restart).</summary>
     Off,
 
-    /// <summary>No adapter's driver offers it.</summary>
     NotOffered,
 
-    /// <summary>The adapters couldn't be asked.</summary>
     Unknown,
 }
 
-/// <summary>One display adapter's answer: whether its driver offers HAGS, and whether it is on.</summary>
 public readonly record struct AdapterScheduling(bool Supported, bool Enabled);
 
-/// <summary>
-/// Hardware-accelerated GPU scheduling: Monado running as administrator gets the GPU's realtime priority only with it on
-///, and every Dream Air run so far had it on. Home warns while it isn't.
-/// </summary>
 public static class GpuScheduling
 {
-    /// <summary>The state from each adapter's answer; adapters that don't offer it (Windows' basic display) don't count.</summary>
     public static GpuSchedulingState StateOf(IReadOnlyList<AdapterScheduling> adapters)
     {
         if (adapters.Count == 0)
@@ -41,7 +30,6 @@ public static class GpuScheduling
             : GpuSchedulingState.Off;
     }
 
-    /// <summary>Home's warning for <paramref name="state"/>; null when there is nothing to say.</summary>
     public static string? Notice(GpuSchedulingState state) => state switch
     {
         GpuSchedulingState.Off => "Hardware-accelerated GPU scheduling is off. Monado as administrator needs it for the GPU's realtime priority, and Mirador is tested with it on. Turn it on in Windows' graphics settings, then restart Windows.",
@@ -49,7 +37,6 @@ public static class GpuScheduling
         _ => null,
     };
 
-    /// <summary>The state now (<see cref="Query"/>, then <see cref="StateOf"/>); never throws.</summary>
     public static GpuSchedulingState Now()
     {
         try
@@ -62,10 +49,6 @@ public static class GpuScheduling
         }
     }
 
-    /// <summary>
-    /// Asks each display adapter for its WDDM 2.7 caps (<c>D3DKMTQueryAdapterInfo</c>, <c>KMTQAITYPE_WDDM_2_7_CAPS</c>):
-    /// the bits HwSchSupported and HwSchEnabled. An adapter that can't answer is left out; none at all gives an empty list.
-    /// </summary>
     public static IReadOnlyList<AdapterScheduling> Query()
     {
         var enumerate = new EnumAdapters2();
@@ -114,7 +97,6 @@ public static class GpuScheduling
     private const uint HwSchSupported = 1;
     private const uint HwSchEnabled = 2;
 
-    /// <summary>The adapter's D3DKMT_WDDM_2_7_CAPS bits, or null when it doesn't answer (a driver older than WDDM 2.7).</summary>
     private static uint? Caps(uint handle)
     {
         var caps = Marshal.AllocHGlobal(sizeof(uint));

@@ -3,7 +3,6 @@ using Mirador.Core.BaseStations;
 
 namespace Mirador.Core.Tests.BaseStations;
 
-/// <summary>Talks to the real base stations; skipped unless MIRADOR_BLUETOOTH_TESTS=1 (see <see cref="BluetoothFactAttribute"/>).</summary>
 [Trait("Category", "Hardware")]
 public class WinRtStationRadioTests
 {
@@ -164,7 +163,6 @@ public class WinRtStationRadioTests
     {
         var radio = await StartedRadio();
 
-        // Windows may hand back a device for an address it has never seen; the failure then comes at the first write.
         await Assert.ThrowsAsync<StationException>(async () =>
         {
             await using var link = await radio.ConnectAsync(0x0000_DEAD_BEEF_01, true, CancellationToken.None);

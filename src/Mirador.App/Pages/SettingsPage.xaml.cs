@@ -17,7 +17,6 @@ public sealed partial class SettingsPage : Page
 
     public SettingsViewModel ViewModel { get; }
 
-    /// <summary>The "Monado folder" section.</summary>
     public MonadoFolderViewModel Folder { get; }
 
     private void OnFolderMessageClosed(InfoBar sender, InfoBarClosedEventArgs args) => Folder.DismissMessage();

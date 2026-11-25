@@ -1,12 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The rest of the display commands: every other command that can be handed one of the layer's display, mode, surface or
-// swapchain (handled_commands.cpp). For the layer's own handles each is accepted and answered here (debug names and
-// tags, HDR metadata, full-screen exclusive, NVIDIA low latency, AMD local dimming, GOOGLE display timing, private
-// data, released images), or refused with a log line (vkCreateSharedSwapchainsKHR, an image made or bound for the
-// layer's swapchain: failures Monado never hits). Anything else goes down unchanged.
-
 #include <vulkan/vulkan.h>
 
 #include <map>
@@ -24,10 +18,6 @@
 namespace dvl {
 namespace {
 
-// --- Private data on the layer's objects ---------------------------------------------------------------------------
-
-// The layer keeps it itself: the driver cannot be handed our handles. Keyed by device, slot, type and handle. Made at
-// first use and never destroyed; a slot's entries outlive it, which costs a few bytes.
 struct PrivateStore {
     std::mutex mutex;
     std::map<std::tuple<VkDevice, VkPrivateDataSlot, VkObjectType, uint64_t>, uint64_t> data;
@@ -51,13 +41,9 @@ uint64_t get_private(VkDevice device, VkObjectType type, uint64_t handle, VkPriv
     PrivateStore& s = private_store();
     std::lock_guard<std::mutex> hold(s.mutex);
     const auto it = s.data.find(std::make_tuple(device, slot, type, handle));
-    return it == s.data.end() ? 0 : it->second; // never set: 0, as Vulkan answers
+    return it == s.data.end() ? 0 : it->second;
 }
 
-// --- Images made or bound for a swapchain --------------------------------------------------------------------------
-
-// The layer's swapchain named in a pNext chain (VkImageSwapchainCreateInfoKHR, VkBindImageMemorySwapchainInfoKHR):
-// the driver would take our handle for its own.
 bool names_our_swapchain(const void* next)
 {
     for (auto* s = static_cast<const VkBaseInStructure*>(next); s != nullptr; s = s->pNext) {
@@ -80,7 +66,6 @@ bool creates_for_our_swapchain(const VkDeviceImageMemoryRequirements* info)
 
 void refuse_image(const char* command)
 {
-    // A failure Monado never hits: the images of the layer's swapchain are the imported back-buffers.
     log(Level::Error, "%s: the pNext chain names the layer's swapchain; images of it come from "
                       "vkGetSwapchainImagesKHR only. Refused",
         command);
@@ -145,9 +130,7 @@ void subresource_layout(const char* command, PFN_vkGetDeviceImageSubresourceLayo
     down(device, info, out);
 }
 
-} // namespace
-
-// --- Debug names and tags: accepted for the layer's handles, not passed down ----------------------------------------
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_SetDebugUtilsObjectNameEXT(VkDevice device,
                                                                 const VkDebugUtilsObjectNameInfoEXT* info)
@@ -195,8 +178,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_DebugMarkerSetObjectTagEXT(VkDevice device,
         return call_down(d.DebugMarkerSetObjectTagEXT, "vkDebugMarkerSetObjectTagEXT", device, info);
     });
 }
-
-// --- Private data ----------------------------------------------------------------------------------------------------
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_SetPrivateData(VkDevice device, VkObjectType type, uint64_t handle,
                                                     VkPrivateDataSlot slot, uint64_t value)
@@ -260,13 +241,10 @@ VKAPI_ATTR void VKAPI_CALL layer_GetPrivateDataEXT(VkDevice device, VkObjectType
     });
 }
 
-// --- Swapchain extras --------------------------------------------------------------------------------------------
-
 VKAPI_ATTR void VKAPI_CALL layer_SetHdrMetadataEXT(VkDevice device, uint32_t count, const VkSwapchainKHR* swapchains,
                                                    const VkHdrMetadataEXT* metadata)
 {
     guarded_void("vkSetHdrMetadataEXT", [&] {
-        // The headset takes no HDR metadata: a no-op for the layer's swapchain; the others' go down, with theirs.
         std::vector<VkSwapchainKHR> theirs;
         std::vector<VkHdrMetadataEXT> their_metadata;
         for (uint32_t i = 0; i < count; ++i) {
@@ -295,7 +273,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSharedSwapchainsKHR(VkDevice device, 
     return guarded("vkCreateSharedSwapchainsKHR", [&] {
         for (uint32_t i = 0; i < count; ++i) {
             if (find_surface(infos[i].surface) != nullptr || find_swapchain(infos[i].oldSwapchain)) {
-                // Design 6.3 and 6.10: refused. Monado never calls it.
                 log(Level::Error, "vkCreateSharedSwapchainsKHR: create info %u names the layer's surface or "
                                   "swapchain; shared swapchains are not supported there. Refused",
                     i);
@@ -312,7 +289,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_AcquireFullScreenExclusiveModeEXT(VkDevice 
 {
     return guarded("vkAcquireFullScreenExclusiveModeEXT", [&] {
         if (find_swapchain(swapchain)) {
-            return VK_SUCCESS; // the headset is the layer's alone already
+            return VK_SUCCESS;
         }
         DeviceData& d = device_data(device);
         return call_down(d.AcquireFullScreenExclusiveModeEXT, "vkAcquireFullScreenExclusiveModeEXT", device,
@@ -334,8 +311,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_ReleaseFullScreenExclusiveModeEXT(VkDevice 
 
 namespace {
 
-// vkReleaseSwapchainImagesEXT and its KHR name (VK_KHR_swapchain_maintenance1): acquired images go back unpresented,
-// their frames end and their back-buffers are free again.
 void release_images(SwapchainRecord& record, const VkReleaseSwapchainImagesInfoKHR& info)
 {
     Presenter& p = presenter();
@@ -350,7 +325,7 @@ void release_images(SwapchainRecord& record, const VkReleaseSwapchainImagesInfoK
     p.changed.notify_all();
 }
 
-} // namespace
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_ReleaseSwapchainImagesEXT(VkDevice device,
                                                                const VkReleaseSwapchainImagesInfoEXT* info)
@@ -378,14 +353,12 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_ReleaseSwapchainImagesKHR(VkDevice device,
     });
 }
 
-// --- GOOGLE display timing -------------------------------------------------------------------------------------------
-
 VKAPI_ATTR VkResult VKAPI_CALL layer_GetRefreshCycleDurationGOOGLE(VkDevice device, VkSwapchainKHR swapchain,
                                                                    VkRefreshCycleDurationGOOGLE* out)
 {
     return guarded("vkGetRefreshCycleDurationGOOGLE", [&] {
         if (find_swapchain(swapchain)) {
-            out->refreshDuration = static_cast<uint64_t>(presenter().refresh_ns); // 1/90 s
+            out->refreshDuration = static_cast<uint64_t>(presenter().refresh_ns);
             return VK_SUCCESS;
         }
         DeviceData& d = device_data(device);
@@ -399,7 +372,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPastPresentationTimingGOOGLE(VkDevice de
 {
     return guarded("vkGetPastPresentationTimingGOOGLE", [&] {
         if (find_swapchain(swapchain)) {
-            *count = 0; // no timings
+            *count = 0;
             return VK_SUCCESS;
         }
         DeviceData& d = device_data(device);
@@ -407,8 +380,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPastPresentationTimingGOOGLE(VkDevice de
                          count, timings);
     });
 }
-
-// --- NVIDIA low latency and AMD local dimming: accepted and ignored on the layer's swapchain -----------------------
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_SetLatencySleepModeNV(VkDevice device, VkSwapchainKHR swapchain,
                                                            const VkLatencySleepModeInfoNV* info)
@@ -428,10 +399,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_LatencySleepNV(VkDevice device, VkSwapchain
     return guarded("vkLatencySleepNV", [&] {
         DeviceData& d = device_data(device);
         if (find_swapchain(swapchain)) {
-            // No sleep (pacing is acquire's and the display thread's), but the application waits on its semaphore
-            // reaching the value: signalled from the host at once with vkSignalSemaphoreKHR (VK_KHR_timeline_semaphore;
-            // VK_NV_low_latency2 needs timeline semaphores). Never the core 1.2 vkSignalSemaphore: the layer calls
-            // only 1.0 core and extension commands (Monado's instance is API 1.0).
             if (d.SignalSemaphoreKHR != nullptr) {
                 VkSemaphoreSignalInfo signal{VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO};
                 signal.semaphore = info->signalSemaphore;
@@ -470,7 +437,7 @@ VKAPI_ATTR void VKAPI_CALL layer_GetLatencyTimingsNV(VkDevice device, VkSwapchai
 {
     guarded_void("vkGetLatencyTimingsNV", [&] {
         if (find_swapchain(swapchain)) {
-            info->timingCount = 0; // no timings
+            info->timingCount = 0;
             return;
         }
         DeviceData& d = device_data(device);
@@ -496,8 +463,6 @@ VKAPI_ATTR void VKAPI_CALL layer_SetLocalDimmingAMD(VkDevice device, VkSwapchain
         d.SetLocalDimmingAMD(device, swapchain, enable);
     });
 }
-
-// --- Images whose pNext names a swapchain ----------------------------------------------------------------------------
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_CreateImage(VkDevice device, const VkImageCreateInfo* ci,
                                                  const VkAllocationCallbacks* alloc, VkImage* image)
@@ -590,4 +555,4 @@ VKAPI_ATTR void VKAPI_CALL layer_GetDeviceImageSubresourceLayoutKHR(VkDevice dev
     });
 }
 
-} // namespace dvl
+}

@@ -8,7 +8,6 @@ public class OpenVrPathsTests
 {
     private const string SteamVr = @"C:\Program Files (x86)\Steam\steamapps\common\SteamVR";
 
-    /// <summary>Finn's file on 2026-11-04, as SteamVR wrote it.</summary>
     private const string FinnsFile = """
         {
         	"config" :

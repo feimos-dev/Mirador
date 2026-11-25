@@ -1,11 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// vkCreateDevice, vkDestroyDevice and vkDeviceWaitIdle. An NVIDIA device gets the private queue that
-// signals acquire and the extensions the back-buffer import needs, before NVAPI is ever loaded: Monado creates its
-// device before it asks for displays. vkDestroyDevice tears the device's part of the presentation down first, in
-// this order (swapchain.hpp: before_device_destroyed, device_destroyed).
-
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_layer.h>
 
@@ -25,8 +20,6 @@
 namespace dvl {
 namespace {
 
-// The loader's structs in a device create info's pNext chain: the link to the next layer (VK_LAYER_LINK_INFO) and the
-// callback that makes objects the layer creates dispatchable (VK_LOADER_DATA_CALLBACK).
 VkLayerDeviceCreateInfo* find_loader_struct(const VkDeviceCreateInfo* ci, VkLayerFunction function)
 {
     for (auto* s = static_cast<const VkBaseInStructure*>(ci->pNext); s != nullptr; s = s->pNext) {
@@ -81,8 +74,6 @@ std::string joined(const std::vector<const char*>& names)
     return text;
 }
 
-// The driver's device, until the layer has registered it: destroyed again, and the application's handle cleared, if
-// anything after the call down fails or throws, so a failed vkCreateDevice leaves nothing behind.
 class CreatedDevice {
 public:
     CreatedDevice(VkDevice* out, PFN_vkDestroyDevice destroy, const VkAllocationCallbacks* alloc)
@@ -127,9 +118,8 @@ VkResult create_device(VkPhysicalDevice physical_device, const VkDeviceCreateInf
         log(Level::Error, "vkCreateDevice: the next layer has no vkCreateDevice");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
-    link->u.pLayerInfo = link->u.pLayerInfo->pNext; // the layer below finds its own link
+    link->u.pLayerInfo = link->u.pLayerInfo->pNext;
 
-    // Design 6.2: every NVIDIA device is prepared, before the display is known.
     VkPhysicalDeviceProperties properties{};
     if (instance->GetPhysicalDeviceProperties != nullptr) {
         instance->GetPhysicalDeviceProperties(physical_device, &properties);
@@ -149,8 +139,6 @@ VkResult create_device(VkPhysicalDevice physical_device, const VkDeviceCreateInf
 
     const VkResult result = next_create(physical_device, &down, alloc, out);
     if (result != VK_SUCCESS) {
-        // The plan was all the layer had made for it, and it is gone with this call: nothing else to undo. Monado
-        // retries with a lower priority after VK_ERROR_NOT_PERMITTED.
         log(Level::Info, "vkCreateDevice: the driver returned %d", static_cast<int>(result));
         return result;
     }
@@ -159,8 +147,6 @@ VkResult create_device(VkPhysicalDevice physical_device, const VkDeviceCreateInf
 
     std::unique_ptr<DeviceData> data = make_device_data(device, physical_device, instance, next_gdpa);
     if (plan && plan->private_family != VK_QUEUE_FAMILY_IGNORED) {
-        // The private queue: vkGetDeviceQueue (Vulkan 1.0), then the loader's callback, without which a
-        // layer below would crash on the queue.
         const VkLayerDeviceCreateInfo* callback = find_loader_struct(ci, VK_LOADER_DATA_CALLBACK);
         if (callback == nullptr || callback->u.pfnSetDeviceLoaderData == nullptr || data->GetDeviceQueue == nullptr) {
             log(Level::Error, "vkCreateDevice: the loader gave no vkSetDeviceLoaderData callback (or the driver no "
@@ -215,7 +201,7 @@ VkResult create_device(VkPhysicalDevice physical_device, const VkDeviceCreateInf
     return VK_SUCCESS;
 }
 
-} // namespace
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDevice(VkPhysicalDevice physical_device, const VkDeviceCreateInfo* ci,
                                                   const VkAllocationCallbacks* alloc, VkDevice* out)
@@ -229,11 +215,8 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyDevice(VkDevice device, const VkAllocati
         if (device == VK_NULL_HANDLE) {
             return;
         }
-        // Out of the table first: the handle is gone once the call below returns.
         const std::unique_ptr<DeviceData> data = remove_device(device);
         if (!data || data->DestroyDevice == nullptr) {
-            // Not ours to forget, but the driver's object must not leak: down through the one function the layer
-            // below has, if there is one.
             const PFN_vkDestroyDevice fallback = fallback_destroy_device();
             log(Level::Error, "vkDestroyDevice: device %p is not one the layer knows; %s", static_cast<void*>(device),
                 fallback != nullptr ? "passed down" : "it cannot be passed down");
@@ -243,11 +226,7 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyDevice(VkDevice device, const VkAllocati
             return;
         }
         log(Level::Debug, "vkDestroyDevice: device %p", static_cast<void*>(device));
-        // Design 6.10, in order: the device's swapchains left alive are destroyed, the display thread leaves the
-        // device (at most a refresh), frame fences still outstanding are waited for (at most 100 ms) ...
         before_device_destroyed(*data);
-        // ... the private queue goes idle under its mutex, which stays held: every queue of the device must be
-        // externally synchronised for the call down, the private one too ...
         std::lock_guard<std::mutex> lock(data->queue_mutex);
         if (data->private_queue != VK_NULL_HANDLE && data->QueueWaitIdle != nullptr) {
             const VkResult idle = data->QueueWaitIdle(data->private_queue);
@@ -256,7 +235,6 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyDevice(VkDevice device, const VkAllocati
                     static_cast<int>(idle));
             }
         }
-        // ... the device's frames end (no ids completed) and its frame fences are destroyed; then the call down.
         device_destroyed(*data);
         data->DestroyDevice(device, alloc);
     });
@@ -266,10 +244,9 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_DeviceWaitIdle(VkDevice device)
 {
     return guarded("vkDeviceWaitIdle", [&] {
         DeviceData& data = device_data(device);
-        // Monado calls this with only its own queue locked (comp_swapchain.c); the private queue is the layer's.
         std::lock_guard<std::mutex> lock(data.queue_mutex);
         return call_down(data.DeviceWaitIdle, "vkDeviceWaitIdle", device);
     });
 }
 
-} // namespace dvl
+}

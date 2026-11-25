@@ -5,19 +5,12 @@ using Mirador.Core.Monado.Libmonado;
 
 namespace Mirador.Core.Playspace;
 
-/// <summary>
-/// What <c>xr-check --poses</c> measured, in the stage space: the head and the controllers' grips; a controller that
-/// wasn't tracked is null.
-/// </summary>
 public sealed record XrPoses(MonadoPose Head, MonadoPose? Left, MonadoPose? Right)
 {
-    /// <summary>The start of the result line: <c>XR-POSES {"head":{"p":[x,y,z],"q":[x,y,z,w]},"left":…,"right":…}</c>.</summary>
     public const string Prefix = "XR-POSES ";
 
-    /// <summary>The start of the line that says why there is no result.</summary>
     public const string FailurePrefix = "XR-POSES-FAIL ";
 
-    /// <summary>The last result line in <paramref name="lines"/>; null when there is none it can read.</summary>
     public static XrPoses? Parse(IEnumerable<string> lines)
     {
         var line = lines.LastOrDefault(l => l.StartsWith(Prefix, StringComparison.Ordinal));
@@ -44,11 +37,9 @@ public sealed record XrPoses(MonadoPose Head, MonadoPose? Left, MonadoPose? Righ
         }
     }
 
-    /// <summary>What the last failure line says; null when there is none.</summary>
     public static string? Failure(IEnumerable<string> lines) =>
         lines.LastOrDefault(l => l.StartsWith(FailurePrefix, StringComparison.Ordinal))?[FailurePrefix.Length..].Trim();
 
-    /// <summary>A hand that is there and null, or there and a pose; false for anything else.</summary>
     private static bool Hand(JsonObject root, string name, out MonadoPose? pose)
     {
         pose = null;
@@ -66,7 +57,6 @@ public sealed record XrPoses(MonadoPose Head, MonadoPose? Left, MonadoPose? Righ
         return pose is not null;
     }
 
-    /// <summary>{"p":[x,y,z],"q":[x,y,z,w]} with finite numbers and a rotation of length about 1; null otherwise.</summary>
     private static MonadoPose? Pose(JsonNode? node)
     {
         if (node is not JsonObject pose || Numbers(pose["p"], 3) is not { } p || Numbers(pose["q"], 4) is not { } q)

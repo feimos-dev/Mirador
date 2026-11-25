@@ -18,7 +18,6 @@ public class VerifyRunLogsTests
         dir.Touch("verify-monado-20261101-120000.log");
         dir.Touch("monado-20261101-120000.log");
 
-        // Day 2's run is still a profile's result; a result whose log is gone, or none, changes nothing.
         VerifyRunLogs.Prune(dir.Path, [dir.File(Name(2)), dir.File("verify-run-20261001-120000.log"), null]);
 
         var left = Directory.GetFiles(dir.Path).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();

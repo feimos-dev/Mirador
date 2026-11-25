@@ -1,15 +1,5 @@
 # Copyright 2026, Finn Zeruhn
 # SPDX-License-Identifier: BSL-1.0
-#
-# Configure, build and test one of Mirador's C++ projects (the direct-mode layer, xr-check, the OpenXR loader) in a
-# Visual Studio developer shell, with vcpkg's x64-windows-static triplet (the static CRT: nothing needs the Visual C++
-# Redistributable) unless -Triplet names another, Ninja and RelWithDebInfo. A project's own triplets\ folder is
-# vcpkg's overlay of triplets.
-#   pwsh -NoProfile -File tools\build-cmake.ps1 -Source layer -BuildDir artifacts\layer-build -Configure -Build -Test
-# Visual Studio (or its Build Tools) with the C++ x64 tools is found with vswhere, as for the stand-in and Monado's
-# recipe; -VsPath names one instead. vcpkg: VCPKG_ROOT, else Mirador's pinned copy (%LOCALAPPDATA%\Mirador\tools\vcpkg),
-# else the one inside that Visual Studio (it fetches vcpkg.json's baseline itself), else VCPKG_INSTALLATION_ROOT
-# (GitHub's runners; its clone must hold the baseline commit).
 param(
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$BuildDir,
@@ -50,8 +40,6 @@ if (-not $vcpkg) {
 }
 $toolchain = Join-Path $vcpkg 'scripts\buildsystems\vcpkg.cmake'
 $env:VCPKG_DISABLE_METRICS = '1'
-# vcpkg picks the newest Visual Studio on its own. Its static libraries then may need a newer STL than the toolset
-# that links the tests, so pin vcpkg to the same Visual Studio.
 $env:VCPKG_VISUAL_STUDIO_PATH = $vs
 Import-Module (Join-Path $vs "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
 Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -no_logo -host_arch=amd64' | Out-Null
@@ -59,8 +47,6 @@ if ($Configure) {
     $cmakeArgs = @(
         "-S", $source, "-B", $buildDir, "-GNinja",
         "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-        # RelWithDebInfo links incrementally, which keeps unused code: a third the size without. No
-        # identical-function folding (/OPT:ICF): code that compares function pointers would see two functions as one.
         "-DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO /OPT:REF /OPT:NOICF",
         "-DCMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO /OPT:REF /OPT:NOICF",
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain",

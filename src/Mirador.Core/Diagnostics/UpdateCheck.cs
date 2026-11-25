@@ -4,16 +4,8 @@ using Mirador.Core.OpenVr;
 
 namespace Mirador.Core.Diagnostics;
 
-/// <summary>A full release from GitHub's <c>releases/latest</c>.</summary>
-/// <param name="Tag">The release's tag, such as <c>v0.2.0</c>.</param>
-/// <param name="Url">The release's page.</param>
-/// <param name="InstallerUrl">The download of the asset <c>OpenLamina-Windows-Installer.exe</c>; null when the release has none or no digest.</param>
-/// <param name="InstallerSha256">That asset's SHA-256 from GitHub's <c>digest</c>, lower case without <c>sha256:</c>; null likewise.</param>
-/// <param name="SumsUrl">The download of the asset <c>SHA256SUMS.txt</c>; null when the release has none.</param>
-/// <param name="SignatureUrl">The download of the asset <c>SHA256SUMS.txt.sig</c>; null when the release has none.</param>
 public sealed record Release(string Tag, string Url, string? InstallerUrl, string? InstallerSha256, string? SumsUrl = null, string? SignatureUrl = null);
 
-/// <summary>Asks GitHub for the latest release of Mirador and of OpenLamina, to say so on Home. It never installs anything.</summary>
 public static class UpdateCheck
 {
     public const string MiradorRepository = "feimos-dev/mirador";
@@ -24,7 +16,6 @@ public static class UpdateCheck
 
     private const string DigestPrefix = "sha256:";
 
-    /// <summary>The latest full release from GitHub's answer; null when it isn't one (a draft, a pre-release, an error).</summary>
     public static Release? ParseLatest(string json)
     {
         try
@@ -50,15 +41,9 @@ public static class UpdateCheck
         return null;
     }
 
-    /// <summary>Whether release <paramref name="tag"/> (<c>v0.2.0</c>) is newer than <paramref name="current"/> (<c>0.1.0</c>); false when either isn't a version.</summary>
     public static bool IsNewer(string current, string tag) =>
         Parse(current) is { } mine && Parse(tag) is { } theirs && theirs > mine;
 
-    /// <summary>
-    /// Asks GitHub for <paramref name="repository"/>'s latest full release. <c>Answered</c> is false when it couldn't be
-    /// asked (offline, refused, too slow), so that the caller tries again soon rather than in a day; a repository without
-    /// a release is answered with no release.
-    /// </summary>
     public static async Task<(bool Answered, Release? Latest)> LatestAsync(HttpClient http, string repository, string userAgentVersion, CancellationToken ct)
     {
         try
@@ -69,7 +54,7 @@ public static class UpdateCheck
             using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return (true, null); // no release yet
+                return (true, null);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -106,7 +91,6 @@ public static class UpdateCheck
         return (null, null);
     }
 
-    /// <summary>The download of the release's asset <paramref name="name"/>; null when it has none.</summary>
     private static string? FindAsset(JsonElement release, string name)
     {
         if (release.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
@@ -128,7 +112,6 @@ public static class UpdateCheck
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
-    /// <summary>A version from <c>0.2.0</c> or <c>v0.2.0</c>, missing parts as 0 (<c>v1</c> is 1.0); null for anything else.</summary>
     private static Version? Parse(string text)
     {
         var t = text.Trim();

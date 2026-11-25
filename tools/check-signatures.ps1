@@ -1,13 +1,4 @@
 #Requires -Version 7.3
-<#
-.SYNOPSIS
-    Checks that files are signed: a signature Windows trusts, with a timestamp, and the same signer on all of them.
-.DESCRIPTION
-    Fails (exit code 1) with one line per file that isn't. In a workflow the signer's name is the step's output
-    "signer".
-.EXAMPLE
-    tools\check-signatures.ps1 artifacts\Mirador-0.1.0-setup.exe
-#>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory, ValueFromRemainingArguments)]
@@ -25,7 +16,6 @@ foreach ($file in $Path) {
     } elseif ($signature.Status -ne 'Valid') {
         $problems += "$file's signature isn't trusted ($($signature.Status): $($signature.StatusMessage))"
     } elseif (-not $signature.TimeStamperCertificate) {
-        # Without one the signature ends with its certificate, which lasts days.
         $problems += "$file's signature has no timestamp"
     } else {
         $signers[$signature.SignerCertificate.Subject] = $signature.SignerCertificate

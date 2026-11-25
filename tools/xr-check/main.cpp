@@ -1,33 +1,5 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
-//
-// xr-check: Mirador's small OpenXR test client.
-//
-//   xr-check --api d3d11|vulkan|none [--frames 300] [--timeout 60]
-//
-// --api none only creates an instance (the runtime loads and its service takes the app): no graphics, no session.
-//
-// Makes an instance, a session and one swapchain per view with the graphics API asked for, runs the frames (each image
-// acquired, waited for and released, a projection layer submitted), ends the session, and prints one result line:
-//
-//   XR-CHECK {"api":"d3d11","ok":true,"frames":300,"submitted":300,"runtime":"...","system":"...","error":""}
-//
-// A frame the runtime says not to render, or whose views have no valid pose, ends without a layer; "submitted" counts
-// the frames that rendered one, and fewer than half of them fails the check.
-// Exit code 0 when every frame was ended and enough rendered, 1 when a step failed, 2 for a bad command line, 3 on the
-// timeout.
-// The runtime is the one the OpenXR loader finds (XR_RUNTIME_JSON, else the machine's active runtime).
-//
-//   xr-check --api d3d11 --poses [--timeout 30]
-//
-// --poses runs the same D3D11 session, with left and right grip pose actions (suggested for the Khronos simple
-// controller and the Valve Index controller), until 30 focused frames had a valid head pose. Then it locates the head
-// (the VIEW space) and both grips in the STAGE space, ends the session and prints one line:
-//
-//   XR-POSES {"head":{"p":[x,y,z],"q":[x,y,z,w]},"left":{"p":[...],"q":[...]},"right":null}
-//
-// A hand without a valid position and orientation is null. Exit code 0 then; on a failure or the timeout (default 30 s,
-// for the whole run) it prints "XR-POSES-FAIL <message>" and exits 1 (2 for a bad command line).
 
 #include <windows.h>
 #include <unknwn.h>
@@ -59,7 +31,7 @@ struct Result
 	std::string api;
 	bool ok = false;
 	int frames = 0;
-	int submitted = 0; // frames that submitted a projection layer (rendered), of `frames`
+	int submitted = 0;
 	std::string runtime;
 	std::string system;
 	std::string error;
@@ -98,7 +70,6 @@ print(const Result &r)
 	std::fflush(stdout);
 }
 
-//! What --poses measured, in the STAGE space.
 struct Poses
 {
 	XrPosef head{};
@@ -108,7 +79,6 @@ struct Poses
 	XrPosef right{};
 };
 
-//! A pose as {"p":[x,y,z],"q":[x,y,z,w]}, metres and a unit quaternion; null when there is none.
 std::string
 pose_json(const XrPosef *pose)
 {
@@ -151,7 +121,6 @@ struct Failure : std::runtime_error
 
 XrInstance g_instance = XR_NULL_HANDLE;
 
-//! Frames submitted so far, for the watchdog (which must not read the result's strings while they change).
 std::atomic<int> g_frames{0};
 
 std::string
@@ -181,7 +150,6 @@ proc(const char *name)
 	return reinterpret_cast<F>(function);
 }
 
-//! What one graphics API gives the session: the binding, the swapchain image type, and the clean-up.
 struct Graphics
 {
 	const void *binding = nullptr;
@@ -354,7 +322,6 @@ struct VulkanGraphics : Graphics
 	}
 };
 
-//! Polls the session's events; returns its state after them.
 XrSessionState
 poll(XrSessionState state)
 {
@@ -387,7 +354,6 @@ wait_for(XrSessionState state, XrSessionState wanted, const char *what)
 	return state;
 }
 
-//! A location with both a valid position and a valid orientation.
 bool
 located(const XrSpaceLocation &location)
 {
@@ -403,7 +369,6 @@ path(const char *text)
 	return result;
 }
 
-//! --poses' input: an action set with a grip pose action per hand, their spaces, and the STAGE and VIEW spaces.
 struct PoseInput
 {
 	XrActionSet set = XR_NULL_HANDLE;
@@ -429,7 +394,6 @@ struct PoseInput
 			check(xrCreateAction(set, &action_info, &grip[hand]), "xrCreateAction");
 		}
 
-		// Each profile on its own: a runtime that doesn't know one still takes the other.
 		const XrActionSuggestedBinding bindings[2] = {
 		    {grip[0], path("/user/hand/left/input/grip/pose")},
 		    {grip[1], path("/user/hand/right/input/grip/pose")},
@@ -481,7 +445,6 @@ struct PoseInput
 				xrDestroySpace(space);
 			}
 		}
-		// Destroys its actions too.
 		if (set != XR_NULL_HANDLE) {
 			xrDestroyActionSet(set);
 		}
@@ -497,7 +460,6 @@ struct PoseInput
 		check(xrSyncActions(session, &sync_info), "xrSyncActions");
 	}
 
-	//! The head's location in the STAGE space at `time`.
 	XrSpaceLocation
 	head(XrTime time) const
 	{
@@ -506,7 +468,6 @@ struct PoseInput
 		return location;
 	}
 
-	//! The head and both grips in the STAGE space at `time`; a grip without a valid pose is left out.
 	Poses
 	measure(XrTime time) const
 	{
@@ -524,11 +485,8 @@ struct PoseInput
 	}
 };
 
-//! Focused frames with a valid head pose before --poses measures.
 constexpr int kHeadFrames = 30;
 
-// --api none: the runtime loads and its service takes the app (xrCreateInstance), with no graphics API and no session.
-// The nightly's check on CI, whose machines have no GPU for Monado's compositor.
 void
 run_instance_only(Result &result)
 {
@@ -547,7 +505,6 @@ run_instance_only(Result &result)
 	result.ok = true;
 }
 
-//! Runs the session: `frames` frames, or with `poses` until they are measured (the watchdog bounds that).
 void
 run(Result &result, bool vulkan, int frames, Poses *poses)
 {
@@ -652,8 +609,6 @@ run(Result &result, bool vulkan, int frames, Poses *poses)
 			check(xrWaitFrame(session, nullptr, &frame_state), "xrWaitFrame");
 			check(xrBeginFrame(session, nullptr), "xrBeginFrame");
 
-			// Actions are synced every frame (only a focused session gets their data); once enough focused frames had
-			// a valid head pose, the head and the grips are measured at this frame's display time.
 			if (input != nullptr) {
 				input->sync(session);
 				if (state == XR_SESSION_STATE_FOCUSED && located(input->head(frame_state.predictedDisplayTime))) {
@@ -679,13 +634,12 @@ run(Result &result, bool vulkan, int frames, Poses *poses)
 				uint32_t located_count = 0;
 				check(xrLocateViews(session, &locate, &view_state, view_count, &located_count, located.data()), "xrLocateViews");
 
-				// A layer needs valid poses; without them (no tracking yet) the frame ends empty.
 				if ((view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0) {
 					for (uint32_t v = 0; v < view_count; v++) {
 						uint32_t index = 0;
 						check(xrAcquireSwapchainImage(swapchains[v], nullptr, &index), "xrAcquireSwapchainImage");
 						XrSwapchainImageWaitInfo wait{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
-						wait.timeout = 1000000000; // 1 s
+						wait.timeout = 1000000000;
 						const XrResult waited = xrWaitSwapchainImage(swapchains[v], &wait);
 						check(waited, "xrWaitSwapchainImage");
 						if (waited == XR_TIMEOUT_EXPIRED) {
@@ -718,14 +672,11 @@ run(Result &result, bool vulkan, int frames, Poses *poses)
 			g_frames = frame + 1;
 		}
 
-		// A frame that never rendered (the session never visible, no valid pose) proves nothing about the graphics
-		// path: at least half the frames must have submitted their layer.
 		if (poses == nullptr && result.submitted * 2 < result.frames) {
 			throw Failure("only " + std::to_string(result.submitted) + " of " + std::to_string(result.frames) +
 			              " frames rendered a layer (the session wasn't visible, or the views had no valid pose)");
 		}
 
-		// Monado moves the session to STOPPING through its frames: keep ending empty frames until it does (5 s at most).
 		check(xrRequestExitSession(session), "xrRequestExitSession");
 		const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 		while ((state = poll(state)) != XR_SESSION_STATE_STOPPING) {
@@ -779,7 +730,7 @@ usage(const char *why)
 	return 2;
 }
 
-} // namespace
+}
 
 int
 main(int argc, char **argv)
@@ -828,7 +779,6 @@ main(int argc, char **argv)
 		return usage("--frames must be 1 to 100000 and --timeout 1 to 3600");
 	}
 
-	// A runtime that hangs (a service that never answers) still gives a result line.
 	static Result result;
 	result.api = api;
 	static std::atomic<bool> done{false};

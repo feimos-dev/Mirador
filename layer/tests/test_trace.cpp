@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The per-frame timing trace (core/trace.hpp): a fixed array any thread appends to without a lock, and its CSV file.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -24,7 +22,6 @@ using nvdm::TraceKind;
 
 constexpr char kHeader[] = "t_ns,kind,a,b\n";
 
-// A file in the temp folder, gone again at the end of the test.
 class TempCsv {
 public:
     TempCsv()
@@ -42,7 +39,6 @@ public:
     TempCsv& operator=(const TempCsv&) = delete;
 
     const std::wstring& path() const { return path_; }
-    // A path in a folder that is not there.
     std::wstring unwritable() const { return dir_ + L"dvl_no_such_folder\\x.csv"; }
     std::string text() const
     {
@@ -55,8 +51,6 @@ private:
     std::wstring path_;
 };
 
-// Two threads appending at once, `each` records apiece: thread 0 numbers its records (the `a` column) 0..each-1,
-// thread 1 each..2*each-1.
 void append_from_two_threads(Trace& trace, size_t each)
 {
     std::atomic<bool> go{false};
@@ -75,7 +69,7 @@ void append_from_two_threads(Trace& trace, size_t each)
     b.join();
 }
 
-} // namespace
+}
 
 TEST_CASE("Trace: a fixed array any thread appends to, written as CSV")
 {
@@ -83,7 +77,7 @@ TEST_CASE("Trace: a fixed array any thread appends to, written as CSV")
     trace.add(TraceKind::Acquire, 100, 7, 2);
     trace.add(TraceKind::Credit, 200, 7, -5);
     trace.add(TraceKind::Counter, 300, 9, 250);
-    trace.add(TraceKind::Counter, 400, 10, 350); // full: dropped, counted
+    trace.add(TraceKind::Counter, 400, 10, 350);
     CHECK(trace.size() == 3);
     CHECK(trace.dropped() == 1);
     CHECK(trace.at(1).t_ns == 200);
@@ -110,10 +104,10 @@ TEST_CASE("Trace: a write adds only the records added since the last one")
     trace.add(TraceKind::Credit, 300, 3, 0);
     written = trace.append_csv(csv.path());
     CHECK(written.ok);
-    CHECK(written.records == 1); // not the two before it again
-    CHECK(csv.text() == std::string(kHeader) + "100,1,1,0\n200,1,2,0\n300,32,3,0\n"); // one header
+    CHECK(written.records == 1);
+    CHECK(csv.text() == std::string(kHeader) + "100,1,1,0\n200,1,2,0\n300,32,3,0\n");
 
-    written = trace.append_csv(csv.path()); // nothing new
+    written = trace.append_csv(csv.path());
     CHECK(written.ok);
     CHECK(written.records == 0);
     CHECK(csv.text() == std::string(kHeader) + "100,1,1,0\n200,1,2,0\n300,32,3,0\n");
@@ -138,7 +132,6 @@ TEST_CASE("Trace: a file that cannot be written keeps its records for the next w
 
 TEST_CASE("Trace: a bound writes the newest records and counts the older ones it leaves out")
 {
-    // The console handler gives its hook 100 ms: it writes the newest records only (layer/swapchain.cpp).
     Trace trace(10);
     TempCsv csv;
     for (uint64_t i = 0; i < 5; ++i) {
@@ -150,7 +143,6 @@ TEST_CASE("Trace: a bound writes the newest records and counts the older ones it
     CHECK(written.skipped == 3);
     CHECK(csv.text() == std::string(kHeader) + "400,1,3,0\n500,1,4,0\n");
 
-    // The ones left out stay out; the next write goes on from the newest.
     trace.add(TraceKind::Acquire, 600, 5, 0);
     written = trace.append_csv(csv.path());
     CHECK(written.records == 1);
@@ -165,7 +157,7 @@ TEST_CASE("Trace: the first record that does not fit calls on_full, once")
     for (int i = 0; i < 3; ++i) {
         trace.add(TraceKind::Acquire, i, 0, 0);
     }
-    CHECK(full == 0); // the array is full, but nothing was dropped yet
+    CHECK(full == 0);
     trace.add(TraceKind::Acquire, 3, 0, 0);
     CHECK(full == 1);
     for (int i = 0; i < 5; ++i) {
@@ -179,7 +171,7 @@ TEST_CASE("Trace: a callback that throws does not leave add")
 {
     Trace trace(1, [] { throw 1; });
     trace.add(TraceKind::Acquire, 1, 0, 0);
-    trace.add(TraceKind::Acquire, 2, 0, 0); // calls it
+    trace.add(TraceKind::Acquire, 2, 0, 0);
     CHECK(trace.dropped() == 1);
 }
 
@@ -193,10 +185,10 @@ TEST_CASE("Trace: two threads appending at once lose nothing")
     CHECK(trace.size() == 2 * kEach);
     std::set<uint64_t> numbers;
     for (size_t i = 0; i < trace.size(); ++i) {
-        CHECK(trace.at(i).kind.load() != 0); // every record that is held was finished
+        CHECK(trace.at(i).kind.load() != 0);
         numbers.insert(trace.at(i).a);
     }
-    CHECK(numbers.size() == 2 * kEach); // and none was written over by the other thread
+    CHECK(numbers.size() == 2 * kEach);
 }
 
 TEST_CASE("Trace: two threads appending to an array that fills up lose nothing but the overflow")
@@ -210,7 +202,7 @@ TEST_CASE("Trace: two threads appending to an array that fills up lose nothing b
     CHECK(trace.size() == kCapacity);
     CHECK(trace.dropped() == 2 * kEach - kCapacity);
     CHECK(trace.size() + trace.dropped() == 2 * kEach);
-    CHECK(full == 1); // however many threads dropped records, the notice is made once
+    CHECK(full == 1);
     std::set<uint64_t> numbers;
     for (size_t i = 0; i < trace.size(); ++i) {
         CHECK(trace.at(i).kind.load() != 0);

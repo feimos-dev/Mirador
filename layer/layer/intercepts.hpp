@@ -3,11 +3,6 @@
 
 #pragma once
 
-// The layer's intercepts outside layer_main.cpp, for its proc-address tables: device.cpp, display_intercepts.cpp,
-// surface_intercepts.cpp, swapchain.cpp, present.cpp, events.cpp and misc_intercepts.cpp, and
-// present_timing_intercepts.cpp. Each is declared from its Vulkan PFN type, so a definition whose
-// signature differs from the command's does not link.
-
 #include <vulkan/vulkan.h>
 
 #include <exception>
@@ -21,7 +16,6 @@
 
 namespace dvl {
 
-// Instance-level commands (vkGetInstanceProcAddr only). X(name) is vkName; the function is layer_name.
 #define DVL_INSTANCE_INTERCEPTS(X)                 \
     X(CreateDevice)                                \
     X(GetPhysicalDeviceDisplayPropertiesKHR)       \
@@ -49,8 +43,6 @@ namespace dvl {
     X(GetPhysicalDevicePresentRectanglesKHR)       \
     X(GetPhysicalDeviceSurfacePresentModes2EXT)
 
-// Device-level commands (vkGetDeviceProcAddr, and vkGetInstanceProcAddr too): device.cpp, surface_intercepts.cpp,
-// swapchain.cpp, present.cpp, events.cpp and misc_intercepts.cpp, and present_timing_intercepts.cpp.
 #define DVL_DEVICE_INTERCEPTS(X)                    \
     X(DestroyDevice)                                \
     X(DeviceWaitIdle)                               \
@@ -115,34 +107,16 @@ DVL_INSTANCE_INTERCEPTS(DVL_DECLARE_INTERCEPT)
 DVL_DEVICE_INTERCEPTS(DVL_DECLARE_INTERCEPT)
 #undef DVL_DECLARE_INTERCEPT
 
-// The display session the intercepts use: nvdm::process_session(), its lines routed to the layer's log at the first
-// use, unless a test has put another in its place.
 nvdm::DisplaySession& display_session();
 
-// The test seam: every later display_session() is `session` (a session on a fake
-// NVAPI) instead of the process's; null puts the process's back. Only the test build of the DLL exports it
-// (test_hooks.cpp), so no test reaches the real NVAPI. The caller keeps `session` alive while it is in place.
 void set_display_session_for_tests(nvdm::DisplaySession* session);
 
-// Whether our display is listed on `physical_device`. The first call for a physical device of the
-// instance decides it and keeps the answer: not NVIDIA, no LUID, the display session failing to open for its LUID (it
-// logs the line itself), or the import failing (the format queries, or the trial import on a device of the physical
-// device that exists now: import_verdict()) is no. The only place, with vkCreateDisplayPlaneSurfaceKHR, where the
-// layer can fail. May wait for the session's open (MIRADOR_DIRECT_MODE_WAIT_MS and the NVAPI calls) and
-// the trial import.
 bool display_listed(InstanceData& instance, VkPhysicalDevice physical_device);
-// The decided answer, without deciding: false if not decided yet.
 bool display_listed_now(InstanceData& instance, VkPhysicalDevice physical_device);
-// The usage our surface offers on a physical device that lists the display (from the format queries of the
-// decision); 0 on one that does not, or is not decided yet.
 VkImageUsageFlags surface_usage(InstanceData& instance, VkPhysicalDevice physical_device);
-// The instance's physical device that lists our display, if one does (decided ones only).
 std::optional<VkPhysicalDevice> listing_physical_device(InstanceData& instance);
-// The layer below's plane count on `physical_device` (0 if it cannot tell).
 uint32_t driver_plane_count(InstanceData& instance, VkPhysicalDevice physical_device);
 
-// Runs an intercept's body. No exception leaves the layer: out of memory is VK_ERROR_OUT_OF_HOST_MEMORY, anything
-// else (a handle the layer does not know) VK_ERROR_UNKNOWN, each with a log line naming the command.
 template <class Body>
 VkResult guarded(const char* command, Body&& body) noexcept
 {
@@ -169,11 +143,8 @@ void guarded_void(const char* command, Body&& body) noexcept
     });
 }
 
-// The call down for a command whose next function the layer below did not give. Only a layer below that lacks a
-// command it should have gets here (the loader's terminators have them all): logged, VK_ERROR_EXTENSION_NOT_PRESENT.
 VkResult missing_below(const char* command) noexcept;
 
-// Calls the layer below's `fn`, or missing_below() if it has none.
 template <class Fn, class... Args>
 VkResult call_down(Fn fn, const char* command, Args... args)
 {
@@ -183,4 +154,4 @@ VkResult call_down(Fn fn, const char* command, Args... args)
     return fn(args...);
 }
 
-} // namespace dvl
+}

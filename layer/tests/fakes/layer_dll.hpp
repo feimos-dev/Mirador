@@ -8,14 +8,11 @@
 #include <filesystem>
 #include <string>
 
-// Vulkan's prototypes are off (the dvl_pure target defines VK_NO_PROTOTYPES): the tests reach the layer only through
-// the DLL's exports, the way the loader does.
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_layer.h>
 
 namespace dvl_test {
 
-// Sets an environment variable of this process for a scope and puts the old value back.
 class ScopedEnv {
 public:
     ScopedEnv(const wchar_t* name, const wchar_t* value) : name_(name)
@@ -38,8 +35,6 @@ private:
     bool had_old_ = false;
 };
 
-// The built layer DLL (the CMake build gives its path), loaded the way the loader loads it. DVL_LAYER_TEST_DLL is the
-// test build of the same objects, which also exports the display-session seam (layer/test_hooks.cpp).
 class LayerDll {
 public:
     explicit LayerDll(const char* path = DVL_LAYER_DLL)
@@ -66,7 +61,6 @@ private:
     HMODULE module_;
 };
 
-// A negotiated layer: what vkNegotiateLoaderLayerInterfaceVersion gave back.
 struct NegotiatedLayer {
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
     VkNegotiateLayerInterface iface{};
@@ -85,4 +79,4 @@ inline NegotiatedLayer negotiate(const LayerDll& dll, uint32_t offered_version)
     return out;
 }
 
-} // namespace dvl_test
+}

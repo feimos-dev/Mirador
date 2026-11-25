@@ -48,12 +48,10 @@ public class ElevatedChoiceTests
     {
         Assert.Equal(ElevatedChoice.ExtraVariables, ElevatedChoice.RunsAsYouReason(Custom(null, Log), null, installedCopy: true, variablesApproved: false));
 
-        // An approved branch whose variables changed since: the approval covered both.
         var branch = Custom(BuildSource.UpstreamMain, Log) with { RunAsAdministrator = true };
         Assert.Equal(ElevatedChoice.ExtraVariables, ElevatedChoice.RunsAsYouReason(branch, null, installedCopy: true, approvedBuild: true, variablesApproved: false));
         Assert.Null(ElevatedChoice.RunsAsYouReason(branch, null, installedCopy: true, approvedBuild: true, variablesApproved: true));
 
-        // And one whose approved variables were all removed.
         Assert.Equal(
             ElevatedChoice.ExtraVariables,
             ElevatedChoice.RunsAsYouReason(Custom(BuildSource.UpstreamMain) with { RunAsAdministrator = true }, null, true, approvedBuild: true, variablesApproved: false));

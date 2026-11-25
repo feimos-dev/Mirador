@@ -2,21 +2,14 @@ using System.Text.Json;
 
 namespace Mirador.Core.Monado;
 
-/// <summary>Reading an OpenXR runtime manifest (the small JSON file that names the runtime DLL).</summary>
 public static class RuntimeManifest
 {
-    /// <summary>
-    /// The full path of the runtime DLL named by <c>runtime.library_path</c>; a relative path is taken from the folder
-    /// of the manifest. Does not check that the DLL exists (see <see cref="Validate"/>).
-    /// </summary>
-    /// <exception cref="MiradorException">The manifest is missing, can't be read, is not JSON, or does not name a usable library path.</exception>
     public static string ReadLibraryPath(string manifestPath)
     {
         var (library, problem) = Read(manifestPath);
         return library ?? throw new MiradorException(problem!);
     }
 
-    /// <summary>Null when the manifest is readable, names a library and that library exists; else the problem in plain words.</summary>
     public static string? Validate(string manifestPath)
     {
         var (library, problem) = Read(manifestPath);
@@ -64,7 +57,6 @@ public static class RuntimeManifest
             }
             catch (InvalidOperationException)
             {
-                // The JSON parses, but the string holds an invalid escape (a lone UTF-16 surrogate): reading it is what fails.
                 return (null, $"The file {manifestPath} has a runtime.library_path that isn't valid text.");
             }
 

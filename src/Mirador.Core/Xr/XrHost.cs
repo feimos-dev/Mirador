@@ -5,43 +5,25 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Xr;
 
-/// <summary>A home or dashboard that connected: where Mirador's lines to it go.</summary>
 public interface IXrProgram
 {
-    /// <summary>Queues a line for the program; never blocks or throws.</summary>
     void Send(string line);
 }
 
-/// <summary>Ends the game Monado shows, for the dashboard's exit button.</summary>
 public interface IGameExit
 {
-    /// <summary>Whether <see cref="Quit"/> could end the game shown now.</summary>
     bool CanQuit();
 
-    /// <summary>Ends the game shown; false when it couldn't.</summary>
     bool Quit();
 }
 
-/// <summary>Told who runs the dashboard and whether it is open, for other programs that have a dashboard of their own to give way to it.</summary>
 public interface IDashboardRecord
 {
-    /// <summary>The dashboard's session began in process <paramref name="processId"/>, or (null) the dashboard has gone. Returns at once.</summary>
     void Hosted(int? processId);
 
-    /// <summary>The dashboard opened or closed. Returns at once.</summary>
     void Opened(bool open);
 }
 
-/// <summary>What an <see cref="XrHost"/> works with.</summary>
-/// <param name="Launcher">Starts the two programs. The app owns it; they end with it, and so with Mirador.</param>
-/// <param name="ProgramExe">The full path of <c>Mirador.Xr.exe</c>.</param>
-/// <param name="Environment">The environment the programs start from: the user's default one.</param>
-/// <param name="Time">The clock of every wait.</param>
-/// <param name="HomeEnabled">Whether the home is switched on ("Home environment").</param>
-/// <param name="DashboardEnabled">Whether the dashboard is switched on ("Dashboard").</param>
-/// <param name="Log">Takes a line for Mirador's log.</param>
-/// <param name="GameExit">Ends the game shown; null: the exit button only stops Monado.</param>
-/// <param name="Record">Told who runs the dashboard and whether it is open; null: nobody.</param>
 public sealed record XrHostDeps(
     IProcessLauncher Launcher,
     string ProgramExe,
@@ -53,60 +35,41 @@ public sealed record XrHostDeps(
     IGameExit? GameExit = null,
     IDashboardRecord? Record = null);
 
-/// <summary>
-/// Runs the home and the dashboard beside Monado and decides what the dashboard does: started once libmonado is
-/// connected, restarted when one exits, ended with Monado. The home tells when it is what Monado shows, which opens the
-/// dashboard; the dashboard tells of the system button and its own buttons; Mirador does the rest through libmonado
-/// (the view handed back to a game that began first, the game's inputs blocked while the dashboard is open over it, the
-/// recentre). Safe from any thread; events come on background threads.
-/// </summary>
 public sealed class XrHost(XrHostDeps deps)
 {
-    /// <summary>A program that exits this often within <see cref="ExitWindow"/> stays down until Monado starts again.</summary>
     public const int ExitsAllowed = 3;
 
     public static readonly TimeSpan ExitWindow = TimeSpan.FromMinutes(1);
 
-    /// <summary>How long after a program's exit it is started again.</summary>
     public static readonly TimeSpan RestartDelay = TimeSpan.FromSeconds(1);
 
-    /// <summary>How long the home must stay shown before the dashboard opens: a game taking over at once never sees it.</summary>
     public static readonly TimeSpan OpenDelay = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>How often the open dashboard gets the controllers' batteries again.</summary>
     public static readonly TimeSpan DevicesInterval = TimeSpan.FromSeconds(5);
 
-    /// <summary>How long a program has to end by itself when Monado stops.</summary>
     public static readonly TimeSpan QuitLimit = TimeSpan.FromSeconds(1);
 
     private readonly object gate = new();
     private readonly Slot home = new(XrLink.HomeRole, "The home environment");
     private readonly Slot dashboard = new(XrLink.DashboardRole, "The dashboard");
 
-    // One Monado run: null while Monado is stopped. A late timer or exit of an earlier run sees another object and stops.
     private RunState? run;
 
-    /// <summary>Raised when <see cref="Problem"/> may be different.</summary>
     public event Action? ProblemChanged;
 
-    /// <summary>Raised when the dashboard's exit button asks for Monado to stop.</summary>
     public event Action? StopMonadoRequested;
 
-    /// <summary>Why the home or the dashboard isn't running though it should be; null otherwise.</summary>
     public string? Problem
     {
-        // Read without the lock, which a stalled Monado can hold: the event follows every change.
         get => home.Problem ?? dashboard.Problem;
     }
 
-    /// <summary>Follows <paramref name="session"/>: the programs start once its libmonado connection is open and end as it stops.</summary>
     public void Follow(SessionController session)
     {
         session.MonadoConnected += client =>
         {
             if (session.CurrentInstall is { } install)
             {
-                // The copy that runs: the approved one when there is one.
                 MonadoStarted(client, install.Approved?.Manifest ?? install.Manifest);
             }
         };
@@ -119,12 +82,6 @@ public sealed class XrHost(XrHostDeps deps)
         };
     }
 
-    /// <summary>
-    /// Monado is up and libmonado connected: starts the programs that are switched on. Without the app list in this
-    /// Monado's libmonado, neither starts: a home couldn't hand the view back to a game that began before it.
-    /// </summary>
-    /// <param name="client">The run's libmonado connection.</param>
-    /// <param name="runtimeManifest">The OpenXR runtime manifest of the Monado that runs, which the programs must use whatever the machine's active runtime is.</param>
     public void MonadoStarted(IMonadoClient client, string runtimeManifest)
     {
         lock (gate)
@@ -161,10 +118,6 @@ public sealed class XrHost(XrHostDeps deps)
         RaiseProblemChanged();
     }
 
-    /// <summary>
-    /// Monado is stopping or has stopped: gives a blocked game its inputs back, then ends the programs, asking first and
-    /// waiting at most <see cref="QuitLimit"/>. Never throws.
-    /// </summary>
     public async Task MonadoStoppedAsync()
     {
         RunState? state;
@@ -205,10 +158,6 @@ public sealed class XrHost(XrHostDeps deps)
         await Task.WhenAll(ending.Select(EndAsync)).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// "Home environment" or "Dashboard" was switched while Monado may be running: a program switched on starts now, one
-    /// switched off is ended. Never throws.
-    /// </summary>
     public void SwitchesChanged()
     {
         List<IRunningProcess> ending = [];
@@ -252,7 +201,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>Waits <see cref="QuitLimit"/> for a program told to quit, then ends it. Never throws.</summary>
     private async Task EndAsync(IRunningProcess process)
     {
         try
@@ -265,7 +213,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
         catch (Exception)
         {
-            // Its exit can't be read: it ends with Mirador at the latest.
         }
 
         try
@@ -277,7 +224,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>Whether process <paramref name="processId"/> is the program Mirador started as <paramref name="role"/>.</summary>
     public bool Started(int? processId, string role)
     {
         lock (gate)
@@ -286,7 +232,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>A program connected as <paramref name="role"/>; its lines go to <see cref="Line"/> and its end to <see cref="Disconnected"/>.</summary>
     public void Connected(string role, IXrProgram program)
     {
         lock (gate)
@@ -302,7 +247,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>The program connected as <paramref name="role"/> through <paramref name="program"/> has gone.</summary>
     public void Disconnected(string role, IXrProgram program)
     {
         lock (gate)
@@ -321,7 +265,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>A line from the program connected as <paramref name="role"/>.</summary>
     public void Line(string role, string line)
     {
         var stop = false;
@@ -362,7 +305,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>The bar's entries for Monado's <paramref name="devices"/>: the hands first, then the rest by serial.</summary>
     public static IReadOnlyList<XrDevice> BarDevices(IReadOnlyList<MonadoDevice> devices) =>
     [
         .. DeviceStatus.Controllers(null, devices)
@@ -470,7 +412,6 @@ public sealed class XrHost(XrHostDeps deps)
         RaiseProblemChanged();
     }
 
-    /// <summary>What goes with a program that left: the home no longer shows, a dashboard no longer blocks a game.</summary>
     private void GoneLocked(RunState state, Slot slot)
     {
         if (ReferenceEquals(slot, home))
@@ -502,7 +443,6 @@ public sealed class XrHost(XrHostDeps deps)
                 state.OpenTimer = null;
                 if (!shown)
                 {
-                    // A game took the view: the dashboard closes, and opens over it only on the system button.
                     SetOpenLocked(state, false);
                 }
                 else
@@ -514,10 +454,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <summary>
-    /// The home's session began. Monado shows the session that began last, so a game that started Monado and began
-    /// before the home has just lost the view: it gets it back.
-    /// </summary>
     private void HandBackLocked(RunState state)
     {
         var apps = state.Client.Apps();
@@ -551,7 +487,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
     }
 
-    /// <returns>True when Monado should be stopped.</returns>
     private bool DashboardLineLocked(RunState state, string word, string value)
     {
         switch (word)
@@ -560,7 +495,6 @@ public sealed class XrHost(XrHostDeps deps)
                 dashboard.Running = true;
                 state.Recorded = false;
                 deps.Record?.Hosted(dashboard.Process?.Id);
-                // A dashboard that starts (again) while the home shows opens at once.
                 state.Open = false;
                 SetOpenLocked(state, state.HomeShown);
                 break;
@@ -607,7 +541,6 @@ public sealed class XrHost(XrHostDeps deps)
         return false;
     }
 
-    /// <summary>The game Monado shows; null at home, or with nothing shown.</summary>
     private static MonadoApp? ShownGameLocked(RunState state) =>
         state.HomeShown ? null : state.Client.Apps().LastOrDefault(a => a.Shown && !a.Overlay && a.Name != XrLink.HomeAppName);
 
@@ -620,7 +553,6 @@ public sealed class XrHost(XrHostDeps deps)
             return;
         }
 
-        // The game under an open dashboard gets no buttons, triggers or sticks; its view and hands keep moving.
         var game = state.Open ? ShownGameLocked(state) : null;
         if (game is null || !state.Client.OffersInputBlocks)
         {
@@ -661,7 +593,6 @@ public sealed class XrHost(XrHostDeps deps)
         }
         catch (Exception e) when (e is MiradorException or NotSupportedException or ObjectDisposedException)
         {
-            // The game has gone, or Monado has: nothing is left blocked.
         }
     }
 
@@ -680,7 +611,6 @@ public sealed class XrHost(XrHostDeps deps)
             }
             catch (Exception e) when (e is MiradorException or ObjectDisposedException)
             {
-                // Monado didn't answer: the bar keeps what it had.
             }
         }
     }
@@ -702,16 +632,12 @@ public sealed class XrHost(XrHostDeps deps)
 
         public IReadOnlyDictionary<string, string> Environment { get; } = environment;
 
-        /// <summary>Whether the home is the app Monado shows.</summary>
         public bool HomeShown { get; set; }
 
-        /// <summary>Whether the dashboard is open.</summary>
         public bool Open { get; set; }
 
-        /// <summary>Whether the record was last told the dashboard is open; a new host starts closed.</summary>
         public bool Recorded { get; set; }
 
-        /// <summary>The app whose inputs Mirador blocked, to give them back.</summary>
         public uint? Blocked { get; set; }
 
         public ITimer? OpenTimer { get; set; }
@@ -723,14 +649,12 @@ public sealed class XrHost(XrHostDeps deps)
     {
         public string Role { get; } = role;
 
-        /// <summary>The program's name at the start of a sentence.</summary>
         public string Name { get; } = name;
 
         public IRunningProcess? Process { get; set; }
 
         public IXrProgram? Link { get; set; }
 
-        /// <summary>Whether the connected program's session has begun.</summary>
         public bool Running { get; set; }
 
         public List<DateTimeOffset> Exits { get; } = [];

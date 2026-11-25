@@ -38,8 +38,8 @@ public class ProcessesTests
     {
         var list = new SystemProcessList();
 
-        Assert.Null(list.ImagePathOf(0)); // the idle process: never opened
-        Assert.Null(list.ImagePathOf(0x7FFFFFF0)); // no such process
+        Assert.Null(list.ImagePathOf(0));
+        Assert.Null(list.ImagePathOf(0x7FFFFFF0));
     }
 
     [Fact]

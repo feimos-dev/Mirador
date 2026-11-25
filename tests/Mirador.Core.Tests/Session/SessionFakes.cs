@@ -11,7 +11,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Tests.Session;
 
-/// <summary>What the fakes were asked to do, in order, from any thread.</summary>
 internal sealed class Steps
 {
     private readonly List<string> list = [];
@@ -40,10 +39,8 @@ internal sealed class FakeProcessList(Steps steps) : IProcessList
 {
     public List<ProcInfo> Running { get; } = [];
 
-    /// <summary>The program file of each process whose file can be read; the others can't.</summary>
     public Dictionary<int, string> Images { get; } = [];
 
-    /// <summary>Processes that end right after the next snapshot has listed them.</summary>
     public HashSet<int> EndAfterSnapshot { get; } = [];
 
     public IReadOnlyList<ProcInfo> Snapshot()
@@ -66,7 +63,6 @@ internal sealed class FakeProcessList(Steps steps) : IProcessList
     }
 }
 
-/// <summary>A process that does what the test says. Lines sent before anyone listens go to the first listener, as the real one does.</summary>
 internal sealed class FakeProcess(Steps steps) : IRunningProcess
 {
     private readonly object gate = new();
@@ -78,7 +74,6 @@ internal sealed class FakeProcess(Steps steps) : IRunningProcess
 
     public Task<int> Exited => exited.Task;
 
-    /// <summary>The exit code a kill leaves.</summary>
     public int KilledExitCode { get; set; } = 1;
 
     public bool Killed { get; private set; }
@@ -157,7 +152,6 @@ internal sealed class FakeProcess(Steps steps) : IRunningProcess
         exited.TrySetResult(KilledExitCode);
     }
 
-    /// <summary>Whether <see cref="EndCleanlyAsync"/> ends it (exit code 0), as Monado does on its exit key.</summary>
     public bool EndsCleanly { get; set; }
 
     public Task<bool> EndCleanlyAsync(TimeSpan limit)
@@ -206,7 +200,6 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
 {
     private readonly List<ProcessSpec> specs = [];
 
-    /// <summary>Lines the process writes at once, before Mirador can listen.</summary>
     public string[] FirstLines { get; set; } = [];
 
     public MiradorException? Refusal { get; set; }
@@ -215,7 +208,6 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
 
     public bool SessionFileExistedAtLaunch { get; private set; }
 
-    /// <summary>Runs as each launch begins, to look at what the Start did before it.</summary>
     public Action? OnStart { get; set; }
 
     public int Starts
@@ -262,10 +254,6 @@ internal sealed class FakeLauncher(Steps steps, string sessionFile) : IProcessLa
     }
 }
 
-/// <summary>
-/// Monado's pipe, there once the test says so. Names come from the real <see cref="MonadoPipe"/>, without the trip
-/// through the ANSI code page (MonadoPipeTests cover that), so that they don't depend on the machine's code page.
-/// </summary>
 internal sealed class FakePipe(Steps steps) : IMonadoPipe
 {
     private readonly ConcurrentQueue<string> asked = new();
@@ -287,12 +275,10 @@ internal sealed class FakePipe(Steps steps) : IMonadoPipe
     }
 }
 
-/// <summary>Libmonado as the session opens it: counts the opens and hands out <see cref="FakeMonadoClient"/>s.</summary>
 internal sealed class FakeLibmonado(Steps steps)
 {
     private readonly ConcurrentQueue<string> binDirs = new();
 
-    /// <summary>What the next open gives when not null; else a new connected client.</summary>
     public LibmonadoOpen? Result { get; set; }
 
     public FakeMonadoClient? Client { get; private set; }
@@ -301,10 +287,8 @@ internal sealed class FakeLibmonado(Steps steps)
 
     public int Opens => binDirs.Count;
 
-    /// <summary>When set, an open waits for it (at most <see cref="Harness.Limit"/>) before it connects.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
-    /// <summary>Completes once an open has begun.</summary>
     public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public LibmonadoOpen Open(string binDir)
@@ -323,23 +307,18 @@ internal sealed class FakeLibmonado(Steps steps)
     }
 }
 
-/// <summary>A libmonado connection to a Monado with a head; it throws after <see cref="Dispose"/>, as the real one does.</summary>
 internal sealed class FakeMonadoClient(Steps steps) : IMonadoClient
 {
     public bool Disposed { get; private set; }
 
-    /// <summary>Completes once <see cref="Dispose"/> has run.</summary>
     public TaskCompletionSource Closed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>When set, <see cref="Devices"/> waits for it (at most <see cref="Harness.Limit"/>), as a call Monado doesn't answer does.</summary>
     public TaskCompletionSource? DevicesGate { get; set; }
 
-    /// <summary>Completes once a <see cref="Devices"/> call has begun.</summary>
     public TaskCompletionSource DevicesEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public bool OffersOriginOffsets => true;
 
-    /// <summary>When set, <see cref="Devices"/> throws it, as a read Monado's answer breaks does.</summary>
     public Exception? DevicesFail { get; set; }
 
     public IReadOnlyList<MonadoDevice> Devices()
@@ -389,7 +368,6 @@ internal sealed class FakeHelper : IHelperClient
     public Task<HelperReply> SendAsync(HelperCommand command, CancellationToken ct) => Task.FromResult(new HelperReply(true));
 }
 
-/// <summary>The USB devices "plugged in": the fake headset unless a test unplugs it.</summary>
 internal sealed class FakeUsb : IUsbDevices
 {
     public HashSet<UsbId> Devices { get; } = [FakeModule.HeadsetId];
@@ -435,7 +413,7 @@ internal sealed class FakeModuleSession(
         HasEnded.TrySetResult();
         if (endHangs)
         {
-            return new TaskCompletionSource().Task; // never finishes, and ignores ct: the worst case
+            return new TaskCompletionSource().Task;
         }
 
         return endFailure is null ? Task.CompletedTask : Task.FromException(endFailure);
@@ -446,17 +424,14 @@ internal sealed class FakeModuleSession(
     public void RequestStop(string reason) => RaiseStopRequested(reason);
 }
 
-/// <summary>A direct-mode layer that writes down its steps; its session sets <c>FAKE_LAYER=1</c> and shows a display line.</summary>
 internal sealed class FakeDirectMode(Steps steps) : IDirectMode
 {
     public DirectModeKind Kind => DirectModeKind.Nvidia;
 
     public string DisplayName => "Fake layer";
 
-    /// <summary>What CheckAsync finds.</summary>
     public List<CheckResult> Checks { get; } = [];
 
-    /// <summary>When set, BeforeStart throws it.</summary>
     public Exception? Refusal { get; set; }
 
     public Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, CancellationToken ct)
@@ -508,40 +483,28 @@ internal sealed class FakeModule(Steps steps) : IHeadsetModule
 
     public string? ElevatedModuleId { get; set; } = "fake";
 
-    /// <summary>When set, BeforeStart throws it (after waiting at <see cref="Gate"/>).</summary>
     public Exception? Refusal { get; set; }
 
-    /// <summary>When set, BeforeStart waits for it, honouring its token.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
-    /// <summary>When set, BeforeStart reports it as progress.</summary>
     public string? Progress { get; set; }
 
-    /// <summary>The recovery data of the sessions BeforeStart makes from now on.</summary>
     public IReadOnlyDictionary<string, string> RecoveryData { get; set; } = new Dictionary<string, string> { ["wasRunning"] = "true" };
 
-    /// <summary>When set, BeforeStart saves it as recovery data first thing, before waiting at <see cref="Gate"/>.</summary>
     public IReadOnlyDictionary<string, string>? SavedDuringStart { get; set; }
 
-    /// <summary>When set, BeforeStart saves it as recovery data just before it throws <see cref="Refusal"/>: an empty set says it undid its steps.</summary>
     public IReadOnlyDictionary<string, string>? SavedBeforeRefusal { get; set; }
 
-    /// <summary>The last save-recovery callback BeforeStart was given.</summary>
     public Action<IReadOnlyDictionary<string, string>>? SaveRecovery { get; private set; }
 
-    /// <summary>When set, the session throws what it makes of each line it is given.</summary>
     public Func<string, Exception>? SessionLineFailure { get; set; }
 
-    /// <summary>When set, the session's EndAsync fails with it.</summary>
     public Exception? SessionEndFailure { get; set; }
 
-    /// <summary>When true, the session's EndAsync never finishes.</summary>
     public bool SessionEndHangs { get; set; }
 
-    /// <summary>When set, RecoverAsync throws it.</summary>
     public Exception? RecoverFailure { get; set; }
 
-    /// <summary>When set, RecoverAsync waits for it, honouring its token.</summary>
     public TaskCompletionSource? RecoverGate { get; set; }
 
     public TaskCompletionSource RecoverEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -554,7 +517,6 @@ internal sealed class FakeModule(Steps steps) : IHeadsetModule
 
     public IReadOnlyDictionary<string, string>? Recovered { get; private set; }
 
-    /// <summary>The fake headset's USB id; <see cref="FakeUsb"/> has it plugged in by default.</summary>
     public static readonly UsbId HeadsetId = new(0x1234, 0x5678);
 
     public bool IsPresent(IReadOnlySet<UsbId> devices) => devices.Contains(HeadsetId);
@@ -619,21 +581,16 @@ internal sealed class FakeModule(Steps steps) : IHeadsetModule
     }
 }
 
-/// <summary>An <see cref="ISessionHook"/> that writes down what it is told, in order, from any thread.</summary>
 internal sealed class FakeHook : ISessionHook
 {
     private readonly List<string> calls = [];
 
-    /// <summary>When set, both calls throw it (after writing themselves down).</summary>
     public Exception? Failure { get; set; }
 
-    /// <summary>Run inside <see cref="Started"/>, before it writes itself down: tests look at the session from there.</summary>
     public Action? OnStarted { get; set; }
 
-    /// <summary>Run inside <see cref="Ended"/>, before it writes itself down.</summary>
     public Action? OnEnded { get; set; }
 
-    /// <summary>The calls so far: <c>started:profile-id:module-id</c> or <c>ended:profile-id:module-id</c> (module-id empty without a module).</summary>
     public string[] Calls
     {
         get
@@ -671,23 +628,12 @@ internal sealed class FakeHook : ISessionHook
     }
 }
 
-/// <summary>
-/// A <see cref="SessionController"/> on fakes, with a bundled Monado and a stand-in on disk in a temp folder whose
-/// path has a space and a non-ASCII letter. The selected profile is "Dream Air" on the bundled Monado with the fake module.
-/// </summary>
 internal sealed class Harness : IAsyncDisposable
 {
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
     private readonly TempDir dir = new();
 
-    /// <param name="installedCopy">With a value, the user allowed Monado as administrator, and this says whether this
-    /// Mirador is the installed one; the elevated launcher then records its starts in <see cref="ElevatedStarts"/>
-    /// and runs them through <see cref="Launcher"/>.</param>
-    /// <param name="approvedCopy">The locator's lookup of a build's approved copy; null: no build is approved.</param>
-    /// <param name="elevationFix">Whether Verify found the elevation fix in a build; null: never.</param>
-    /// <param name="variablesApproved">Whether a profile's variables are approved to run as administrator; null: never.</param>
-    /// <param name="folderBackupLimit">With a value, the session copies <see cref="MonadoFolder"/> at each Start, up to that many bytes.</param>
     public Harness(
         ISessionHook? hook = null, bool? installedCopy = null, Func<Profile, MonadoInstall, Mirador.Ipc.ApprovedBuild?>? approvedCopy = null,
         Func<Profile, MonadoInstall, bool>? elevationFix = null, bool controllersOffAtStop = false, long? folderBackupLimit = null,
@@ -765,10 +711,8 @@ internal sealed class Harness : IAsyncDisposable
     public static Profile DreamAir { get; } =
         new("p1", "Dream Air", "fake", BuildSource.Mirador, [], new Dictionary<string, string>());
 
-    /// <summary>Program files under this folder count as Mirador's stand-in, nothing else does.</summary>
     public const string StandInImages = @"C:\Games\stand-ins\";
 
-    /// <summary>A real Monado's program file, outside Mirador.</summary>
     public const string OtherMonado = @"C:\Users\Zoë\monado\build\src\xrt\targets\service\monado-service.exe";
 
     public static IReadOnlyDictionary<string, string> Inherited { get; } = new Dictionary<string, string>
@@ -785,10 +729,8 @@ internal sealed class Harness : IAsyncDisposable
 
     public string BundledServer { get; }
 
-    /// <summary>The Monado folder the session's backups copy (with <c>folderBackupLimit</c> given).</summary>
     public string MonadoFolder => Path.Combine(Root, "monado");
 
-    /// <summary>The bundled Monado's runtime DLL folder, with the stand-in's <c>service</c> folder below it.</summary>
     public string RuntimeDir => Path.GetDirectoryName(BundledServer)!;
 
     public string StandInExe { get; }
@@ -798,7 +740,6 @@ internal sealed class Harness : IAsyncDisposable
 
     public FakeTimeProvider Time { get; } = new();
 
-    /// <summary>The clock the controller is given: <see cref="Time"/>, saying when a timer is set on it.</summary>
     public TimerWatch Timers { get; }
 
     public FakeProcessList Processes { get; }
@@ -809,10 +750,8 @@ internal sealed class Harness : IAsyncDisposable
 
     public FakeLauncher Launcher { get; }
 
-    /// <summary>The Starts that went to the elevated launcher (with <c>installedCopy</c> given).</summary>
     public System.Collections.Concurrent.ConcurrentQueue<ElevatedStart> ElevatedStarts { get; } = new();
 
-    /// <summary>What is plugged in: the fake headset, until a test clears it.</summary>
     public FakeUsb Usb { get; }
 
     public FakePipe Pipe { get; }
@@ -839,12 +778,10 @@ internal sealed class Harness : IAsyncDisposable
 
     public TaskCompletionSource<string> HasEnded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>The log file a Start at the fake clock's time writes.</summary>
     public string MonadoLog => Paths.NewMonadoLogFile(Time.GetLocalNow().DateTime);
 
     public void UseProfile(Profile p) => Profiles.Save(new ProfileSet([p], p.Id));
 
-    /// <summary>Creates an empty file (and its folders) and returns its path.</summary>
     public static string Touch(params string[] parts)
     {
         var path = Path.Combine(parts);
@@ -853,7 +790,6 @@ internal sealed class Harness : IAsyncDisposable
         return path;
     }
 
-    /// <summary>A Monado build folder as a dev build leaves it; returns the folder of its runtime DLL.</summary>
     public static string MakeBuild(string folder)
     {
         var dll = Touch(folder, "src", "xrt", "targets", "openxr", "openxr_monado.dll");
@@ -862,7 +798,6 @@ internal sealed class Harness : IAsyncDisposable
         return Path.GetDirectoryName(dll)!;
     }
 
-    /// <summary>Starts with the pipe there at the first look.</summary>
     public async Task<StartOutcome> StartRunningAsync()
     {
         Pipe.Up = true;

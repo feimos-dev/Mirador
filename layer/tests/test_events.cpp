@@ -1,10 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display events of VK_EXT_display_control: the event table, and vkWaitForFences on lists that name
-// display events, in fake time. A fake host plays the driver's ordinary fences (each signals at a scripted time, or
-// never) and the display thread's refreshes (scripted too), and moves the clock only inside its waits.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -41,22 +37,19 @@ const VkFence kEvent2 = handle<VkFence>(0xE2);
 const VkFence kOrdinary = handle<VkFence>(0xF1);
 const VkFence kOrdinary2 = handle<VkFence>(0xF2);
 
-// The driver's ordinary fences and the display thread's refreshes, in fake time.
 struct FakeHost : dvl::FenceWaitHost {
     nvdm::FakeClock clock{0};
     EventTable& table;
-    std::multimap<int64_t, int64_t> refreshes;         // at fake time t, a refresh whose QPC time is the value
-    std::map<VkFence, int64_t> ready_at;               // when each ordinary fence signals; absent: never
-    std::vector<std::vector<VkFence>> down_calls;      // what wait_down was given
+    std::multimap<int64_t, int64_t> refreshes;
+    std::map<VkFence, int64_t> ready_at;
+    std::vector<std::vector<VkFence>> down_calls;
     std::vector<uint64_t> down_timeouts;
     size_t change_waits = 0;
 
     explicit FakeHost(EventTable& t) : table(t) {}
 
-    // A refresh at fake time `at`, with that QPC time.
     void refresh_at(int64_t at) { refreshes.emplace(at, at); }
 
-    // Moves the clock to `t`, running every refresh due on the way.
     void run_until(int64_t t)
     {
         while (!refreshes.empty() && refreshes.begin()->first <= t) {
@@ -100,7 +93,7 @@ struct FakeHost : dvl::FenceWaitHost {
 
     void wait_change(std::unique_lock<std::mutex>& lock, int64_t until_ns) override
     {
-        REQUIRE(lock.owns_lock()); // the caller holds the session lock, as with a condition variable
+        REQUIRE(lock.owns_lock());
         ++change_waits;
         const int64_t next = refreshes.empty() ? until_ns : std::min(until_ns, refreshes.begin()->first);
         run_until(next);
@@ -117,12 +110,12 @@ struct WaitRig {
         std::unique_lock<std::mutex> hold(lock);
         const EventWait result = dvl::wait_for_fences(table, hold, kDevice, fences.data(),
                                                       static_cast<uint32_t>(fences.size()), wait_all, timeout_ns, host);
-        CHECK(hold.owns_lock()); // given back held
+        CHECK(hold.owns_lock());
         return result;
     }
 };
 
-} // namespace
+}
 
 TEST_CASE("event_set_by_first_refresh_after_registration")
 {
@@ -132,19 +125,17 @@ TEST_CASE("event_set_by_first_refresh_after_registration")
     CHECK_FALSE(table.is_set(kDevice, kEvent));
     CHECK(table.pending());
 
-    CHECK(table.on_refresh(105 * kMs) == 1); // any refresh, whether or not it showed a new frame
+    CHECK(table.on_refresh(105 * kMs) == 1);
     CHECK(table.is_set(kDevice, kEvent));
     REQUIRE(table.set_at(kDevice, kEvent).has_value());
     CHECK(*table.set_at(kDevice, kEvent) == 105 * kMs);
     CHECK_FALSE(table.pending());
 
-    // A later refresh does not move it, and an event registered after that refresh waits for the next one.
     table.add(kDevice, kEvent2, 106 * kMs);
     CHECK(table.on_refresh(116 * kMs) == 1);
     CHECK(*table.set_at(kDevice, kEvent) == 105 * kMs);
     CHECK(*table.set_at(kDevice, kEvent2) == 116 * kMs);
 
-    // The same fence handle on another device is another event, and not this one.
     CHECK_FALSE(table.is_event(kOtherDevice, kEvent));
 }
 
@@ -152,8 +143,6 @@ TEST_CASE("event_not_set_by_refresh_before_registration")
 {
     EventTable table;
     table.add(kDevice, kEvent, 100 * kMs);
-    // A refresh the display thread reports after the registration, but whose QPC time is before it (or at it), showed
-    // a frame before the event was asked for.
     CHECK(table.on_refresh(95 * kMs) == 0);
     CHECK(table.on_refresh(100 * kMs) == 0);
     CHECK_FALSE(table.is_set(kDevice, kEvent));
@@ -167,20 +156,17 @@ TEST_CASE("wait_honours_timeout")
     WaitRig rig;
     rig.table.add(kDevice, kEvent, 0);
 
-    // Monado's 1 s, no refresh: a timeout at 1 s, not before and not much after.
     const EventWait one = rig.wait({kEvent}, true, 1'000'000'000);
     CHECK(one.result == VK_TIMEOUT);
     CHECK(rig.host.now_ns() >= kS);
     CHECK(rig.host.now_ns() <= kS + kMs);
     CHECK_FALSE(one.set_ns.has_value());
-    CHECK(rig.host.down_calls.empty()); // nothing to pass down
+    CHECK(rig.host.down_calls.empty());
 
-    // A timeout of 0 only looks.
     const int64_t before = rig.host.now_ns();
     CHECK(rig.wait({kEvent}, true, 0).result == VK_TIMEOUT);
     CHECK(rig.host.now_ns() == before);
 
-    // A refresh within the timeout ends it then, and says which refresh did.
     rig.host.refresh_at(before + 7 * kMs);
     const EventWait set = rig.wait({kEvent}, true, 1'000'000'000);
     CHECK(set.result == VK_SUCCESS);
@@ -188,7 +174,6 @@ TEST_CASE("wait_honours_timeout")
     REQUIRE(set.set_ns.has_value());
     CHECK(*set.set_ns == before + 7 * kMs);
 
-    // Signalled stays signalled: another wait returns at once.
     const int64_t after = rig.host.now_ns();
     CHECK(rig.wait({kEvent}, true, 1'000'000'000).result == VK_SUCCESS);
     CHECK(rig.host.now_ns() == after);
@@ -204,10 +189,10 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
         rig.host.refresh_at(11 * kMs);
         const EventWait w = rig.wait({kOrdinary, kEvent}, true, kS);
         CHECK(w.result == VK_SUCCESS);
-        CHECK(rig.host.now_ns() == 11 * kMs); // both: the later of the two
+        CHECK(rig.host.now_ns() == 11 * kMs);
         REQUIRE_FALSE(rig.host.down_calls.empty());
         for (const std::vector<VkFence>& call : rig.host.down_calls) {
-            CHECK(call == std::vector<VkFence>{kOrdinary}); // never the event's fence
+            CHECK(call == std::vector<VkFence>{kOrdinary});
         }
     }
     SECTION("wait all: the ordinary fence late, within the timeout")
@@ -238,15 +223,15 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
         const EventWait w = rig.wait({kEvent, kOrdinary}, false, kS);
         CHECK(w.result == VK_SUCCESS);
         CHECK(rig.host.now_ns() >= 5 * kMs);
-        CHECK(rig.host.now_ns() <= 6 * kMs); // looked at within a millisecond of it signalling
-        CHECK_FALSE(w.set_ns.has_value());   // no event ended it
+        CHECK(rig.host.now_ns() <= 6 * kMs);
+        CHECK_FALSE(w.set_ns.has_value());
         CHECK_FALSE(rig.table.is_set(kDevice, kEvent));
     }
     SECTION("wait any: the event first")
     {
         WaitRig rig;
         rig.table.add(kDevice, kEvent, 0);
-        rig.host.refresh_at(11 * kMs); // the ordinary fence never signals
+        rig.host.refresh_at(11 * kMs);
         const EventWait w = rig.wait({kOrdinary, kEvent, kOrdinary2}, false, kS);
         CHECK(w.result == VK_SUCCESS);
         CHECK(rig.host.now_ns() == 11 * kMs);
@@ -254,7 +239,6 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
         CHECK(*w.set_ns == 11 * kMs);
         for (const std::vector<VkFence>& call : rig.host.down_calls) {
             CHECK(call == std::vector<VkFence>{kOrdinary, kOrdinary2});
-            // Only looks: it cannot wait for the event and the driver at once, and must not sleep through a refresh.
         }
         for (const uint64_t timeout : rig.host.down_timeouts) {
             CHECK(timeout == 0);
@@ -272,7 +256,7 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
     {
         WaitRig rig;
         rig.table.add(kDevice, kEvent, 0);
-        rig.table.add(kDevice, kEvent2, 12 * kMs); // after the first refresh: it needs the second
+        rig.table.add(kDevice, kEvent2, 12 * kMs);
         rig.host.refresh_at(11 * kMs);
         rig.host.refresh_at(22 * kMs);
         CHECK(rig.wait({kEvent, kEvent2}, false, kS).result == VK_SUCCESS);
@@ -290,7 +274,6 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
         const EventTable::Split split = table.split(kDevice, list, 4);
         CHECK(split.events == std::vector<VkFence>{kEvent2, kEvent});
         CHECK(split.ordinary == std::vector<VkFence>{kOrdinary, kOrdinary2});
-        // On another device none of them is an event.
         const EventTable::Split other = table.split(kOtherDevice, list, 4);
         CHECK(other.events.empty());
         CHECK(other.ordinary.size() == 4);
@@ -299,7 +282,6 @@ TEST_CASE("mixed_list_split_wait_all_and_any")
 
 TEST_CASE("reset_unsignals_an_event_for_good")
 {
-    // vkResetFences on an event fence: unsignalled, and not set again by later refreshes (the event happened once).
     EventTable table;
     table.add(kDevice, kEvent, 0);
     table.on_refresh(kRefresh);
@@ -320,14 +302,13 @@ TEST_CASE("destroy_removes_event")
     REQUIRE(table.size() == 3);
 
     CHECK(table.remove(kDevice, kEvent));
-    CHECK_FALSE(table.remove(kDevice, kEvent)); // gone: an ordinary fence from now on
+    CHECK_FALSE(table.remove(kDevice, kEvent));
     CHECK_FALSE(table.is_event(kDevice, kEvent));
     CHECK(table.is_event(kOtherDevice, kEvent));
     const EventTable::Split split = table.split(kDevice, &kEvent, 1);
     CHECK(split.events.empty());
     CHECK(split.ordinary == std::vector<VkFence>{kEvent});
 
-    // vkDestroyDevice forgets the device's events, and only those.
     CHECK(table.remove_device(kDevice) == 1);
     CHECK(table.size() == 1);
     CHECK(table.remove(kOtherDevice, kEvent));
@@ -338,8 +319,6 @@ TEST_CASE("destroy_removes_event")
 
 TEST_CASE("no_event_set_while_flips_stopped")
 {
-    // The frame model's refreshes feed the table, as the display loop's refresh_seen does. While
-    // flips are stopped there are none, so no event is set: not by the "flips stopped" rule, not by any tick.
     nvdm::FencePool pool;
     nvdm::FrameModel model(nvdm::FrameModelConfig{}, &pool);
     EventTable table;
@@ -350,11 +329,11 @@ TEST_CASE("no_event_set_while_flips_stopped")
     };
 
     model.thread_started(0);
-    model.on_counter(100, 0); // the baseline
+    model.on_counter(100, 0);
     feed();
     table.add(kDevice, kEvent, 5 * kMs);
     for (int64_t t = 50 * kMs; t <= 1500 * kMs; t += 50 * kMs) {
-        model.on_counter(100, 0); // the counter does not move
+        model.on_counter(100, 0);
         model.tick(t);
         feed();
     }
@@ -362,7 +341,6 @@ TEST_CASE("no_event_set_while_flips_stopped")
     CHECK_FALSE(table.is_set(kDevice, kEvent));
     CHECK(table.pending());
 
-    // The counter moves again: that refresh sets it.
     model.on_counter(101, 1510 * kMs);
     feed();
     CHECK_FALSE(model.flips_stopped());

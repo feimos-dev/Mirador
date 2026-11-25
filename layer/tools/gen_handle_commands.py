@@ -35,9 +35,7 @@ The output has no dates and no paths, so a rebuild with the same vk.xml changes 
 import sys
 import xml.etree.ElementTree as ET
 
-# The objects the layer makes.
 OUR_HANDLES = frozenset({"VkSurfaceKHR", "VkSwapchainKHR", "VkDisplayKHR", "VkDisplayModeKHR"})
-# Types that name an object by number: the number can be the number of one of ours.
 OBJECT_TYPES = frozenset({"VkObjectType", "VkDebugReportObjectTypeEXT"})
 
 
@@ -50,13 +48,13 @@ class Registry:
     def __init__(self, root):
         self.root = root
         self.struct_aliases = {}
-        self.struct_members = {}   # struct name -> list of (member name, member type name)
-        self.struct_extends = {}   # struct name -> list of the structs it extends (pNext)
-        self.command_aliases = {}  # alias name -> target name
-        self.command_params = {}   # command name -> list of (parameter name, parameter type name)
+        self.struct_members = {}
+        self.struct_extends = {}
+        self.command_aliases = {}
+        self.command_params = {}
         self._read_types()
         self._read_commands()
-        self.extenders = {}        # struct name -> structs that extend it
+        self.extenders = {}
         for child, parents in self.struct_extends.items():
             for parent in parents:
                 self.extenders.setdefault(self.canonical_struct(parent), []).append(child)
@@ -143,7 +141,6 @@ def requirements(root):
     excluded = set()
 
     def owner_name(element):
-        # An internal core feature (VK_BASE_VERSION_1_0, ...) is part of the public VK_VERSION_x_y of its number.
         if element.tag == "feature" and element.get("apitype") == "internal" and element.get("number"):
             return "VK_VERSION_" + element.get("number").replace(".", "_")
         return element.get("name")

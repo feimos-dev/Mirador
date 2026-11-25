@@ -12,7 +12,6 @@ namespace {
 
 constexpr const char kSecondsPrefix[] = "--seconds=";
 
-// A whole number from 1 to kMaxSeconds, digits only: no sign, no blanks, no fraction.
 bool parse_seconds(const std::string& text, int& out)
 {
     if (text.empty() || text.size() > 5) {
@@ -34,10 +33,10 @@ bool parse_seconds(const std::string& text, int& out)
 
 void set_variable(const wchar_t* name, const wchar_t* value)
 {
-    SetEnvironmentVariableW(name, value); // a null value removes it
+    SetEnvironmentVariableW(name, value);
 }
 
-} // namespace
+}
 
 ParsedOptions parse_options(const std::vector<std::string>& args)
 {
@@ -91,4 +90,4 @@ void apply_environment(const Options& options)
     set_variable(L"MIRADOR_DIRECT_MODE_IGNORE_HOLDERS", options.ignore_holders ? L"1" : nullptr);
 }
 
-} // namespace dvl
+}

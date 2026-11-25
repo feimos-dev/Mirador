@@ -24,9 +24,7 @@
 namespace nvdm {
 namespace {
 
-// The enumerate wait looks again this often.
 constexpr int64_t kPollNs = 100'000'000;
-// How often EnableDirectMode is asked again while the display is missing.
 constexpr int64_t kEnableRetryNs = 1'000'000'000;
 
 bool same_luid(const LUID& a, const LUID& b)
@@ -59,7 +57,7 @@ std::string tested_drivers_text()
     return text;
 }
 
-} // namespace
+}
 
 bool is_tested_driver(const std::string& version)
 {
@@ -112,7 +110,7 @@ const BackBuffer& DisplaySession::back_buffer(uint32_t index) const
 
 Mode DisplaySession::mode() const
 {
-    Mode m; // The version, bit depth and flags are the Dream Air's captured values.
+    Mode m;
     m.width = product_.width;
     m.height = product_.height;
     m.refresh_num = product_.refresh_mhz;
@@ -131,7 +129,7 @@ OpenResult DisplaySession::fail(OpenStep step, int code, const std::string& deta
     if (code != 0) {
         message += " (code " + std::to_string(code) + ")";
     }
-    log("error: " + message); // the layer logs it as an error
+    log("error: " + message);
     return OpenResult{false, step, code, std::move(message)};
 }
 
@@ -139,7 +137,7 @@ OpenResult DisplaySession::open(const LUID& queried)
 {
     if (!is_open()) {
         std::lock_guard<std::mutex> guard(open_mutex_);
-        if (!is_open()) { // Not by another thread while this one waited.
+        if (!is_open()) {
             OpenResult result = run_steps(queried);
             if (!result.ok) {
                 return result;
@@ -147,7 +145,6 @@ OpenResult DisplaySession::open(const LUID& queried)
         }
     }
 
-    // Open, so the answer needs no Api call. A device on another adapter (an integrated GPU) is not the display's.
     if (!same_luid(queried, luid_)) {
         return fail(OpenStep::Luid, 0,
                     "the display is on adapter " + luid_text(luid_) + ", not the queried device's " +
@@ -162,9 +159,6 @@ OpenResult DisplaySession::run_steps(const LUID& queried)
         return r;
     }
 
-    // From the first driver call on, the process holds state that must outlive a vkDestroyInstance: the loader
-    // unloads layer DLLs there, and a session that failed half way is picked up again by the next instance. So pin the
-    // DLL now, not only when the session is complete.
     if (!pinned_) {
         deps_.pin_module();
         pinned_ = true;
@@ -284,16 +278,11 @@ OpenResult DisplaySession::find_display()
     if (display_id_ != 0) {
         return proceed(OpenStep::Enumerate);
     }
-    // The display only exists while the board is awake, which can take a few seconds after something starts sending
-    // its heartbeat. Look every kPollNs until wait_ms has passed.
     const int64_t deadline = deps_.clock.now_ns() + static_cast<int64_t>(deps_.wait_ms) * 1'000'000;
     std::vector<uint32_t> ids;
-    // After a Pimax Play or SteamVR session the headset is back on the desktop and Enumerate finds nothing, so direct
-    // mode is asked for first, and again once a second while nothing shows up. A refusal is logged and the wait goes on.
     int64_t last_enable = deps_.clock.now_ns();
     enable_all_vendors();
     for (;;) {
-        // Each direct-mode vendor in turn (Pimax first); the first with a display is the one.
         for (const DirectModeVendor& vendor : kDirectModeVendors) {
             const int ret = deps_.api.enumerate(vendor.nvapi_id, ids);
             if (ret != 0) {
@@ -335,7 +324,6 @@ OpenResult DisplaySession::check_adapter(const LUID& queried)
         luid_ = luid;
         luid_known_ = true;
     }
-    // Compared again at every attempt: a later query may come from another physical device.
     if (!same_luid(queried, luid_)) {
         return fail(OpenStep::Luid, 0,
                     "the display is on adapter " + luid_text(luid_) + ", not the queried device's " +
@@ -349,7 +337,6 @@ OpenResult DisplaySession::identify_product()
     if (product_known_) {
         return proceed(OpenStep::Product);
     }
-    // MIRADOR_DIRECT_MODE_TEST_NO_EDID (tests only): no EDID route is tried, so the last route below decides.
     if (deps_.skip_edid && !skip_edid_logged_) {
         log("warning: MIRADOR_DIRECT_MODE_TEST_NO_EDID is set: every EDID route is skipped (tests only)");
         skip_edid_logged_ = true;
@@ -358,8 +345,6 @@ OpenResult DisplaySession::identify_product()
     EdidRoute route = deps_.skip_edid ? EdidRoute::None : deps_.api.read_edid(display_id_, edid);
     std::optional<Product> product;
     if (route == EdidRoute::None) {
-        // The last route: no EDID, but the one PVR display is the Dream Air if its board is connected (the
-        // display only appears while the board gets its heartbeat). Nothing is opened to find out.
         const std::string unread =
             deps_.skip_edid ? "the display's EDID was not read (MIRADOR_DIRECT_MODE_TEST_NO_EDID skips every route)"
                             : "the display's EDID could not be read (NVAPI, then the registry)";
@@ -389,8 +374,6 @@ OpenResult DisplaySession::identify_product()
                             "gives their mode");
         }
         if (!product->tested && route == EdidRoute::Registry) {
-            // The registry keeps the EDID of every Pimax display Windows ever saw, and its route can't say which one
-            // is connected: a mode from it could be another headset's. Only the tested table's product, as before.
             return fail(OpenStep::Product, kBadOutput,
                         std::string("the display's own EDID could not be read through NVAPI, and the one Windows kept "
                                     "in the registry names the ") +
@@ -398,9 +381,6 @@ OpenResult DisplaySession::identify_product()
                                             "headset's");
         }
         if (!product->tested) {
-            // A headset Windows drives itself (its HMD route, WDDC) is left to it.
-            // Never the tested Dream Air: its own EDID has no such block, and an override that adds one doesn't hand
-            // it to Windows.
             if (has_microsoft_hmd_block(edid)) {
                 return fail(OpenStep::Product, 0,
                             std::string("the ") + product->name + "'s EDID " + kWindowsDrivesIt +
@@ -461,7 +441,6 @@ OpenResult DisplaySession::bind_device()
 
 OpenResult DisplaySession::create_back_buffers()
 {
-    // One at a time, keeping the ones made: a failure at the third is retried as the third.
     while (back_buffers_.size() < kBackBufferCount) {
         BackBuffer buffer{};
         const int ret = deps_.api.create_back_buffer(mode(), buffer);
@@ -478,18 +457,15 @@ OpenResult DisplaySession::create_back_buffers()
 OpenResult DisplaySession::set_display_mode()
 {
     const int ret = deps_.api.set_display_mode(mode());
-    if (ret != 0 && ret != kSetModeOk) { // -208 is how it says OK.
+    if (ret != 0 && ret != kSetModeOk) {
         return fail(OpenStep::SetDisplayMode, ret, "NVAPI would not set the display mode");
     }
     return proceed(OpenStep::SetDisplayMode);
 }
 
-// --- Settings and the process-wide session -----------------------------------------------------------------------
-
 SessionSettings parse_session_settings(const char* wait_ms, const char* ignore_holders, const char* no_edid)
 {
     SessionSettings settings;
-    // Digits only: strtoull would take a sign or leading blanks, and wrap "-5" to a huge number.
     if (wait_ms != nullptr && wait_ms[0] >= '0' && wait_ms[0] <= '9') {
         char* end = nullptr;
         errno = 0;
@@ -505,7 +481,6 @@ SessionSettings parse_session_settings(const char* wait_ms, const char* ignore_h
 
 namespace {
 
-// Nothing here is destroyed at process exit.
 std::mutex& sink_mutex()
 {
     static std::mutex* const mutex = new std::mutex;
@@ -536,8 +511,6 @@ void process_log(const std::string& line)
 
 void pin_this_module()
 {
-    // An address inside this module, so FROM_ADDRESS finds the DLL that holds this code (the layer, when it is the
-    // layer that links nvdm), and PIN keeps it loaded until the process exits.
     HMODULE module = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
                             reinterpret_cast<LPCWSTR>(&pin_this_module), &module)) {
@@ -545,9 +518,6 @@ void pin_this_module()
     }
 }
 
-// Port of nvdm_create_d3d11 (comp_window_nvapi_direct.c): the DXGI adapter with this LUID, and a D3D11 device on it at
-// feature level 11_1. The device is returned with its one reference and never released: the NVAPI binding and the
-// back-buffers need it for the life of the process.
 IUnknown* create_d3d11_on(const LUID& luid)
 {
     using Microsoft::WRL::ComPtr;
@@ -589,7 +559,7 @@ IUnknown* create_d3d11_on(const LUID& luid)
         process_log(text);
         return nullptr;
     }
-    return device.Detach(); // The ID3D11Device* itself, upcast: what Api::bind_device wants.
+    return device.Detach();
 }
 
 std::string environment_one(const char* name)
@@ -636,10 +606,10 @@ private:
 
     std::unique_ptr<Api> api_;
     QpcClock clock_;
-    DisplaySession session_; // Declared last: it holds references to the two above.
+    DisplaySession session_;
 };
 
-} // namespace
+}
 
 void set_process_session_log(std::function<void(const std::string&)> function)
 {
@@ -649,9 +619,8 @@ void set_process_session_log(std::function<void(const std::string&)> function)
 
 DisplaySession& process_session()
 {
-    // Built once, thread-safely, and never destroyed.
     static ProcessSession* const instance = new ProcessSession;
     return instance->session();
 }
 
-} // namespace nvdm
+}

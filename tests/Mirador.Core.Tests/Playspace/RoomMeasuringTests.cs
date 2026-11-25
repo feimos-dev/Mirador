@@ -13,7 +13,6 @@ public class RoomMeasuringTests
     private const string Measured =
         """XR-POSES {"head":{"p":[0,1.6,0],"q":[0,-0.707107,0,0.707107]},"left":{"p":[0,-0.02,-0.5],"q":[0,0,0,1]},"right":null}""";
 
-    /// <summary>Monado's devices and tracking origins as libmonado gives them.</summary>
     private sealed class DevicesClient(IReadOnlyList<MonadoDevice> devices, params string[] origins) : IMonadoClient
     {
         public bool OffersOriginOffsets { get; init; } = true;
@@ -85,7 +84,6 @@ public class RoomMeasuringTests
         e = await Assert.ThrowsAsync<MiradorException>(() => new RoomMeasuring(runner, "xr-check.exe").MeasureAsync(null, CancellationToken.None));
         Assert.Equal("The measuring program gave no result (exit code 3).", e.Message);
 
-        // A result line with a failing exit code isn't trusted.
         runner.Answer = _ => ([Measured], 1);
         e = await Assert.ThrowsAsync<MiradorException>(() => new RoomMeasuring(runner, "xr-check.exe").MeasureAsync(null, CancellationToken.None));
         Assert.Equal("The measuring program gave no result (exit code 1).", e.Message);
@@ -109,7 +107,6 @@ public class RoomMeasuringTests
 
         var setups = RoomMeasuring.Corrected(origins, RoomStep.Floor, poses, "1500000001", Now);
 
-        // The left grip rests at −0.02 m: the floor is at −0.07 m.
         Assert.Equal(["steamvr_lh", "Pimax"], setups.Select(s => s.OriginName));
         Assert.All(setups, s => Assert.Equal("1500000001", s.Universe));
         Assert.All(setups, s => Assert.Equal(Now, s.Taken));
@@ -121,7 +118,6 @@ public class RoomMeasuringTests
     [Fact]
     public void The_forward_step_turns_every_measured_origin()
     {
-        // The head faces +X (−90°): the origins turn by +90°.
         var poses = XrPoses.Parse([Measured])!;
         var setups = RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Forward, poses, null, Now);
 
@@ -179,10 +175,8 @@ public class RoomMeasuringTests
     [InlineData("0", false)]
     public void Exit_on_disconnect_is_read_as_monado_reads_a_switch(string value, bool on)
     {
-        // Monado's bool options: set and not one of its exact "false" spellings is on (False with a capital F too).
         Assert.Equal(on, RoomMeasuring.StopsMonado(new Dictionary<string, string> { ["IPC_EXIT_ON_DISCONNECT"] = value }));
 
-        // Windows' variable names don't care about case.
         Assert.Equal(on, RoomMeasuring.StopsMonado(new Dictionary<string, string> { ["ipc_exit_on_disconnect"] = value }));
     }
 
@@ -191,7 +185,6 @@ public class RoomMeasuringTests
     [InlineData(-1.2f)]
     public void A_forward_taken_looking_up_or_down_is_refused(float pitch)
     {
-        // Pitched about 69° while facing +X: too little of the view is left on the floor plane to tell forward.
         var facing = new MonadoPose(0, MathF.Sin(-MathF.PI / 4), 0, MathF.Cos(-MathF.PI / 4), 0, 0, 0);
         var tilt = new MonadoPose(MathF.Sin(pitch / 2), 0, 0, MathF.Cos(pitch / 2), 0, 0, 0);
         var head = RoomSetupMath.Transform(facing, tilt) with { Y = 1.6f };
@@ -200,7 +193,6 @@ public class RoomMeasuringTests
         var e = Assert.Throws<MiradorException>(() => RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Forward, poses, null, Now));
         Assert.Equal("Look straight ahead, then Set forward.", e.Message);
 
-        // Pitched 45°: still taken.
         var ahead = RoomSetupMath.Transform(facing, new MonadoPose(MathF.Sin(0.3927f), 0, 0, MathF.Cos(0.3927f), 0, 0, 0));
         Assert.Single(RoomMeasuring.Corrected([new(0, "steamvr_lh", MonadoPose.Identity)], RoomStep.Forward, new XrPoses(ahead, null, null), null, Now));
     }

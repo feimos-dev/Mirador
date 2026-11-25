@@ -39,7 +39,6 @@ public sealed class XrHostTests : IDisposable
         return host;
     }
 
-    /// <summary>A host with Monado up and both programs connected, their sessions begun.</summary>
     private XrHost Running()
     {
         var host = Host();
@@ -52,7 +51,6 @@ public sealed class XrHostTests : IDisposable
         return host;
     }
 
-    /// <summary>The home has been what Monado shows for long enough: the dashboard is open.</summary>
     private XrHost OpenAtHome()
     {
         client.AppList = [Home, Bar];
@@ -64,7 +62,6 @@ public sealed class XrHostTests : IDisposable
         return host;
     }
 
-    /// <summary>A game is what Monado shows, the dashboard closed.</summary>
     private XrHost InGame()
     {
         client.AppList = [Home with { Shown = false }, Bar, Game];
@@ -423,7 +420,6 @@ public sealed class XrHostTests : IDisposable
     {
         public List<string> Lines { get; } = [];
 
-        /// <summary>Runs when Mirador tells the program to quit.</summary>
         public Action? OnQuit { get; set; }
 
         public void Send(string line)

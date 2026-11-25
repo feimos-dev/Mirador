@@ -1,10 +1,3 @@
-<#
-.SYNOPSIS
-    Builds Mirador (Release, x64); with -Test it also runs the tests.
-.PARAMETER SkipHardware
-    With -Test: leaves out the tests marked Category=Hardware (they need this PC's headset, devices or set-up), as
-    CI does.
-#>
 param(
     [switch]$Test,
     [switch]$SkipHardware
@@ -15,8 +8,6 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 Push-Location $repo
 try {
-    # The stand-in first: the app's build copies it in, and its tests run it. Without Visual Studio's C++ tools the
-    # rest still builds, and those tests are skipped.
     try {
         & (Join-Path $repo 'standin\build.ps1')
     }
@@ -24,9 +15,6 @@ try {
         Write-Warning "The stand-in wasn't built: $_"
     }
 
-    # The direct-mode layer (layer\, into artifacts\layer-build) and, with -Test, its tests. Without Visual Studio's
-    # C++ tools it is skipped as the stand-in is; with them, a failed build or test fails this script. A child
-    # process, so its developer shell stays out of this one.
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $cppTools = (Test-Path -LiteralPath $vswhere) -and
         [bool](& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
@@ -36,12 +24,10 @@ try {
             -BuildDir (Join-Path $repo 'artifacts\layer-build') @layerArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        # xr-check, Verify's OpenXR test client (tools\xr-check): built here, run only by Verify on a PC with a GPU.
         & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo 'tools\build-cmake.ps1') -Source (Join-Path $repo 'tools\xr-check') `
             -BuildDir (Join-Path $repo 'artifacts\xr-check-build') -Configure -Build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        # The OpenXR loader as a DLL (tools\openxr-loader), which the desktop program's project copies in.
         & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo 'tools\build-cmake.ps1') -Source (Join-Path $repo 'tools\openxr-loader') `
             -BuildDir (Join-Path $repo 'artifacts\openxr-loader-build') -Triplet x64-windows-dll-static-crt -Configure -Build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

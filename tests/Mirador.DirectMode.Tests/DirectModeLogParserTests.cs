@@ -58,7 +58,6 @@ public class DirectModeLogParserTests
     [Fact]
     public void Log_parser_reads_the_layers_lines()
     {
-        // The layer's lines of a real run, in their order.
         string[] run =
         [
             "[dvl] info: display session open: Pimax Dream Air, 7104x3840 at 90.000 Hz, display 0x80061086, adapter 00000000:00014f8d",

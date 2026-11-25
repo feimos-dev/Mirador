@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The frame model, one rule at a time. Every model call goes through M, which runs
-// check_invariants() after it.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -38,8 +35,6 @@ using Via = nvdm::Acquired::Via;
 constexpr int64_t kMs = 1'000'000;
 constexpr int64_t kRefresh = 11'111'111;
 
-// The model, a pool whose fences signal when a test says so, and the log. Every call checks the invariants after
-// itself; the helpers below the wrappers script the usual steps.
 struct M {
     std::set<FenceSlot> signalled;
     FencePool pool{16, [this](FenceSlot slot) { return signalled.count(slot) > 0; }};
@@ -58,7 +53,6 @@ struct M {
 
     void check() const { model.check_invariants(); }
 
-    // Checked wrappers, one per model call.
     SwapchainGen add_swapchain()
     {
         const SwapchainGen gen = model.add_swapchain();
@@ -91,8 +85,6 @@ struct M {
         model.fence_seen(fence);
         check();
     }
-    // A wait outside the lock that saw the fence signalled, as the fence protocol (frame_model.hpp) has it: marked
-    // waited before the wait, then seen and unmarked in one lock hold.
     void wait_seen(FenceSlot fence)
     {
         model.fence_waiting(fence, true);
@@ -180,11 +172,10 @@ struct M {
         return b;
     }
 
-    // Script helpers.
     void start(int64_t now)
     {
         thread_started(now);
-        on_counter(counter, now); // the first read is the baseline
+        on_counter(counter, now);
     }
     void vblank(int64_t qpc) { on_counter(++counter, qpc); }
     Acquired acq(SwapchainGen gen, int64_t now)
@@ -197,10 +188,9 @@ struct M {
     {
         const std::optional<FenceSlot> slot = pool.take();
         REQUIRE(slot.has_value());
-        signalled.erase(*slot); // reset for its new submit
+        signalled.erase(*slot);
         return *slot;
     }
-    // acquire, then present (queue) with a fresh fence.
     Acquired frame(SwapchainGen gen, int64_t now, uint64_t id)
     {
         const Acquired a = acq(gen, now);
@@ -209,7 +199,6 @@ struct M {
         queue(a.seq, id, fence);
         return a;
     }
-    // The display thread: the fence seen signalled, the Present, its return.
     void present(FrameSeq seq, int64_t start_qpc, int64_t return_qpc, int code = 0)
     {
         signalled.insert(fence_of.at(seq));
@@ -224,7 +213,7 @@ struct M {
     }
 };
 
-} // namespace
+}
 
 TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
 {
@@ -235,19 +224,19 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
         const SwapchainGen g = m.add_swapchain();
         const Acquired a = m.frame(g, 1 * kMs, 1);
         m.present(a.seq, 4 * kMs, 4 * kMs + 50'000);
-        m.vblank(kRefresh); // a on screen
+        m.vblank(kRefresh);
         const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
-        m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 4 * kMs + 50'000, 5); // reserved
+        m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 4 * kMs + 50'000, 5);
         m.vblank(2 * kRefresh);
         const Acquired c = m.frame(g, 2 * kRefresh + 1 * kMs, 3);
-        m.present(c.seq, 2 * kRefresh + 4 * kMs, 2 * kRefresh + 4 * kMs + 50'000); // presented
+        m.present(c.seq, 2 * kRefresh + 4 * kMs, 2 * kRefresh + 4 * kMs + 50'000);
 
         CHECK(m.state(a.buffer) == BufferState::OnScreen);
         CHECK(m.state(b.buffer) == BufferState::Reserved);
         CHECK(m.state(c.buffer) == BufferState::Presented);
         CHECK_FALSE(m.acquire(g, 2 * kRefresh + 5 * kMs).has_value());
 
-        m.vblank(3 * kRefresh); // c credited: a and b become idle
+        m.vblank(3 * kRefresh);
         const Acquired d = m.acq(g, 3 * kRefresh + 1 * kMs);
         CHECK(d.via == Via::Free);
         CHECK(d.buffer != c.buffer);
@@ -268,11 +257,11 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
         m.start(0);
         SwapchainGen gen = m.add_swapchain();
         std::optional<SwapchainGen> old_gen;
-        std::optional<FrameSeq> held;     // the current swapchain's acquired frame
-        std::optional<FrameSeq> old_held; // one left acquired on the retired swapchain
+        std::optional<FrameSeq> held;
+        std::optional<FrameSeq> old_held;
         uint64_t id = 0;
         int by_via[4] = {};
-        std::vector<FenceSlot> gpu_busy; // fences whose GPU work ends at the next step
+        std::vector<FenceSlot> gpu_busy;
 
         for (int step = 0; step < 20000; ++step) {
             t += static_cast<int64_t>(next(3) + 1) * kMs / 2;
@@ -287,7 +276,7 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
             m.tick(t);
             switch (next(10)) {
             case 0:
-            case 1: // acquire
+            case 1:
                 if (!held) {
                     BufferState before[3] = {m.state(0), m.state(1), m.state(2)};
                     const bool stopped = m.model.flips_stopped() || t - m.model.last_refresh_ns() >= 600 * kMs;
@@ -308,13 +297,13 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
                 }
                 break;
             case 2:
-            case 3: // present (queue)
+            case 3:
                 if (held) {
                     if (m.state_of(*held) == FrameState::Acquired) {
                         const FenceSlot fence = m.take_fence();
                         m.fence_of[*held] = fence;
                         if (next(2) == 0) {
-                            m.signalled.insert(fence); // GPU done at once
+                            m.signalled.insert(fence);
                         } else {
                             gpu_busy.push_back(fence);
                         }
@@ -324,7 +313,7 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
                 }
                 break;
             case 4:
-            case 5: { // the display thread
+            case 5: {
                 const std::optional<Candidate> c = m.candidate(t);
                 if (c) {
                     m.signalled.insert(c->fence);
@@ -334,13 +323,13 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
                 }
                 break;
             }
-            case 6: // the display dies, or comes back after a second and a half or more
+            case 6:
                 if (display_alive ? next(20) == 0 : t - died_at > 1500 * kMs && next(4) == 0) {
                     display_alive = !display_alive;
                     died_at = t;
                 }
                 break;
-            case 7: // recreate with oldSwapchain, sometimes leaving an image acquired on the old one
+            case 7:
                 if (next(10) == 0) {
                     if (old_gen) {
                         m.remove_swapchain(*old_gen);
@@ -356,7 +345,6 @@ TEST_CASE("acquire_never_hands_out_presented_on_screen_or_reserved")
                 break;
             }
         }
-        // The walk reached every way of acquiring.
         CHECK(by_via[static_cast<int>(Via::Free)] > 0);
         CHECK(by_via[static_cast<int>(Via::DroppedQueued)] > 0);
         CHECK(by_via[static_cast<int>(Via::Reserved)] > 0);
@@ -373,13 +361,13 @@ TEST_CASE("credit_requires_qpc_after_return")
     const Acquired a = m.frame(g, 1 * kMs, 7);
     m.present(a.seq, 10 * kMs, 12 * kMs);
 
-    m.vblank(11 * kMs); // read after the return, but the refresh came during the call: it showed the old frame
+    m.vblank(11 * kMs);
     CHECK(m.state(a.buffer) == BufferState::Presented);
     CHECK(m.state_of(a.seq) == FrameState::Presented);
     CHECK(m.completed(g) == 0);
     CHECK(m.model.last_refresh_ns() == 11 * kMs);
     CHECK(m.model.last_credited_ns() == 0);
-    m.vblank(12 * kMs); // at the return time itself: not later, not credited
+    m.vblank(12 * kMs);
     CHECK(m.state(a.buffer) == BufferState::Presented);
 
     m.vblank(22 * kMs);
@@ -399,7 +387,7 @@ TEST_CASE("backwards_counter_is_link_drop_not_refresh")
     m.model.drain_refreshes();
     const FrameModel::Counters before = m.counters();
 
-    m.on_counter(3, 20 * kMs); // was 1000
+    m.on_counter(3, 20 * kMs);
     FrameModel::Counters c = m.counters();
     CHECK(c.link_drops == before.link_drops + 1);
     CHECK(c.refreshes == before.refreshes);
@@ -408,7 +396,7 @@ TEST_CASE("backwards_counter_is_link_drop_not_refresh")
     CHECK(m.model.drain_refreshes().empty());
     CHECK(m.logged("link drop"));
 
-    m.on_counter(4, 31 * kMs); // the next increment from the new value is a refresh
+    m.on_counter(4, 31 * kMs);
     c = m.counters();
     CHECK(c.refreshes == before.refreshes + 1);
     CHECK(m.model.last_refresh_ns() == 31 * kMs);
@@ -423,12 +411,12 @@ TEST_CASE("nonzero_present_reserves_and_waits_one_increment")
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.present(a.seq, 4 * kMs, 5 * kMs);
-    m.vblank(kRefresh); // a on screen
+    m.vblank(kRefresh);
     const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
     m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 5 * kMs, 5);
 
     CHECK(m.state(b.buffer) == BufferState::Reserved);
-    CHECK(m.state(a.buffer) == BufferState::OnScreen); // what is on screen stays on screen
+    CHECK(m.state(a.buffer) == BufferState::OnScreen);
     CHECK(m.end_of(b.seq) == FrameEnd::Failed);
     CHECK(m.completed(g) == 2);
     CHECK(m.counters().failed == 1);
@@ -439,7 +427,7 @@ TEST_CASE("nonzero_present_reserves_and_waits_one_increment")
     CHECK_FALSE(m.present_started(c.seq, kRefresh + 7 * kMs));
     m.tick(kRefresh + 8 * kMs);
     CHECK_FALSE(m.candidate(kRefresh + 9 * kMs).has_value());
-    m.vblank(kRefresh + 4 * kMs + 500'000); // read now, but it came during b's call: same refresh interval
+    m.vblank(kRefresh + 4 * kMs + 500'000);
     CHECK_FALSE(m.candidate(kRefresh + 9 * kMs).has_value());
 
     m.vblank(2 * kRefresh);
@@ -450,7 +438,7 @@ TEST_CASE("nonzero_present_reserves_and_waits_one_increment")
     CHECK(next->fence == m.fence_of.at(c.seq));
 
     m.present(c.seq, 2 * kRefresh + 1 * kMs, 2 * kRefresh + 2 * kMs);
-    m.vblank(3 * kRefresh); // the next credit frees the reserved one
+    m.vblank(3 * kRefresh);
     CHECK(m.state(b.buffer) == BufferState::Idle);
     CHECK(m.state(a.buffer) == BufferState::Idle);
     CHECK(m.state(c.buffer) == BufferState::OnScreen);
@@ -474,7 +462,7 @@ TEST_CASE("second_reserved_frees_older_after_a_refresh")
     CHECK(m.counters().reserved == 2);
     CHECK(m.logged("two non-zero Presents in a row"));
 
-    m.vblank(b_returned - 1 * kMs); // came during b's call: not yet
+    m.vblank(b_returned - 1 * kMs);
     CHECK(m.state(a.buffer) == BufferState::Reserved);
     CHECK(m.state(b.buffer) == BufferState::Reserved);
 
@@ -491,7 +479,7 @@ TEST_CASE("three_uncredited_increments_make_unconfirmed")
     const Acquired a = m.frame(g, 1 * kMs, 4);
     m.signalled.insert(m.fence_of.at(a.seq));
     m.wait_seen(m.fence_of.at(a.seq));
-    REQUIRE(m.present_started(a.seq, 4 * kMs)); // its return time is never written
+    REQUIRE(m.present_started(a.seq, 4 * kMs));
 
     m.vblank(kRefresh);
     m.vblank(2 * kRefresh);
@@ -509,7 +497,7 @@ TEST_CASE("three_uncredited_increments_make_unconfirmed")
     CHECK(m.counters().reserved == 1);
     CHECK(m.logged("not credited"));
 
-    const std::optional<Candidate> next = m.candidate(3 * kRefresh + 1 * kMs); // the next Present may go ahead
+    const std::optional<Candidate> next = m.candidate(3 * kRefresh + 1 * kMs);
     REQUIRE(next.has_value());
     CHECK(next->seq == b.seq);
 }
@@ -539,7 +527,7 @@ TEST_CASE("frame model: acquire takes the oldest free back-buffer")
     m.vblank(kRefresh);
     const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
     m.present(b.seq, kRefresh + 2 * kMs, kRefresh + 3 * kMs);
-    m.vblank(2 * kRefresh); // a's back-buffer is free again, the third one has never been used
+    m.vblank(2 * kRefresh);
     const Acquired c = m.acq(g, 2 * kRefresh + 1 * kMs);
     CHECK(c.buffer != a.buffer);
     CHECK(c.buffer != b.buffer);
@@ -548,7 +536,7 @@ TEST_CASE("frame model: acquire takes the oldest free back-buffer")
     m.queue(c.seq, 3, fc);
     m.present(c.seq, 2 * kRefresh + 2 * kMs, 2 * kRefresh + 3 * kMs);
     m.vblank(3 * kRefresh);
-    CHECK(m.acq(g, 3 * kRefresh + 1 * kMs).buffer == a.buffer); // free longer than b's
+    CHECK(m.acq(g, 3 * kRefresh + 1 * kMs).buffer == a.buffer);
 }
 
 TEST_CASE("unconfirmed_without_live_frame_completes_no_id")
@@ -559,7 +547,7 @@ TEST_CASE("unconfirmed_without_live_frame_completes_no_id")
     const Acquired a = m.frame(g, 1 * kMs, 4);
     m.signalled.insert(m.fence_of.at(a.seq));
     m.wait_seen(m.fence_of.at(a.seq));
-    REQUIRE(m.present_started(a.seq, 4 * kMs)); // a left-behind thread: no return time
+    REQUIRE(m.present_started(a.seq, 4 * kMs));
 
     m.device_destroyed();
     CHECK(m.end_of(a.seq) == FrameEnd::Destroyed);
@@ -582,7 +570,7 @@ TEST_CASE("ids_complete_in_order_and_once")
     const SwapchainGen g = m.add_swapchain();
     const Acquired f1 = m.frame(g, 1 * kMs, 10);
     const Acquired f2 = m.frame(g, 2 * kMs, 11);
-    m.present(f2.seq, 4 * kMs, 5 * kMs); // f1 retired: its id completes now
+    m.present(f2.seq, 4 * kMs, 5 * kMs);
     CHECK(m.end_of(f1.seq) == FrameEnd::Retired);
     CHECK(m.completed(g) == 10);
     CHECK(m.model.ids_completed() == 1);
@@ -597,7 +585,6 @@ TEST_CASE("ids_complete_in_order_and_once")
     const Acquired f4 = m.frame(g, kRefresh + 6 * kMs, 13);
     CHECK(m.completed(g) == 11);
 
-    // No refresh for a while: after the bound, acquire drops f4, completing 13 and so everything before it.
     CHECK_FALSE(m.acquire(g, returned + 599 * kMs).has_value());
     const Acquired f5 = m.acq(g, returned + 600 * kMs);
     CHECK(f5.via == Via::DroppedQueued);
@@ -606,12 +593,12 @@ TEST_CASE("ids_complete_in_order_and_once")
     CHECK(m.completed(g) == 13);
     CHECK(m.model.ids_completed() == 3);
 
-    m.vblank(returned + 605 * kMs); // f3 goes on screen; 12 < 13, so the record stays at 13
+    m.vblank(returned + 605 * kMs);
     CHECK(m.state_of(f3.seq) == FrameState::OnScreen);
     CHECK(m.completed(g) == 13);
     CHECK(m.model.ids_completed() == 4);
     CHECK(m.end_of(f2.seq) == FrameEnd::Replaced);
-    CHECK(m.model.ids_completed() == 4); // replaced: completed once already, when it went on screen
+    CHECK(m.model.ids_completed() == 4);
 }
 
 TEST_CASE("ids_of_destroyed_swapchain_not_written")
@@ -623,17 +610,17 @@ TEST_CASE("ids_of_destroyed_swapchain_not_written")
     m.present(f1.seq, 4 * kMs, 5 * kMs);
     const Acquired f2 = m.frame(g1, 6 * kMs, 2);
 
-    const SwapchainGen g2 = m.add_swapchain(); // recreate with oldSwapchain
+    const SwapchainGen g2 = m.add_swapchain();
     REQUIRE(g2 != g1);
     m.remove_swapchain(g1);
-    CHECK(m.end_of(f2.seq) == FrameEnd::Dropped); // queued: dropped
+    CHECK(m.end_of(f2.seq) == FrameEnd::Dropped);
     CHECK(m.state(f2.buffer) == BufferState::Idle);
-    CHECK(m.state_of(f1.seq) == FrameState::Presented); // presented: unlinked, its state stays
+    CHECK(m.state_of(f1.seq) == FrameState::Presented);
     CHECK(m.completed(g1) == 0);
     CHECK(m.completed(g2) == 0);
     CHECK(m.pool.state(m.fence_of.at(f2.seq)) == FenceState::LeftOver);
 
-    m.vblank(kRefresh); // f1 goes on screen, but its swapchain is gone
+    m.vblank(kRefresh);
     CHECK(m.state(f1.buffer) == BufferState::OnScreen);
     CHECK(m.completed(g1) == 0);
     CHECK(m.completed(g2) == 0);
@@ -654,13 +641,13 @@ TEST_CASE("acquire_bound_uses_later_of_credit_and_return_time")
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.present(a.seq, 4 * kMs, 5 * kMs);
-    m.vblank(kRefresh); // a on screen, the last credited refresh
+    m.vblank(kRefresh);
     REQUIRE(m.model.last_credited_ns() == kRefresh);
 
     SECTION("after a gap with no app session: the outstanding Present's return time")
     {
         int64_t t = kRefresh;
-        for (int i = 0; i < 450; ++i) { // 5 s of refreshes with no frames
+        for (int i = 0; i < 450; ++i) {
             t += kRefresh;
             m.vblank(t);
         }
@@ -671,7 +658,7 @@ TEST_CASE("acquire_bound_uses_later_of_credit_and_return_time")
         const Acquired c = m.frame(g, t + 6 * kMs, 3);
         (void)c;
         CHECK(m.bound() == returned + 600 * kMs);
-        CHECK_FALSE(m.acquire(g, returned + 1 * kMs).has_value()); // not expired at once
+        CHECK_FALSE(m.acquire(g, returned + 1 * kMs).has_value());
         CHECK_FALSE(m.acquire(g, returned + 599 * kMs).has_value());
         CHECK(m.acq(g, returned + 600 * kMs).via == Via::DroppedQueued);
     }
@@ -695,11 +682,11 @@ TEST_CASE("acquire_bound_uses_later_of_credit_and_return_time")
     SECTION("with no Present outstanding, refreshes do not move it")
     {
         const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
-        m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 5 * kMs, 5); // reserved
+        m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 5 * kMs, 5);
         const Acquired c = m.frame(g, kRefresh + 6 * kMs, 3);
         (void)c;
         int64_t t = kRefresh;
-        for (int i = 0; i < 50; ++i) { // refreshes go on; nothing is Presented
+        for (int i = 0; i < 50; ++i) {
             t += kRefresh;
             m.vblank(t);
         }
@@ -716,7 +703,7 @@ TEST_CASE("acquire_bound_uses_later_of_credit_and_return_time")
         m.wait_seen(m.fence_of.at(b.seq));
         REQUIRE(m.present_started(b.seq, start));
         CHECK(m.bound() == start + 600 * kMs);
-        m.vblank(2 * kRefresh); // no return time: not credited, but the display is alive
+        m.vblank(2 * kRefresh);
         CHECK(m.bound() == 2 * kRefresh + 600 * kMs);
         m.present_returned(b.seq, 0, 2 * kRefresh + 1 * kMs);
         CHECK(m.bound() == 2 * kRefresh + 601 * kMs);
@@ -728,19 +715,18 @@ TEST_CASE("acquire_after_bound_order")
     SECTION("queued, then reserved, then presented only when flips have stopped")
     {
         FrameModelConfig config;
-        config.stopped_ns = 1000 * kMs; // longer than the bound, so the two can be told apart
+        config.stopped_ns = 1000 * kMs;
         M m(config);
         m.start(0);
         const SwapchainGen g1 = m.add_swapchain();
         const Acquired a = m.frame(g1, 1 * kMs, 1);
-        m.present(a.seq, 4 * kMs, 5 * kMs, 5); // reserved
+        m.present(a.seq, 4 * kMs, 5 * kMs, 5);
         const int64_t v = kRefresh;
         m.vblank(v);
         const Acquired b = m.frame(g1, v + 1 * kMs, 2);
         const int64_t returned = v + 5 * kMs;
-        m.present(b.seq, v + 4 * kMs, returned); // presented; the display dies after this
+        m.present(b.seq, v + 4 * kMs, returned);
         const Acquired c = m.frame(g1, v + 6 * kMs, 3);
-        // Two more swapchains, as if recreated, each holding the image it acquires.
         const SwapchainGen g2 = m.add_swapchain();
         const SwapchainGen g3 = m.add_swapchain();
         REQUIRE(m.bound() == returned + 600 * kMs);
@@ -759,7 +745,7 @@ TEST_CASE("acquire_after_bound_order")
 
         m.tick(t1);
         CHECK_FALSE(m.model.flips_stopped());
-        CHECK_FALSE(m.acquire(g3, t1).has_value()); // the presented one only while flips are stopped
+        CHECK_FALSE(m.acquire(g3, t1).has_value());
         CHECK(m.state(b.buffer) == BufferState::Presented);
 
         const int64_t t2 = v + 1000 * kMs;
@@ -769,7 +755,7 @@ TEST_CASE("acquire_after_bound_order")
         CHECK(third.via == Via::Presented);
         CHECK(third.buffer == b.buffer);
         CHECK(m.end_of(b.seq) == FrameEnd::Unconfirmed);
-        CHECK(m.completed(g1) == 3); // dropped 3, then unconfirmed 2: the record never goes back
+        CHECK(m.completed(g1) == 3);
         CHECK(m.counters().unconfirmed == 1);
     }
 
@@ -780,7 +766,7 @@ TEST_CASE("acquire_after_bound_order")
         const SwapchainGen g1 = m.add_swapchain();
         const Acquired a = m.frame(g1, 1 * kMs, 1);
         m.present(a.seq, 4 * kMs, 5 * kMs);
-        m.vblank(kRefresh); // a on screen
+        m.vblank(kRefresh);
         const Acquired b = m.frame(g1, kRefresh + 1 * kMs, 2);
         const int64_t returned = kRefresh + 5 * kMs;
         m.present(b.seq, kRefresh + 4 * kMs, returned);
@@ -788,16 +774,15 @@ TEST_CASE("acquire_after_bound_order")
         const SwapchainGen g2 = m.add_swapchain();
         const SwapchainGen g3 = m.add_swapchain();
 
-        const int64_t t = returned + 600 * kMs; // the display has been dead since before the return
+        const int64_t t = returned + 600 * kMs;
         CHECK(m.acq(g1, t).buffer == c.buffer);
-        CHECK_FALSE(m.model.flips_stopped()); // the display thread has not ticked since
+        CHECK_FALSE(m.model.flips_stopped());
         const Acquired p = m.acq(g2, t);
         CHECK(p.via == Via::Presented);
         CHECK(p.buffer == b.buffer);
-        CHECK_FALSE(m.acquire(g3, t + 10'000 * kMs).has_value()); // only the on-screen one is left
+        CHECK_FALSE(m.acquire(g3, t + 10'000 * kMs).has_value());
         CHECK(m.state(a.buffer) == BufferState::OnScreen);
 
-        // Flips have stopped now, and the Present acquire took was the one of the stopped period.
         CHECK(m.model.flips_stopped());
         const FenceSlot fp = m.take_fence();
         m.fence_of[p.seq] = fp;
@@ -805,7 +790,7 @@ TEST_CASE("acquire_after_bound_order")
         CHECK(m.end_of(p.seq) == FrameEnd::Dropped);
         CHECK_FALSE(m.candidate(t + 1 * kMs).has_value());
         CHECK(m.counters().presents == 2);
-        m.vblank(t + 2 * kMs); // the display is back
+        m.vblank(t + 2 * kMs);
         CHECK_FALSE(m.model.flips_stopped());
     }
 }
@@ -818,7 +803,7 @@ TEST_CASE("flips_stopped_drops_queued_keeps_one_present")
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.present(a.seq, 4 * kMs, 5 * kMs);
     const int64_t last = kRefresh;
-    m.vblank(last); // a on screen; the display dies after this refresh
+    m.vblank(last);
 
     SECTION("with a Present outstanding, it stays the only one and queued frames are dropped")
     {
@@ -836,17 +821,17 @@ TEST_CASE("flips_stopped_drops_queued_keeps_one_present")
         CHECK(m.state(c.buffer) == BufferState::Idle);
         CHECK(m.completed(g) == 3);
 
-        const Acquired d = m.frame(g, last + 601 * kMs, 4); // dropped as it arrives
+        const Acquired d = m.frame(g, last + 601 * kMs, 4);
         CHECK(d.via == Via::Free);
         CHECK(m.end_of(d.seq) == FrameEnd::Dropped);
         CHECK(m.completed(g) == 4);
         CHECK_FALSE(m.candidate(last + 602 * kMs).has_value());
-        CHECK(m.state(b.buffer) == BufferState::Presented); // states kept
+        CHECK(m.state(b.buffer) == BufferState::Presented);
         CHECK(m.state(a.buffer) == BufferState::OnScreen);
         CHECK(m.counters().presents == 2);
         CHECK(m.counters().dropped == 2);
 
-        m.vblank(last + 2000 * kMs); // the display is back
+        m.vblank(last + 2000 * kMs);
         CHECK_FALSE(m.model.flips_stopped());
         CHECK(m.logged("flips resumed"));
         CHECK(m.state(b.buffer) == BufferState::OnScreen);
@@ -891,7 +876,7 @@ TEST_CASE("recreate_shares_buffer_state")
     const SwapchainGen g1 = m.add_swapchain();
     const Acquired a = m.frame(g1, 1 * kMs, 1);
     m.present(a.seq, 4 * kMs, 5 * kMs);
-    m.vblank(kRefresh); // a on screen
+    m.vblank(kRefresh);
     const SwapchainGen g2 = m.add_swapchain();
 
     const Acquired b = m.frame(g2, kRefresh + 1 * kMs, 1);
@@ -900,13 +885,13 @@ TEST_CASE("recreate_shares_buffer_state")
     const Acquired c = m.frame(g2, kRefresh + 6 * kMs, 2);
     CHECK(c.buffer != a.buffer);
     CHECK(c.buffer != b.buffer);
-    CHECK_FALSE(m.acquire(g2, kRefresh + 7 * kMs).has_value()); // the old swapchain's on-screen image is not free
+    CHECK_FALSE(m.acquire(g2, kRefresh + 7 * kMs).has_value());
 
     m.remove_swapchain(g1);
     CHECK(m.state(a.buffer) == BufferState::OnScreen);
     CHECK_FALSE(m.acquire(g2, kRefresh + 8 * kMs).has_value());
 
-    m.vblank(2 * kRefresh); // b credited: a's back-buffer is free now
+    m.vblank(2 * kRefresh);
     CHECK(m.end_of(a.seq) == FrameEnd::Replaced);
     CHECK(m.acq(g2, 2 * kRefresh + 1 * kMs).buffer == a.buffer);
     CHECK(m.completed(g2) == 1);
@@ -919,22 +904,21 @@ TEST_CASE("device_destroyed_frees_frame_held_keeps_nvapi_states")
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.present(a.seq, 4 * kMs, 5 * kMs);
-    m.vblank(kRefresh); // a on screen
+    m.vblank(kRefresh);
     const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
-    m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 5 * kMs); // presented
-    const Acquired c = m.acq(g, kRefresh + 6 * kMs);          // acquired, held
+    m.present(b.seq, kRefresh + 4 * kMs, kRefresh + 5 * kMs);
+    const Acquired c = m.acq(g, kRefresh + 6 * kMs);
 
     m.remove_swapchain(g);
     m.device_destroyed();
     CHECK(m.end_of(a.seq) == FrameEnd::Destroyed);
     CHECK(m.end_of(b.seq) == FrameEnd::Destroyed);
-    CHECK(m.end_of(c.seq).has_value()); // ended with its swapchain
+    CHECK(m.end_of(c.seq).has_value());
     CHECK(m.state(a.buffer) == BufferState::OnScreen);
     CHECK(m.state(b.buffer) == BufferState::Presented);
     CHECK(m.state(c.buffer) == BufferState::Idle);
-    CHECK(m.model.ids_completed() == 1); // only a's, when it went on screen
+    CHECK(m.model.ids_completed() == 1);
 
-    // The retry: a new device with its own pool.
     FencePool next_pool;
     m.set_pool(&next_pool);
     const SwapchainGen g2 = m.add_swapchain();
@@ -942,7 +926,7 @@ TEST_CASE("device_destroyed_frees_frame_held_keeps_nvapi_states")
     CHECK(d.via == Via::Free);
     CHECK(d.buffer == c.buffer);
 
-    m.vblank(2 * kRefresh); // b's Present is credited, with no frame left to complete
+    m.vblank(2 * kRefresh);
     CHECK(m.state(b.buffer) == BufferState::OnScreen);
     CHECK(m.state(a.buffer) == BufferState::Idle);
     CHECK(m.model.ids_completed() == 1);
@@ -955,7 +939,7 @@ TEST_CASE("frame model: thread start sets both clocks, takes the first read as t
     m.thread_started(5000 * kMs);
     CHECK(m.model.last_refresh_ns() == 5000 * kMs);
     CHECK(m.model.last_credited_ns() == 5000 * kMs);
-    m.on_counter(77, 5001 * kMs); // baseline: no refresh
+    m.on_counter(77, 5001 * kMs);
     CHECK(m.counters().refreshes == 0);
     CHECK(m.model.last_refresh_ns() == 5000 * kMs);
     m.tick(5599 * kMs);
@@ -968,9 +952,9 @@ TEST_CASE("frame model: thread start sets both clocks, takes the first read as t
     m.tick(5610 * kMs);
     CHECK(m.model.flips_stopped());
 
-    m.thread_started(9000 * kMs); // a restart is not mistaken for stopped flips
+    m.thread_started(9000 * kMs);
     CHECK_FALSE(m.model.flips_stopped());
-    m.on_counter(500, 9001 * kMs); // a jump across the restart is a new baseline
+    m.on_counter(500, 9001 * kMs);
     CHECK(m.counters().refreshes == 1);
 }
 
@@ -981,7 +965,7 @@ TEST_CASE("frame model: missed is the flip gap minus one, gaps over 1 s are idle
     const SwapchainGen g = m.add_swapchain();
     uint64_t id = 0;
     int64_t t = 0;
-    auto show = [&](int refreshes_later) { // one frame, credited `refreshes_later` refreshes on
+    auto show = [&](int refreshes_later) {
         const Acquired f = m.frame(g, t + 1 * kMs, ++id);
         m.present(f.seq, t + 2 * kMs, t + 3 * kMs);
         for (int i = 0; i < refreshes_later; ++i) {
@@ -993,19 +977,16 @@ TEST_CASE("frame model: missed is the flip gap minus one, gaps over 1 s are idle
     show(1);
     show(1);
     CHECK(m.counters().missed == 0);
-    // A frame whose Present comes late: the refresh in between shows the old frame again.
     t += kRefresh;
     m.vblank(t);
     show(1);
     CHECK(m.counters().missed == 1);
-    // Over a second with no frame (no app session) is idle, not missed.
     for (int i = 0; i < 100; ++i) {
         t += kRefresh;
         m.vblank(t);
     }
     show(1);
     CHECK(m.counters().missed == 1);
-    // Refreshes a poll did not see on their own (the counter jumps by 3) count each.
     const Acquired f = m.frame(g, t + 1 * kMs, ++id);
     m.present(f.seq, t + 2 * kMs, t + 3 * kMs);
     m.counter += 2;
@@ -1021,7 +1002,7 @@ TEST_CASE("frame model: drain_refreshes gives every refresh's QPC time once")
     m.start(0);
     m.vblank(10 * kMs);
     m.vblank(21 * kMs);
-    m.on_counter(5, 25 * kMs); // a link drop is not a refresh
+    m.on_counter(5, 25 * kMs);
     m.on_counter(6, 32 * kMs);
     CHECK(m.model.drain_refreshes() == std::vector<int64_t>{10 * kMs, 21 * kMs, 32 * kMs});
     CHECK(m.model.drain_refreshes().empty());
@@ -1036,15 +1017,15 @@ TEST_CASE("frame model: fences go back to the pool when seen signalled, else are
     const FenceSlot fa = m.fence_of.at(a.seq);
     CHECK(m.pool.state(fa) == FenceState::Attached);
     const Acquired b = m.frame(g, 2 * kMs, 2);
-    m.present(b.seq, 3 * kMs, 4 * kMs); // a retired before its fence was seen
+    m.present(b.seq, 3 * kMs, 4 * kMs);
     CHECK(m.pool.state(fa) == FenceState::LeftOver);
     m.vblank(kRefresh);
     const Acquired c = m.frame(g, kRefresh + 1 * kMs, 3);
     m.present(c.seq, kRefresh + 2 * kMs, kRefresh + 3 * kMs);
-    m.vblank(2 * kRefresh); // b replaced; its fence was seen signalled
+    m.vblank(2 * kRefresh);
     CHECK(m.pool.state(m.fence_of.at(b.seq)) == FenceState::InPool);
 
-    m.wait_seen(fa); // a wait on it (the present path's, on the oldest left-over fence) saw it signalled
+    m.wait_seen(fa);
     CHECK(m.pool.state(fa) == FenceState::InPool);
 
     SECTION("the display thread's wait marks the fence")
@@ -1054,7 +1035,7 @@ TEST_CASE("frame model: fences go back to the pool when seen signalled, else are
         m.model.fence_waiting(fd, true);
         m.check();
         const Acquired e = m.frame(g, 2 * kRefresh + 2 * kMs, 5);
-        m.present(e.seq, 2 * kRefresh + 3 * kMs, 2 * kRefresh + 4 * kMs); // d retired while waited on
+        m.present(e.seq, 2 * kRefresh + 3 * kMs, 2 * kRefresh + 4 * kMs);
         m.signalled.insert(fd);
         CHECK(m.pool.state(fd) == FenceState::LeftOver);
         CHECK(m.pool.oldest_left_over() != fd);
@@ -1071,19 +1052,19 @@ TEST_CASE("frame model: a stale fence_seen does not mark a re-attached fence see
     SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     const FenceSlot f = m.fence_of.at(a.seq);
-    m.signalled.insert(f); // a's GPU work is done; a status check outside the lock, not marked waited, sees it...
-    m.remove_swapchain(g); // ...while a is dropped: its fence is left over, never seen
+    m.signalled.insert(f);
+    m.remove_swapchain(g);
     REQUIRE(m.pool.state(f) == FenceState::LeftOver);
 
     g = m.add_swapchain();
-    const Acquired b = m.frame(g, 2 * kMs, 2); // take() reclaims the signalled left-over fence; it is reset for b
+    const Acquired b = m.frame(g, 2 * kMs, 2);
     REQUIRE(m.fence_of.at(b.seq) == f);
-    m.fence_seen(f); // the stale call arrives now: f is b's, unsignalled, and not marked waited
+    m.fence_seen(f);
     m.remove_swapchain(g);
-    CHECK(m.pool.state(f) == FenceState::LeftOver); // b's fence was never seen signalled
+    CHECK(m.pool.state(f) == FenceState::LeftOver);
     const std::optional<FenceSlot> next = m.pool.take();
     REQUIRE(next.has_value());
-    CHECK(*next != f); // so it is not handed out again unsignalled (invariant 2)
+    CHECK(*next != f);
 
     SECTION("a stale call on the left-over fence does not put it back in the pool either")
     {
@@ -1098,28 +1079,27 @@ TEST_CASE("frame model: present_started refuses what candidate() would not give"
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.acq(g, 1 * kMs);
-    CHECK_FALSE(m.present_started(a.seq, 2 * kMs)); // acquired, not queued
-    CHECK_FALSE(m.present_started(999, 2 * kMs));   // no such frame
+    CHECK_FALSE(m.present_started(a.seq, 2 * kMs));
+    CHECK_FALSE(m.present_started(999, 2 * kMs));
     const FenceSlot fa = m.take_fence();
     m.fence_of[a.seq] = fa;
     m.queue(a.seq, 1, fa);
     const Acquired b = m.frame(g, 3 * kMs, 2);
-    REQUIRE(m.present_started(a.seq, 4 * kMs)); // the older one may still go (the re-check after a fence wait)
-    CHECK_FALSE(m.present_started(b.seq, 5 * kMs)); // one Present outstanding at most
-    CHECK(m.state_of(b.seq) == FrameState::Queued);  // newer frames are not retired
+    REQUIRE(m.present_started(a.seq, 4 * kMs));
+    CHECK_FALSE(m.present_started(b.seq, 5 * kMs));
+    CHECK(m.state_of(b.seq) == FrameState::Queued);
     CHECK_FALSE(m.candidate(5 * kMs).has_value());
     CHECK(m.counters().presents == 1);
 }
 
 TEST_CASE("frame model: check_invariants names the invariant it finds broken")
 {
-    // A model can only be broken from outside through its pool: a fence attached to a frame and then taken back.
     M m;
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.pool.seen_signalled(m.fence_of.at(a.seq));
-    m.pool.frame_ended(m.fence_of.at(a.seq)); // the pool now thinks the fence is free while a still holds it
+    m.pool.frame_ended(m.fence_of.at(a.seq));
     try {
         m.model.check_invariants();
         FAIL("no invariant reported");
@@ -1130,8 +1110,6 @@ TEST_CASE("frame model: check_invariants names the invariant it finds broken")
 
 TEST_CASE("frame model: release ends an acquired frame and frees its back-buffer")
 {
-    // vkReleaseSwapchainImagesEXT: an image acquired and never presented goes back. Its frame ends dropped (it has no
-    // present id yet, so none completes) and its back-buffer is free for the next acquire.
     M m;
     const SwapchainGen gen = m.add_swapchain();
     const Acquired a = *m.acquire(gen, 0);
@@ -1149,7 +1127,6 @@ TEST_CASE("frame model: release ends an acquired frame and frees its back-buffer
     REQUIRE(again.has_value());
     CHECK(again->buffer == b.buffer);
 
-    // A frame that is not acquired is left as it is.
     m.queue(a.seq, 1, nvdm::kNoFence);
     m.model.release(a.seq);
     m.check();
@@ -1159,8 +1136,6 @@ TEST_CASE("frame model: release ends an acquired frame and frees its back-buffer
     CHECK(m.model.frame_state(c.seq) == FrameState::Acquired);
 }
 
-// --- Present timing ---------------------------------------------------------------------------------
-
 TEST_CASE("frame model: a shown frame is reported once, with its fence, Present and flip times")
 {
     M m;
@@ -1168,9 +1143,8 @@ TEST_CASE("frame model: a shown frame is reported once, with its fence, Present 
     const SwapchainGen g = m.add_swapchain();
     const Acquired a = m.frame(g, 1 * kMs, 1);
     REQUIRE(m.model.frame_times(a.seq).has_value());
-    CHECK(m.model.frame_times(a.seq)->queue_done_ns == 0); // its fence has not been seen yet
+    CHECK(m.model.frame_times(a.seq)->queue_done_ns == 0);
 
-    // The display thread sees its fence signalled and starts its Present in one lock hold: both stages at that time.
     m.present(a.seq, 4 * kMs, 4 * kMs + 50'000);
     nvdm::FrameTimes so_far = *m.model.frame_times(a.seq);
     CHECK(so_far.queue_done_ns == 4 * kMs);
@@ -1178,7 +1152,6 @@ TEST_CASE("frame model: a shown frame is reported once, with its fence, Present 
     CHECK(so_far.on_screen_ns == 0);
     CHECK(m.reports.empty());
 
-    // The refresh that credits it: its flip time, the stats' QPC time of the read.
     m.vblank(kRefresh);
     REQUIRE(m.reports.size() == 1);
     CHECK(m.reports[0].gen == g);
@@ -1187,7 +1160,6 @@ TEST_CASE("frame model: a shown frame is reported once, with its fence, Present 
     CHECK(m.reports[0].times.dequeued_ns == 4 * kMs);
     CHECK(m.reports[0].times.on_screen_ns == kRefresh);
 
-    // Replaced by the next frame shown: not reported again; the next one is, at its own flip.
     const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
     m.present(b.seq, kRefresh + 3 * kMs, kRefresh + 3 * kMs + 50'000);
     m.vblank(2 * kRefresh);
@@ -1195,12 +1167,11 @@ TEST_CASE("frame model: a shown frame is reported once, with its fence, Present 
     REQUIRE(m.reports.size() == 2);
     CHECK(m.reports[1].seq == b.seq);
     CHECK(m.reports[1].times.on_screen_ns == 2 * kRefresh);
-    CHECK_FALSE(m.model.frame_times(a.seq).has_value()); // ended
+    CHECK_FALSE(m.model.frame_times(a.seq).has_value());
 }
 
 TEST_CASE("frame model: a frame with no fence is done when it is queued")
 {
-    // The fence fallback: the present waited for its queue to go idle, so its GPU work was done when it was queued.
     M m;
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
@@ -1222,7 +1193,6 @@ TEST_CASE("frame model: frames that end unshown are reported once, with the stag
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
 
-    // Retired: queued, and a newer frame was Presented instead. It reached no stage.
     const Acquired a = m.frame(g, 1 * kMs, 1);
     const Acquired b = m.frame(g, 2 * kMs, 2);
     m.present(b.seq, 3 * kMs, 3 * kMs + 50'000);
@@ -1232,10 +1202,9 @@ TEST_CASE("frame model: frames that end unshown are reported once, with the stag
     CHECK(m.reports[0].times.queue_done_ns == 0);
     CHECK(m.reports[0].times.dequeued_ns == 0);
     CHECK(m.reports[0].times.on_screen_ns == 0);
-    m.vblank(kRefresh); // b shown
+    m.vblank(kRefresh);
     REQUIRE(m.reports.size() == 2);
 
-    // Failed: NVAPI refused its Present. Fence seen and dequeued, never on screen.
     const Acquired c = m.frame(g, kRefresh + 1 * kMs, 3);
     m.present(c.seq, kRefresh + 3 * kMs, kRefresh + 3 * kMs + 50'000, 5);
     CHECK(m.end_of(c.seq) == FrameEnd::Failed);
@@ -1245,13 +1214,11 @@ TEST_CASE("frame model: frames that end unshown are reported once, with the stag
     CHECK(m.reports[2].times.dequeued_ns == kRefresh + 3 * kMs);
     CHECK(m.reports[2].times.on_screen_ns == 0);
 
-    // Released before it was queued: never presented, so not reported.
     const Acquired d = m.acq(g, kRefresh + 4 * kMs);
     m.model.release(d.seq);
     m.check();
     CHECK(m.reports.size() == 3);
 
-    // Dropped with its swapchain: reported under that swapchain's generation.
     const Acquired e = m.frame(g, kRefresh + 5 * kMs, 4);
     m.remove_swapchain(g);
     CHECK(m.end_of(e.seq) == FrameEnd::Dropped);
@@ -1259,7 +1226,6 @@ TEST_CASE("frame model: frames that end unshown are reported once, with the stag
     CHECK(m.reports[3].gen == g);
     CHECK(m.reports[3].seq == e.seq);
 
-    // Each frame once.
     std::set<FrameSeq> seqs;
     for (const nvdm::FrameReport& r : m.reports) {
         CHECK(seqs.insert(r.seq).second);
@@ -1275,15 +1241,11 @@ TEST_CASE("frame model: queue says whether it took the frame")
     const Acquired a = m.acq(g, 1 * kMs);
     CHECK(m.model.queue(a.seq, 1, nvdm::kNoFence, 2 * kMs));
     m.check();
-    CHECK_FALSE(m.model.queue(a.seq, 2, nvdm::kNoFence, 3 * kMs)); // queued already
-    CHECK_FALSE(m.model.queue(9999, 3, nvdm::kNoFence, 3 * kMs));  // no such frame
+    CHECK_FALSE(m.model.queue(a.seq, 2, nvdm::kNoFence, 3 * kMs));
+    CHECK_FALSE(m.model.queue(9999, 3, nvdm::kNoFence, 3 * kMs));
     m.check();
     CHECK(m.reports.empty());
 }
-
-// --- Present at a time --------------------------------------------------------------------------------
-// Flips at k * kRefresh. A frame held for `not_before` may be Presented once a flip F with F + kRefresh >= not_before
-// has been seen: its Present then lands on F + kRefresh, the first flip not before the limit.
 
 TEST_CASE("frame model: a frame held for its target goes after the flip before it, not sooner")
 {
@@ -1292,15 +1254,15 @@ TEST_CASE("frame model: a frame held for its target goes after the flip before i
     const SwapchainGen g = m.add_swapchain();
     const Acquired z = m.frame(g, 1 * kMs, 9);
     m.present(z.seq, 2 * kMs, 2 * kMs + 50'000);
-    m.vblank(1 * kRefresh); // z shown at flip 1
+    m.vblank(1 * kRefresh);
 
     const Acquired a = m.frame(g, kRefresh + 1 * kMs, 1);
-    m.hold(a.seq, 4 * kRefresh - 1 * kMs); // its target: flip 4, within 1 ms
+    m.hold(a.seq, 4 * kRefresh - 1 * kMs);
     CHECK(m.counters().held == 1);
     CHECK_FALSE(m.candidate(kRefresh + 2 * kMs).has_value());
     m.signalled.insert(m.fence_of.at(a.seq));
     m.wait_seen(m.fence_of.at(a.seq));
-    CHECK_FALSE(m.present_started(a.seq, kRefresh + 2 * kMs)); // the re-check refuses it too
+    CHECK_FALSE(m.present_started(a.seq, kRefresh + 2 * kMs));
     CHECK(m.state_of(a.seq) == FrameState::Queued);
 
     m.vblank(2 * kRefresh);
@@ -1313,14 +1275,13 @@ TEST_CASE("frame model: a frame held for its target goes after the flip before i
     m.present_returned(a.seq, 0, 3 * kRefresh + 1 * kMs + 50'000);
     m.vblank(4 * kRefresh);
     REQUIRE(m.reports.size() == 2);
-    CHECK(m.reports[1].times.on_screen_ns == 4 * kRefresh); // the real flip
+    CHECK(m.reports[1].times.on_screen_ns == 4 * kRefresh);
     CHECK(m.counters().held == 1);
-    CHECK(m.counters().missed == 2);       // flips 2 and 3, as always...
-    CHECK(m.counters().target_skips == 2); // ...which its target asked for
+    CHECK(m.counters().missed == 2);
+    CHECK(m.counters().target_skips == 2);
 
-    // Held for flip 6 and Presented a flip late: 5 and 6 are missed, only 5 asked for.
     const Acquired b = m.frame(g, 4 * kRefresh + 1 * kMs, 2);
-    m.hold(b.seq, 6 * kRefresh - kRefresh / 2); // NEAREST
+    m.hold(b.seq, 6 * kRefresh - kRefresh / 2);
     m.vblank(5 * kRefresh);
     m.vblank(6 * kRefresh);
     m.present(b.seq, 6 * kRefresh + 1 * kMs, 6 * kRefresh + 1 * kMs + 50'000);
@@ -1339,21 +1300,18 @@ TEST_CASE("frame model: an on-time or late frame is not held")
     const SwapchainGen g = m.add_swapchain();
     m.vblank(1 * kRefresh);
 
-    // Its target is the next flip, the first it can make: as if it had none.
     const Acquired a = m.frame(g, kRefresh + 1 * kMs, 1);
     m.hold(a.seq, 2 * kRefresh - 1 * kMs);
     REQUIRE(m.candidate(kRefresh + 2 * kMs).has_value());
     m.present(a.seq, kRefresh + 2 * kMs, kRefresh + 2 * kMs + 50'000);
     m.vblank(2 * kRefresh);
 
-    // Its target has passed: the next flip, never later.
     const Acquired b = m.frame(g, 2 * kRefresh + 1 * kMs, 2);
     m.hold(b.seq, 1 * kRefresh);
     REQUIRE(m.candidate(2 * kRefresh + 2 * kMs).has_value());
     m.present(b.seq, 2 * kRefresh + 2 * kMs, 2 * kRefresh + 2 * kMs + 50'000);
     m.vblank(3 * kRefresh);
 
-    // A limit before any QPC time (a target near 0): the same.
     const Acquired c = m.frame(g, 3 * kRefresh + 1 * kMs, 3);
     m.hold(c.seq, -5 * kMs);
     REQUIRE(m.candidate(3 * kRefresh + 2 * kMs).has_value());
@@ -1369,8 +1327,6 @@ TEST_CASE("frame model: an on-time or late frame is not held")
 
 TEST_CASE("frame model: a flip read with a stale time does not hold a frame one flip too long")
 {
-    // The stats' time of a read that saw the counter move is the refresh's; should it lag (an older refresh's time),
-    // the count gives the flip instead, so a frame due at the next flip is not held for one more.
     M m;
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
@@ -1379,10 +1335,9 @@ TEST_CASE("frame model: a flip read with a stale time does not hold a frame one 
     m.hold(a.seq, 3 * kRefresh - 1 * kMs);
     CHECK_FALSE(m.candidate(kRefresh + 2 * kMs).has_value());
 
-    m.on_counter(++m.counter, 1 * kRefresh); // flip 2, read with flip 1's time
+    m.on_counter(++m.counter, 1 * kRefresh);
     REQUIRE(m.candidate(2 * kRefresh + 1 * kMs).has_value());
 
-    // Two flips in one read, with a stale time: both counted.
     M n;
     n.start(0);
     const SwapchainGen h = n.add_swapchain();
@@ -1390,11 +1345,9 @@ TEST_CASE("frame model: a flip read with a stale time does not hold a frame one 
     const Acquired b = n.frame(h, kRefresh + 1 * kMs, 1);
     n.hold(b.seq, 4 * kRefresh - 1 * kMs);
     n.counter += 2;
-    n.on_counter(n.counter, 1 * kRefresh + 100'000); // flips 2 and 3
+    n.on_counter(n.counter, 1 * kRefresh + 100'000);
     REQUIRE(n.candidate(3 * kRefresh + 1 * kMs).has_value());
 
-    // A time a little early (the flips' jitter, under 0.5 ms) is taken as it is: the frame due at flip 4 within its
-    // 1 ms waits for flip 3.
     M o;
     o.start(0);
     const SwapchainGen k = o.add_swapchain();
@@ -1403,7 +1356,7 @@ TEST_CASE("frame model: a flip read with a stale time does not hold a frame one 
     o.hold(c.seq, 4 * kRefresh - 1 * kMs);
     o.vblank(2 * kRefresh - 300'000);
     CHECK_FALSE(o.candidate(2 * kRefresh + 1 * kMs).has_value());
-    o.vblank(3 * kRefresh - 300'000); // 3 * kRefresh - 0.3 ms + kRefresh >= 4 * kRefresh - 1 ms
+    o.vblank(3 * kRefresh - 300'000);
     REQUIRE(o.candidate(3 * kRefresh + 1 * kMs).has_value());
 }
 
@@ -1414,7 +1367,6 @@ TEST_CASE("frame model: no queued frame overtakes a held one; at its flip the ne
     const SwapchainGen g = m.add_swapchain();
     m.vblank(1 * kRefresh);
 
-    // An untargeted frame queued before the held one is not held by it.
     const Acquired a = m.frame(g, kRefresh + 1 * kMs, 1);
     const Acquired b = m.frame(g, kRefresh + 2 * kMs, 2);
     m.hold(b.seq, 4 * kRefresh - 1 * kMs);
@@ -1422,10 +1374,9 @@ TEST_CASE("frame model: no queued frame overtakes a held one; at its flip the ne
     REQUIRE(c.has_value());
     CHECK(c->seq == a.seq);
     m.present(a.seq, kRefresh + 3 * kMs, kRefresh + 3 * kMs + 50'000);
-    CHECK(m.state_of(b.seq) == FrameState::Queued); // not retired by a's Present: it is newer
+    CHECK(m.state_of(b.seq) == FrameState::Queued);
     m.vblank(2 * kRefresh);
 
-    // An untargeted frame queued after it waits for it, and goes in its place at its flip.
     const Acquired d = m.frame(g, 2 * kRefresh + 1 * kMs, 3);
     CHECK_FALSE(m.candidate(2 * kRefresh + 2 * kMs).has_value());
     m.signalled.insert(m.fence_of.at(d.seq));
@@ -1447,13 +1398,13 @@ TEST_CASE("frame model: a frame behind a held one waits for the held one's flip"
     m.vblank(1 * kRefresh);
     const Acquired a = m.frame(g, kRefresh + 1 * kMs, 1);
     m.hold(a.seq, 4 * kRefresh - 1 * kMs);
-    const Acquired b = m.frame(g, kRefresh + 2 * kMs, 2); // untargeted
+    const Acquired b = m.frame(g, kRefresh + 2 * kMs, 2);
     m.vblank(2 * kRefresh);
     CHECK_FALSE(m.candidate(2 * kRefresh + 1 * kMs).has_value());
     m.vblank(3 * kRefresh);
     const std::optional<Candidate> c = m.candidate(3 * kRefresh + 1 * kMs);
     REQUIRE(c.has_value());
-    CHECK(c->seq == b.seq); // the newest of the frames due
+    CHECK(c->seq == b.seq);
     m.present(b.seq, 3 * kRefresh + 1 * kMs, 3 * kRefresh + 1 * kMs + 50'000);
     CHECK(m.end_of(a.seq) == FrameEnd::Retired);
     m.vblank(4 * kRefresh);
@@ -1470,7 +1421,6 @@ TEST_CASE("frame model: nothing is held before an epoch's first flip, after a li
     m.start(0);
     const SwapchainGen g = m.add_swapchain();
 
-    // No flip seen yet: no phase to hold against.
     const Acquired a = m.frame(g, 1 * kMs, 1);
     m.hold(a.seq, 10 * kRefresh);
     CHECK(m.counters().held == 0);
@@ -1478,21 +1428,18 @@ TEST_CASE("frame model: nothing is held before an epoch's first flip, after a li
     m.present(a.seq, 2 * kMs, 2 * kMs + 50'000);
     m.vblank(1 * kRefresh);
 
-    // Held, then a link drop: the phase may have moved, so it goes at once.
     const Acquired b = m.frame(g, kRefresh + 1 * kMs, 2);
     m.hold(b.seq, 10 * kRefresh);
     CHECK_FALSE(m.candidate(kRefresh + 2 * kMs).has_value());
     m.on_counter(m.counter - 5, kRefresh + 3 * kMs);
     REQUIRE(m.candidate(kRefresh + 4 * kMs).has_value());
 
-    // A new epoch (the display thread restarted): the same until its first flip.
     m.thread_started(kRefresh + 5 * kMs);
-    m.on_counter(m.counter, kRefresh + 5 * kMs); // the baseline
+    m.on_counter(m.counter, kRefresh + 5 * kMs);
     REQUIRE(m.candidate(kRefresh + 6 * kMs).has_value());
     m.vblank(2 * kRefresh);
-    CHECK_FALSE(m.candidate(2 * kRefresh + 1 * kMs).has_value()); // held again from a flip on
+    CHECK_FALSE(m.candidate(2 * kRefresh + 1 * kMs).has_value());
 
-    // Flips stopped: no refresh to hold for; the one Present still allowed may go.
     m.tick(2 * kRefresh + 700 * kMs);
     REQUIRE(m.model.flips_stopped());
     REQUIRE(m.candidate(2 * kRefresh + 700 * kMs).has_value());

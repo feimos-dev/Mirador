@@ -25,7 +25,6 @@ bool family_listed(const std::vector<VkDeviceQueueCreateInfo>& queues, uint32_t 
                        [&](const VkDeviceQueueCreateInfo& q) { return q.queueFamilyIndex == family; });
 }
 
-// Enlarges the first create info by one queue, if it may be.
 bool enlarge_first(DevicePlan& plan, const std::vector<VkQueueFamilyProperties>& families)
 {
     if (plan.queues.empty()) {
@@ -47,7 +46,6 @@ bool enlarge_first(DevicePlan& plan, const std::vector<VkQueueFamilyProperties>&
     return true;
 }
 
-// Adds a create info of its own for a family the application did not list (a family may appear only once).
 bool add_info(DevicePlan& plan, const std::vector<VkQueueFamilyProperties>& families)
 {
     constexpr VkQueueFlags kUsable = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
@@ -71,7 +69,7 @@ bool add_info(DevicePlan& plan, const std::vector<VkQueueFamilyProperties>& fami
     return false;
 }
 
-} // namespace
+}
 
 std::optional<DevicePlan> plan_device(const VkDeviceCreateInfo& ci, const std::vector<VkQueueFamilyProperties>& families,
                                       const std::vector<std::string>& available_ext, uint32_t vendor_id)
@@ -90,7 +88,7 @@ std::optional<DevicePlan> plan_device(const VkDeviceCreateInfo& ci, const std::v
     for (uint32_t i = 0; i < ci.enabledExtensionCount; i++) {
         const char* name = ci.ppEnabledExtensionNames[i];
         if (std::strcmp(name, VK_EXT_DISPLAY_CONTROL_EXTENSION_NAME) == 0) {
-            plan.display_control = true; // the layer's own: the driver lacks it
+            plan.display_control = true;
             continue;
         }
         plan.extensions.push_back(name);
@@ -108,4 +106,4 @@ std::optional<DevicePlan> plan_device(const VkDeviceCreateInfo& ci, const std::v
     return plan;
 }
 
-} // namespace dvl
+}

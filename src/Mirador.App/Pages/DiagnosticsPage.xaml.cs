@@ -8,7 +8,6 @@ namespace Mirador.App.Pages;
 
 public sealed partial class DiagnosticsPage : Page
 {
-    /// <summary>Text that came while the user was selecting in a box; it goes in once they stop.</summary>
     private readonly Dictionary<TextBox, string> waiting = [];
 
     public DiagnosticsPage()
@@ -19,7 +18,6 @@ public sealed partial class DiagnosticsPage : Page
 
     public DiagnosticsViewModel ViewModel { get; }
 
-    // An instance method: x:Bind calls functions on the page instance.
     public InfoBarSeverity SeverityFor(bool passed) => passed ? InfoBarSeverity.Success : InfoBarSeverity.Error;
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -67,13 +65,8 @@ public sealed partial class DiagnosticsPage : Page
         }
     }
 
-    /// <summary>The logs' least height; a window too short for it scrolls the page instead.</summary>
     private const double LogsMinHeight = 240;
 
-    /// <summary>
-    /// Makes the logs fill what the window has left under the tools, but never less than <see cref="LogsMinHeight"/>:
-    /// a star row can't do that inside a scrolling page.
-    /// </summary>
     private void FitLogs(object sender, SizeChangedEventArgs e)
     {
         if (LogsArea is null || PageGrid is null || PageScroller is null)
@@ -86,18 +79,12 @@ public sealed partial class DiagnosticsPage : Page
         LogsArea.Height = Math.Max(LogsMinHeight, Math.Floor(left));
     }
 
-    /// <summary>
-    /// Set before navigating here from a profile's Verify card: the page then opens on that profile's result and the log
-    /// of its last run.
-    /// </summary>
     public static (string? ProfileId, string? LogFile)? VerifyNext { get; set; }
 
-    /// <summary>Shows the log picked above the box, at its end.</summary>
     private void OnLogPicked(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
         if (MonadoBox is null || MiradorBox is null || VerifyBox is null)
         {
-            // The first item is picked while the page is still being built.
             return;
         }
 
@@ -124,10 +111,6 @@ public sealed partial class DiagnosticsPage : Page
         }
     }
 
-    /// <summary>
-    /// Puts new text into a box, unless the user is selecting there (it waits for them); follows the end only when the
-    /// box was at its end, so reading further up isn't interrupted.
-    /// </summary>
     private void Show(TextBox box, string text)
     {
         if (box.SelectionLength > 0)
@@ -142,12 +125,10 @@ public sealed partial class DiagnosticsPage : Page
         box.Text = text;
         if (viewer is null)
         {
-            // The page is still opening (the box has no scroll viewer yet): show the end once it is laid out.
             box.Loaded += ToEnd;
             return;
         }
 
-        // Measured now, so that the end is that of the new text (a queued scroll could still see the old one).
         box.UpdateLayout();
         viewer.ChangeView(null, atEnd ? viewer.ScrollableHeight : offset, null, disableAnimation: true);
     }

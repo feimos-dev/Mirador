@@ -33,7 +33,6 @@ public class ConsoleProcessTests
         File.WriteAllText(notProgram, "this is text, not a program");
         var watch = Stopwatch.StartNew();
 
-        // With Windows' message box this call would wait until someone clicked OK on "Unsupported 16-Bit Application".
         var ex = Assert.Throws<MiradorException>(() =>
             ConsoleProcess.Start(new ProcessSpec(notProgram, "", Environment.SystemDirectory, ConsoleProcess.CurrentEnvironment())));
 

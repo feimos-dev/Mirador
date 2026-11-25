@@ -3,16 +3,11 @@ using StereoKit;
 
 namespace Mirador.Xr;
 
-/// <summary>
-/// Draws each controller as the one in the hand: the WebXR Input Profiles model of the interaction profile Monado gives
-/// that hand, read again whenever it changes. A profile with no model here gets StereoKit's own.
-/// </summary>
 internal static unsafe class ControllerModels
 {
-    private const int InteractionProfileChanged = 52; // XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED
-    private const int InteractionProfileState = 53; // XR_TYPE_INTERACTION_PROFILE_STATE
+    private const int InteractionProfileChanged = 52;
+    private const int InteractionProfileState = 53;
 
-    /// <summary>The OpenXR interaction profiles that have a model, and its folder under xr\controllers.</summary>
     private static readonly Dictionary<string, string> Folders = new()
     {
         ["/interaction_profiles/valve/index_controller"] = "valve-index",
@@ -32,7 +27,6 @@ internal static unsafe class ControllerModels
         public ulong Profile;
     }
 
-    /// <summary>Call once StereoKit is up.</summary>
     public static void Follow()
     {
         Backend.OpenXR.OnPollEvent += data =>
@@ -88,7 +82,6 @@ internal static unsafe class ControllerModels
         return pathToString(Backend.OpenXR.Instance, profile, 256, &length, text) < 0 ? null : Marshal.PtrToStringUTF8((IntPtr)text);
     }
 
-    /// <summary>The model of <paramref name="profile"/>'s <paramref name="side"/> hand (a profile's none.glb serves both), loaded once.</summary>
     private static Model? ModelFor(string? profile, string side)
     {
         if (profile is null || !Folders.TryGetValue(profile, out var folder))
@@ -102,8 +95,6 @@ internal static unsafe class ControllerModels
             var directory = Path.Combine(AppContext.BaseDirectory, Program.AssetsFolder, "controllers", folder);
             var file = new[] { $"{side}.glb", "none.glb" }.Select(f => Path.Combine(directory, f)).FirstOrDefault(File.Exists);
             model = file is null ? null : Model.FromFile(file);
-            // StereoKit turns a glTF half a turn about +Y as it loads it, for glTF's +Z forward. These models are in
-            // grip space as they are, so the same turn again undoes it.
             for (var node = model?.RootNode; node is not null; node = node.Sibling)
             {
                 node.LocalTransform *= Matrix.R(0, 180, 0);

@@ -18,30 +18,10 @@
 
 namespace nvdm {
 
-// A scripted nvdm::Api for tests. By default it is a happy Dream Air: one display, an EDID that names it, a LUID, three
-// back-buffers, SetDisplayMode answering -208, and a flip counter that follows a FakeClock.
-//
-//  * Every call is recorded, in order, with its fake time and main argument (calls(), names(), count()).
-//  * Each call returns its next queued status (queue()), else its default (set_default_status(), else 0, and
-//    kSetModeOk for set_display_mode). A non-zero status leaves the call's outputs empty or untouched, and
-//    read_edid() EdidRoute::None.
-//  * What the calls report is set through the public members below, before the code under test runs.
-//  * The refresh counter is a function of the clock: it is 0 when the fake is made and goes up by one every
-//    refresh_ns() of fake time, whatever is presented. stop_counter(), start_counter() and reset_counter() change that.
-//  * Like the real port, create_back_buffer(), set_display_mode(), present() and present_stats() return kNotBound
-//    before a successful bind_device(), but only when strict_bind is set (a test of one call alone need not bind
-//    first).
-//    bind_device() refuses a NULL device with kBadArgument, strict or not.
-//
-// The call log and the counter are guarded, so the code under test may call from its own thread while the test thread
-// reads them. The public members are not: set them only while no call is in flight.
 class FakeApi : public Api {
 public:
-    // 1/90 s, as the Dream Air refreshes.
     static constexpr int64_t kDefaultRefreshNs = 11'111'111;
 
-    // The calls of Api, for queue() and set_default_status(). A status of 0 means success for all of them, read_edid()
-    // too (it then answers edid_route); first_missing_id() and driver_version() have no status.
     enum class Fn {
         Initialize,
         FirstMissingId,
@@ -57,9 +37,6 @@ public:
         PresentStats,
     };
 
-    // One entry of the call log. name is the Api method's name ("enable_direct_mode"), or a note() text. arg is the
-    // call's main argument: the vendor for enumerate and enable_direct_mode, the display id for adapter_luid,
-    // read_edid and bind_device, the tag for present; 0 otherwise. at_ns is the clock's time at entry.
     struct Call {
         std::string name;
         int64_t at_ns = 0;
@@ -76,36 +53,27 @@ public:
         edid = make_edid(0x42d2, 0x1019);
     }
 
-    // --- What the fake reports ---------------------------------------------------------------------------------
-
-    std::string driver = "621.01";               // driver_version()
-    std::string missing_id;                      // first_missing_id(); empty means none is missing
-    std::vector<uint32_t> display_ids{0x80061086}; // enumerate(kVendorPvr); the id a real machine had
-    int64_t appears_at_ns = 0;                   // enumerate() finds nothing before this clock time
-    uint32_t enables_needed = 0;                 // enumerate() finds nothing until enable_direct_mode() was called this often
-    LUID luid = {0x1234, 0x56};                  // adapter_luid()
-    std::vector<uint8_t> edid;                   // read_edid(); empty means unreadable
-    EdidRoute edid_route = EdidRoute::Nvapi;     // What read_edid() reports as the route when it succeeds
-    bool strict_bind = false;                    // See the class comment: kNotBound before a successful bind_device()
-    std::vector<BackBuffer> back_buffers;        // create_back_buffer() hands these out in order, then fails
-    uint32_t refresh_num = 90000;                // present_stats(); 0 for both models a down link
+    std::string driver = "621.01";
+    std::string missing_id;
+    std::vector<uint32_t> display_ids{0x80061086};
+    int64_t appears_at_ns = 0;
+    uint32_t enables_needed = 0;
+    LUID luid = {0x1234, 0x56};
+    std::vector<uint8_t> edid;
+    EdidRoute edid_route = EdidRoute::Nvapi;
+    bool strict_bind = false;
+    std::vector<BackBuffer> back_buffers;
+    uint32_t refresh_num = 90000;
     uint32_t refresh_den = 1000;
-    int64_t qpc_offset_ns = 0;                   // present_stats() puts its refresh time this far ahead (bogus)
+    int64_t qpc_offset_ns = 0;
 
-    // Called at the entry of every Api call with its name, before the call is recorded and without any fake lock held,
-    // so it may block (a Present that does not return), assert, or call back into the fake.
     std::function<void(const char* name)> on_call;
 
-    // --- What the fake was given -------------------------------------------------------------------------------
+    IUnknown* bound_device = nullptr;
+    uint32_t bound_vendor = 0;
+    std::vector<Mode> modes_created;
+    std::vector<Mode> modes_set;
 
-    IUnknown* bound_device = nullptr;  // The d3d11 of the last bind_device()
-    uint32_t bound_vendor = 0;         // The vendor of the last bind_device() that got a device
-    std::vector<Mode> modes_created;   // The mode of every create_back_buffer()
-    std::vector<Mode> modes_set;       // The mode of every set_display_mode()
-
-    // --- Scripting -----------------------------------------------------------------------------------------------
-
-    // The next `times` calls of fn return this status, then the queue is empty again.
     void queue(Fn fn, int status, size_t times = 1)
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -114,21 +82,18 @@ public:
         }
     }
 
-    // What fn returns whenever nothing is queued for it.
     void set_default_status(Fn fn, int status)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         defaults_[fn] = status;
     }
 
-    // create_back_buffer() starts again from the first back-buffer.
     void reset_back_buffers()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         handed_out_ = 0;
     }
 
-    // Freezes the counter at its value now. The time it reports stays that of its last flip.
     void stop_counter()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -138,8 +103,6 @@ public:
         running_ = false;
     }
 
-    // Counts again from the value it has. It counts as flipped at this moment: that is the time it reports until the
-    // next flip, a period later.
     void start_counter()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -149,7 +112,6 @@ public:
         }
     }
 
-    // A link drop: the counter is 0 at this moment and counts on from there (or stays 0 while stopped).
     void reset_counter()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -159,15 +121,12 @@ public:
 
     int64_t refresh_ns() const { return refresh_ns_; }
 
-    // --- The call log --------------------------------------------------------------------------------------------
-
     std::vector<Call> calls() const
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return calls_;
     }
 
-    // The names of the logged calls in order, leaving out the names in `except`.
     std::vector<std::string> names(std::initializer_list<std::string> except = {}) const
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -194,15 +153,12 @@ public:
         return n;
     }
 
-    // Puts a line into the call log between Api calls, for what a test fakes elsewhere ("make_d3d11").
     void note(const std::string& name)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         calls_.push_back(Call{name, clock_.now_ns(), 0, 0});
     }
 
-    // A 128-byte EDID base block of a monitor: the manufacturer id as the 16 bits the standard stores big-endian
-    // (0x42d2 is "PVR"), the product code (stored little-endian), version 1.4 and a good checksum.
     static std::vector<uint8_t> make_edid(uint16_t pnp_vendor, uint16_t product)
     {
         std::vector<uint8_t> block(128, 0);
@@ -223,8 +179,6 @@ public:
         block[127] = static_cast<uint8_t>((256 - sum % 256) % 256);
         return block;
     }
-
-    // --- Api -----------------------------------------------------------------------------------------------------
 
     int initialize() override
     {
@@ -288,8 +242,6 @@ public:
 
     int bind_device(uint32_t display_id, IUnknown* d3d11, uint32_t vendor) override
     {
-        // A NULL device is refused before the driver (before the queue) and leaves an earlier bind as it is. Any other
-        // bind, like the real port's, first undoes the earlier one.
         Scope call(*this, Fn::BindDevice, display_id, false, d3d11 == nullptr ? kBadArgument : 0);
         if (d3d11 == nullptr) {
             return call.status;
@@ -362,11 +314,6 @@ private:
         return "?";
     }
 
-    // One Api call: runs the hook, then holds the lock, takes the call's status and logs the call. The call may
-    // change `status`; the log gets the final one when the scope ends.
-    //
-    // `refuse`, if non-zero, is the status of a call the real port would refuse before reaching the driver; so is
-    // kNotBound for a `needs_bind` call in strict_bind mode while nothing is bound. Neither uses up a queued status.
     class Scope {
     public:
         Scope(FakeApi& api, Fn fn, uint64_t arg, bool needs_bind = false, int refuse = 0) : api_(api)
@@ -417,8 +364,6 @@ private:
         int64_t qpc_ns;
     };
 
-    // Counter and time of its last flip. While running, flip number base_count_ is at base_ns_ and every refresh_ns_
-    // after that is one more; stopped, both are frozen. Caller holds the lock.
     Reading reading()
     {
         if (!running_) {
@@ -437,7 +382,7 @@ private:
     std::map<Fn, std::deque<int>> queued_;
     std::map<Fn, int> defaults_;
     size_t handed_out_ = 0;
-    bool bound_ = false; // A bind_device() succeeded and no later one failed.
+    bool bound_ = false;
     uint32_t enable_calls_ = 0;
 
     bool running_ = true;
@@ -445,4 +390,4 @@ private:
     int64_t base_ns_;
 };
 
-} // namespace nvdm
+}

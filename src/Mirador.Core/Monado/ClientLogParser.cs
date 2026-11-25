@@ -2,33 +2,22 @@ using System.Text.RegularExpressions;
 
 namespace Mirador.Core.Monado;
 
-/// <summary>
-/// Follows Monado's log to see which applications are connected. A client's name arrives on a later line than its
-/// "connected" line, so a name goes to the most recent connected client that has none yet. Mirador's own clients are
-/// no apps: libmonado's, which it keeps connected while Monado runs, and its home, dashboard and desktop program.
-/// </summary>
 public sealed partial class ClientLogParser
 {
-    /// <summary>The names Mirador's own clients give Monado; "libmonado" is libmonado's.</summary>
     private static readonly string[] Own =
         ["libmonado", Mirador.Ipc.XrLink.HomeAppName, Mirador.Ipc.XrLink.DashboardAppName, Mirador.Ipc.DesktopLayerLink.AppName];
 
     private readonly List<Client> clients = [];
     private volatile IReadOnlyList<string> connectedApps = [];
 
-    /// <summary>The named applications that are connected, in the order they connected. Safe to read from any thread.</summary>
     public IReadOnlyList<string> ConnectedApps => connectedApps;
 
-    /// <summary>
-    /// Takes the next line of Monado's log. Not safe to call from several threads at once.
-    /// </summary>
-    /// <returns>True when <see cref="ConnectedApps"/> is different afterwards.</returns>
     public bool Feed(string line)
     {
         if (ConnectedLine().Match(line) is { Success: true } connected)
         {
             var id = connected.Groups["id"].Value;
-            clients.RemoveAll(c => c.Id == id); // a client that comes back without its disconnect line having been seen
+            clients.RemoveAll(c => c.Id == id);
             clients.Add(new Client(id));
         }
         else if (DisconnectedLine().Match(line) is { Success: true } gone)

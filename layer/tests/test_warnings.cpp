@@ -1,10 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// Design 8's degradation warnings: each fires at most once per app session (a session starts at the first present
-// after more than 1 s without one). A player drives dvl::Warnings the way the layer does at 90 Hz: Monado presents,
-// then registers a display event and waits on it, then waits for the present.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -32,9 +28,9 @@ struct Player {
     dvl::Warnings warnings;
     int64_t t = 10 * kS;
     uint64_t next_event = 1;
-    bool events = true;       // Monado's vblank thread runs
-    bool wait_events = true;  // its fence waits reach the layer
-    bool present_wait = true; // XRT_COMPOSITOR_USE_PRESENT_WAIT=1
+    bool events = true;
+    bool wait_events = true;
+    bool present_wait = true;
     std::vector<std::string> lines;
 
     Player()
@@ -44,7 +40,6 @@ struct Player {
         warnings.set_memory_fallback(false);
     }
 
-    // One frame of Monado's loop, and the lines it gave.
     void frame()
     {
         t += kRefresh;
@@ -78,29 +73,27 @@ struct Player {
     }
 };
 
-} // namespace
+}
 
 TEST_CASE("warns_once_when_no_present_wait_after_90")
 {
     Player p;
     p.present_wait = false;
     p.frames(89);
-    CHECK(p.lines.empty()); // not before the 90th present
+    CHECK(p.lines.empty());
     p.frame();
     REQUIRE(p.lines.size() == 1);
     CHECK(count_with(p.lines, "vkWaitForPresentKHR") == 1);
     CHECK(count_with(p.lines, "XRT_COMPOSITOR_USE_PRESENT_WAIT") == 1);
     p.frames(3000);
-    CHECK(p.lines.size() == 1); // once per app session
+    CHECK(p.lines.size() == 1);
 
-    // More than 1 s without a present: a new app session, warned again after its 90th.
     p.t += 2 * kS;
     p.frames(89);
     CHECK(p.lines.size() == 1);
     p.frame();
     CHECK(count_with(p.lines, "vkWaitForPresentKHR") == 2);
 
-    // The display event's counterpart, with the vblank thread missing.
     Player q;
     q.events = false;
     q.frames(90);
@@ -116,7 +109,6 @@ TEST_CASE("warns_event_without_wait_after_2s")
     w.set_display_control(true);
     w.set_present_mode(VK_PRESENT_MODE_FIFO_KHR);
     const int64_t t0 = 10 * kS;
-    // Presents keep the app session going (one every 100 ms); the event is never waited on.
     const auto presents_until = [&](int64_t from, int64_t to) {
         for (int64_t t = from; t <= to; t += 100 * kMs) {
             w.on_present(t);
@@ -133,7 +125,6 @@ TEST_CASE("warns_event_without_wait_after_2s")
     REQUIRE(lines.size() == 1);
     CHECK(count_with(lines, "2 s") == 1);
 
-    // Another event left unwaited in the same app session: no second line.
     presents_until(t0 + 2100 * kMs, t0 + 2100 * kMs);
     w.on_event_registered(2, t0 + 2100 * kMs);
     presents_until(t0 + 2200 * kMs, t0 + 5 * kS);
@@ -141,7 +132,6 @@ TEST_CASE("warns_event_without_wait_after_2s")
     lines = w.take_lines();
     CHECK(count_with(lines, "2 s") == 0);
 
-    // A waited event (then destroyed) is never overdue; nor is one whose wait arrives just before 2 s.
     dvl::Warnings fine;
     fine.set_display_control(true);
     fine.set_present_mode(VK_PRESENT_MODE_FIFO_KHR);
@@ -155,8 +145,6 @@ TEST_CASE("warns_event_without_wait_after_2s")
     fine.check(t0 + 10 * kS);
     CHECK(fine.take_lines().empty());
 
-    // A fence destroyed with no wait first: the wait went past the layer (Monado waits before it destroys). Warned
-    // at 2 s, as for one never destroyed.
     dvl::Warnings bypassed;
     bypassed.set_display_control(true);
     bypassed.set_present_mode(VK_PRESENT_MODE_FIFO_KHR);
@@ -175,20 +163,18 @@ TEST_CASE("no_warning_on_normal_session")
 {
     Player p;
     p.frames(3000);
-    p.t += 5 * kS; // a pause between app sessions
+    p.t += 5 * kS;
     p.frames(300);
     CHECK(p.lines.empty());
 }
 
 TEST_CASE("standing_conditions_warn_at_each_app_session")
 {
-    // The device without VK_EXT_display_control, a present mode other than FIFO, the memory-type fallback: one line
-    // each at the first present of each app session.
     dvl::Warnings w;
     w.set_display_control(false);
     w.set_present_mode(VK_PRESENT_MODE_MAILBOX_KHR);
     w.set_memory_fallback(true);
-    CHECK(w.take_lines().empty()); // no app session yet
+    CHECK(w.take_lines().empty());
     w.on_present(10 * kS);
     std::vector<std::string> lines = w.take_lines();
     CHECK(lines.size() == 3);
@@ -236,11 +222,10 @@ TEST_CASE("frame_model_degradations_warn_once_per_app_session")
     w.on_fence_fallback();
     w.on_thread_left_behind();
     lines = w.take_lines();
-    CHECK(lines.size() == 2); // the two that had not fired yet
+    CHECK(lines.size() == 2);
     CHECK(count_with(lines, "vkQueueWaitIdle") == 1);
     CHECK(count_with(lines, "left behind") == 1);
 
-    // The next app session warns again, on new increases only.
     w.on_present(20 * kS);
     w.on_counters(c, false);
     CHECK(w.take_lines().empty());

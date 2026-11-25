@@ -14,7 +14,6 @@ public class ElevatedRequestCheckTests
     [Fact]
     public void The_image_is_compared_without_case_after_normalising_the_path()
     {
-        // A different spelling of the same file: upper case, a redundant segment.
         var odd = Path.Combine(InstallDir, "sub", "..", "MIRADOR.EXE").ToUpperInvariant();
 
         Assert.Null(ElevatedRequestCheck.Check(consented: true, imagePath: odd, InstallDir, hasLinkedToken: true, running: false));

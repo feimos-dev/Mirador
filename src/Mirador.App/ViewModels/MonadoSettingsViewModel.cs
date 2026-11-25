@@ -7,10 +7,6 @@ using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// The Monado settings every profile shares. A change is saved once the slider is let go
-/// (or a moment after the last change, whichever comes first), never at every step.
-/// </summary>
 public sealed partial class MonadoSettingsViewModel : ObservableObject
 {
     private readonly AppHost host;
@@ -55,7 +51,6 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
 
     public bool HasProblem => Problem is not null;
 
-    /// <summary>Follows Monado's state while the page is open.</summary>
     public void Attach()
     {
         host.Session.Changed += OnSessionChanged;
@@ -69,13 +64,12 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
         Save();
     }
 
-    /// <summary>Saves what the controls show now: a slider was let go, or the toggle flipped.</summary>
     public void Save()
     {
         saveSoon.Stop();
         if (loading || !loaded)
         {
-            return; // what the controls show isn't the user's settings until they have been read
+            return;
         }
 
         var settings = Current();
@@ -94,7 +88,6 @@ public sealed partial class MonadoSettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Back to Monado's and Mirador's defaults (the page asks first).</summary>
     public void ResetToDefaults()
     {
         Show(new MonadoSettings());

@@ -10,17 +10,8 @@ using WinRT;
 
 namespace Mirador.Xr;
 
-/// <summary>A monitor of the Windows desktop.</summary>
-/// <param name="Handle">Windows' handle for it (an HMONITOR).</param>
-/// <param name="Bounds">Where it is on the virtual desktop, in pixels.</param>
-/// <param name="Primary">Whether it is the primary monitor.</param>
 internal sealed record DesktopMonitor(IntPtr Handle, DesktopRect Bounds, bool Primary);
 
-/// <summary>
-/// One monitor's picture through Windows.Graphics.Capture, with the mouse pointer in it, on the desktop program's own
-/// D3D11 device: each new frame stays on the GPU for the caller to copy. Windows only delivers a frame when the
-/// monitor's picture changed, and no faster than the interval it is given where Windows can limit that.
-/// </summary>
 internal sealed class DesktopCapture : IDisposable
 {
     private static readonly Guid CaptureItemId = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
@@ -32,8 +23,6 @@ internal sealed class DesktopCapture : IDisposable
 
     private Windows.Graphics.SizeInt32 poolSize;
 
-    /// <param name="interval">The shortest time between frames, such as the headset's frame period.</param>
-    /// <exception cref="Exception">Windows can't capture this monitor (capture not supported, the monitor has gone).</exception>
     public DesktopCapture(IntPtr monitor, ID3D11Device device, TimeSpan interval)
     {
         using (var dxgi = device.QueryInterface<IDXGIDevice>())
@@ -65,7 +54,6 @@ internal sealed class DesktopCapture : IDisposable
         session.IsCursorCaptureEnabled = true;
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 20348))
         {
-            // Windows 11: no yellow border around the monitor. Windows 10 keeps it.
             try
             {
                 session.IsBorderRequired = false;
@@ -77,7 +65,6 @@ internal sealed class DesktopCapture : IDisposable
 
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))
         {
-            // Windows 11 24H2: a fast monitor or a video on it is captured no faster than the headset shows it.
             try
             {
                 session.MinUpdateInterval = interval;
@@ -90,10 +77,6 @@ internal sealed class DesktopCapture : IDisposable
         session.StartCapture();
     }
 
-    /// <summary>
-    /// Gives the newest frame since the last call, if there is one, to <paramref name="use"/>: its texture and the size
-    /// of its content, from the texture's top left. The texture goes back to Windows once <paramref name="use"/> returns.
-    /// </summary>
     public bool TakeNewest(Action<ID3D11Texture2D, int, int> use)
     {
         Direct3D11CaptureFrame? frame = null;
@@ -113,7 +96,6 @@ internal sealed class DesktopCapture : IDisposable
             var size = frame.ContentSize;
             if (size.Width != poolSize.Width || size.Height != poolSize.Height)
             {
-                // The monitor's mode changed: frames of the new size from the next one on.
                 poolSize = size;
                 pool.Recreate(winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, poolSize);
                 return false;

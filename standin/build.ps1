@@ -1,8 +1,3 @@
-<#
-.SYNOPSIS
-    Builds Mirador's stand-in (artifacts\standin\mirador-standin.exe) with MSVC, from a Visual Studio developer
-    shell or, when cl.exe isn't on the path, by entering one found with vswhere (the C++ x64 tools are needed).
-#>
 param(
     [string]$Out = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts\standin')
 )
@@ -33,8 +28,6 @@ try {
     rc.exe /nologo /fo (Join-Path $obj 'standin.res') standin.rc
     if ($LASTEXITCODE -ne 0) { throw "rc.exe failed (exit code $LASTEXITCODE)." }
 
-    # A windows-subsystem program: a game without a console starts it without a console window popping up. Its
-    # messages still reach a caller that redirects stderr.
     cl.exe /nologo /O2 /MT /W4 /WX /DUNICODE /D_UNICODE standin.c (Join-Path $obj 'standin.res') `
         "/Fo$(Join-Path $obj 'standin.obj')" "/Fe:$(Join-Path $Out 'mirador-standin.exe')" `
         advapi32.lib userenv.lib /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup

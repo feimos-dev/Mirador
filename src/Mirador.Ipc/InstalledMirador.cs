@@ -1,17 +1,7 @@
 namespace Mirador.Ipc;
 
-/// <summary>
-/// The one test for "this is the installed Mirador", shared by the helper, which
-/// starts Monado as administrator only for that caller, and by Mirador, which picks the elevated path (and Home's
-/// "Runs as you" line) with it, so the two can't disagree.
-/// </summary>
 public static class InstalledMirador
 {
-    /// <summary>
-    /// Whether <paramref name="exePath"/> is <c>Mirador.exe</c> in <paramref name="installDir"/>, the
-    /// helper's own folder (where <c>HKLM\SOFTWARE\Mirador</c> <c>AppPath</c> points in a normal install). Compared as full
-    /// paths, ignoring case as Windows does; false for null or a path that can't be read.
-    /// </summary>
     public static bool IsInstalledCopy(string? exePath, string? installDir)
     {
         if (string.IsNullOrEmpty(exePath) || string.IsNullOrEmpty(installDir))

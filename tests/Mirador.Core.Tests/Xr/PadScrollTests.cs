@@ -14,7 +14,6 @@ public class PadScrollTests
             turned += pad.Update(true, y);
         }
 
-        // All but what is still under the smallest step.
         Assert.InRange(turned, PadScroll.WheelPerPad - PadScroll.MinStep, PadScroll.WheelPerPad);
     }
 
@@ -33,7 +32,6 @@ public class PadScrollTests
         var pad = new PadScroll();
         pad.Update(true, 0);
 
-        // 0.05 of the pad is 18 units: under a step, then a step together with the next.
         Assert.Equal(0, pad.Update(true, 0.05f));
         Assert.InRange(pad.Update(true, 0.1f), 35, 36);
     }
@@ -43,9 +41,9 @@ public class PadScrollTests
     {
         var pad = new PadScroll();
 
-        Assert.Equal(0, pad.Update(true, 0.8f)); // put down, wherever
+        Assert.Equal(0, pad.Update(true, 0.8f));
         pad.Update(true, 0.85f);
         Assert.Equal(0, pad.Update(false, 0));
-        Assert.Equal(0, pad.Update(true, -0.8f)); // down again elsewhere: no jump
+        Assert.Equal(0, pad.Update(true, -0.8f));
     }
 }

@@ -8,7 +8,6 @@ public class BuildChecksTests
     private readonly FakeCommandRunner runner = new();
     private readonly FakeTimeProvider time = new(new DateTimeOffset(2026, 11, 9, 20, 0, 0, TimeSpan.Zero));
 
-    /// <summary>A complete install: the manifest, the runtime importing a DLL beside it and one of Windows'.</summary>
     private static void WriteInstall(TempDir dir, string runtimeImports = "deps.dll")
     {
         Directory.CreateDirectory(dir.File("install", "bin"));
@@ -128,7 +127,6 @@ public class BuildChecksTests
     [Fact]
     public async Task A_build_without_unit_tests_is_not_said_to_pass_them()
     {
-        // ctest exits 0 when it finds none (a fork without tests, BUILD_TESTING off).
         using var dir = new TempDir();
         WriteInstall(dir);
         WriteCache(dir);

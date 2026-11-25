@@ -2,16 +2,8 @@ using System.Text.RegularExpressions;
 
 namespace Mirador.Core.OpenVr;
 
-/// <summary>
-/// Which OpenLamina is installed, from the first line of its <c>SOURCE.txt</c>: the fork's release writes
-/// <c>OpenLamina 2026.11.06, commit &lt;40 hex&gt;</c> (<c>OpenComposite …</c> in releases before the rename); a build of
-/// the commit alone has the 40 hex alone.
-/// </summary>
-/// <param name="Version">The release's date version, or null when SOURCE.txt names only the commit.</param>
-/// <param name="Commit">The 40-hex commit.</param>
 public sealed partial record OpenCompositeSource(string? Version, string? Commit)
 {
-    /// <summary>The source from a <c>SOURCE.txt</c>'s text, or null when its first line is neither form.</summary>
     public static OpenCompositeSource? Read(string sourceTxt)
     {
         var first = sourceTxt.Split('\n', 2)[0].Trim();
@@ -25,7 +17,6 @@ public sealed partial record OpenCompositeSource(string? Version, string? Commit
         return CommitLine().IsMatch(first) ? new OpenCompositeSource(null, first) : null;
     }
 
-    /// <summary><c>2026.11.06 (7534249)</c>, or the short commit alone when there is no version.</summary>
     public string Describe()
     {
         var shortCommit = Commit is { Length: > 7 } ? Commit[..7] : Commit;
@@ -38,7 +29,6 @@ public sealed partial record OpenCompositeSource(string? Version, string? Commit
         };
     }
 
-    /// <summary>Orders date versions (<c>2026.11.06</c>) by their numbers, so <c>2027.1.2</c> is newer; null is lowest.</summary>
     public static int Compare(string? a, string? b)
     {
         if (a is null || b is null)

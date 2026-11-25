@@ -7,15 +7,8 @@ using Mirador.Ipc;
 
 namespace Mirador.App.Services;
 
-/// <summary>
-/// Monado started headless for "Verify build for Windows", for <paramref name="profile"/>:
-/// its build's own service as the user, the same when a stand-in asks for it, and as administrator through the helper
-/// (Mirador's Monado with the consent, or an approved build). Headless means Monado's null compositor and its simulated
-/// headset: no headset, display or headset module is touched.
-/// </summary>
 public sealed class VerifyServices(AppHost host, Profile profile, Action<string> onLine) : IVerifyServices
 {
-    /// <summary>The variables that make Monado headless.</summary>
     public static readonly IReadOnlyDictionary<string, string> Headless = new Dictionary<string, string>
     {
         ["XRT_COMPOSITOR_NULL"] = "1",
@@ -62,7 +55,6 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
                 }
                 catch (ObjectDisposedException)
                 {
-                    // Monado's last lines, after Verify stopped it.
                 }
 
                 tail.Enqueue(line);
@@ -104,10 +96,6 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
         return wait;
     }
 
-    /// <summary>
-    /// A new log for a verify run, <c>logs\&lt;prefix&gt;-yyyyMMdd-HHmmss.log</c>: not named <c>monado-*</c>, so the
-    /// session's own last 10 logs stay; the last 10 of these are kept too.
-    /// </summary>
     private string NewLog(string prefix)
     {
         Directory.CreateDirectory(host.Paths.LogsDir);
@@ -152,14 +140,11 @@ public sealed class VerifyServices(AppHost host, Profile profile, Action<string>
             build = "";
         }
 
-        // The helper refuses without the user's consent: say so, rather than fail the step.
         if (!host.ElevatedMonadoAllowed())
         {
             return new ElevatedVerify(null, "Windows hasn't been asked yet for Monado to run as administrator: Home's Allow asks, then verify again.");
         }
 
-        // Checked as a Start with the elevation fix runs it, without the relaxed pipe: a build that passes has the fix,
-        // and its Starts then leave the pipe as Monado makes it.
         var settings = host.MonadoSettings.Load();
         var start = new ElevatedStart(
             settings.LighthouseWaitMs, settings.RenderScalePercent, settings.CompositorMinTimeMs,

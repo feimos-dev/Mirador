@@ -6,8 +6,6 @@ using Windows.Devices.Radios;
 
 namespace Mirador.Core.BaseStations;
 
-/// <summary>The Windows Bluetooth radio. The only class that calls Windows' Bluetooth APIs.</summary>
-/// <param name="log">Takes a line for Mirador's log; null for none.</param>
 public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadio
 {
     private readonly object _gate = new();
@@ -15,11 +13,9 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
     private BluetoothState _state = BluetoothState.Ready;
     private Task? _looking;
 
-    // Kept in fields so Windows can't release the radio, which would end its StateChanged subscription.
     private BluetoothAdapter? _adapter;
     private Radio? _radio;
 
-    /// <inheritdoc />
     public BluetoothState State
     {
         get
@@ -31,16 +27,12 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         }
     }
 
-    /// <inheritdoc />
     public event Action? StateChanged;
 
-    /// <inheritdoc />
-    /// <remarks>A call while one is still looking shares its look; once the radio is found, a call only reads its state again.</remarks>
     public Task StartAsync()
     {
         lock (_gate)
         {
-            // On the pool, so that no state change is raised under the gate.
             if (_looking is not { IsCompleted: false })
             {
                 _looking = Task.Run(LookAsync);
@@ -50,7 +42,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         }
     }
 
-    /// <inheritdoc />
     public IDisposable Watch(Action<Advert> heard)
     {
         var watching = new Watching(this, heard);
@@ -63,7 +54,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         return watching;
     }
 
-    /// <inheritdoc />
     public async Task<IStationLink> ConnectAsync(ulong address, bool randomAddress, CancellationToken ct)
     {
         BluetoothLEDevice? device = null;
@@ -99,7 +89,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
 
     private static BluetoothState Map(RadioState state) => state == RadioState.On ? BluetoothState.Ready : BluetoothState.Off;
 
-    /// <summary>Finds the Bluetooth LE adapter and its radio, once; never throws.</summary>
     private async Task LookAsync()
     {
         try
@@ -131,7 +120,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         }
         catch (Exception e)
         {
-            // Windows could not tell us about Bluetooth at all; treat it as not there.
             try
             {
                 var reason = e.Message.Trim().TrimEnd('.');
@@ -139,7 +127,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
             }
             catch (Exception)
             {
-                // The log is only for reading later.
             }
 
             SetState(BluetoothState.Missing);
@@ -164,7 +151,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         }
         catch (Exception)
         {
-            // A listener's failure is not the radio's.
         }
 
         if (state == BluetoothState.Ready)
@@ -190,7 +176,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         }
         catch (Exception)
         {
-            // Never throw out of a Windows event.
         }
     }
 
@@ -212,7 +197,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
         private int _restarts;
         private bool _disposed;
 
-        /// <summary>Bluetooth came back (a real radio transition): allows restarts again and starts a watcher if none is listening.</summary>
         public void Resume()
         {
             lock (_lock)
@@ -223,7 +207,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
             Start();
         }
 
-        /// <summary>Starts a watcher, unless one is already listening or this has been disposed.</summary>
         public void Start()
         {
             lock (_lock)
@@ -249,7 +232,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
                 }
                 catch (Exception)
                 {
-                    // Bluetooth is off or going away; drop the watcher so the radio's next state change starts a new one.
                     Detach();
                 }
             }
@@ -286,7 +268,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
             }
             catch (Exception)
             {
-                // Already stopped.
             }
 
             _watcher = null;
@@ -298,7 +279,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
             {
                 lock (_lock)
                 {
-                    // Only the current watcher counts, and only a few times until the radio really changes state.
                     if (_disposed || !ReferenceEquals(sender, _watcher) || _restarts >= MaxRestarts)
                     {
                         return;
@@ -324,13 +304,11 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
                     }
                     catch (Exception)
                     {
-                        // Nothing to report; the next radio change tries again.
                     }
                 });
             }
             catch (Exception)
             {
-                // Never throw out of a Windows event.
             }
         }
 
@@ -366,7 +344,6 @@ public sealed class WinRtStationRadio(Action<string>? log = null) : IStationRadi
             }
             catch (Exception)
             {
-                // A failing callback must not take the Windows thread down; the advert is dropped.
             }
         }
     }

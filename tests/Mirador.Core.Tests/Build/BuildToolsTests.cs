@@ -15,8 +15,6 @@ public class BuildToolsTests
     private static VsInstance Vs(string name, string version, params string[] packages) =>
         new(@"C:\VS\" + name, name, Version.Parse(version), true, new HashSet<string>(packages, StringComparer.OrdinalIgnoreCase));
 
-    // --- vswhere ---
-
     [Fact]
     public void Vswhere_output_gives_each_install_with_its_components()
     {
@@ -47,8 +45,6 @@ public class BuildToolsTests
         Assert.Empty(VsWhere.Parse(""));
     }
 
-    // --- Visual Studio ---
-
     [Fact]
     public void The_newest_install_with_the_cpp_tools_and_the_sdk_is_found()
     {
@@ -73,7 +69,6 @@ public class BuildToolsTests
     [Fact]
     public void The_recipe_takes_the_newest_install_with_the_cpp_tools_so_that_one_is_checked()
     {
-        // build-monado.ps1 enters vswhere -latest -requires VC.Tools: the 2026 one, whatever the 2022 one has.
         var plan = VsPlan.For([Vs("Visual Studio Professional 2022", "17.14.1", VcTools, Sdk), Vs("Visual Studio Build Tools 2026", "18.10.1", VcTools)]);
 
         Assert.Equal(ToolState.Fixable, plan.State);
@@ -118,7 +113,6 @@ public class BuildToolsTests
         var command = plan.Command(@"C:\Program Files (x86)\Microsoft Visual Studio\Installer", @"C:\dl\vs_buildtools.exe");
 
         Assert.Equal(@"C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe", command.FileName);
-        // setup.exe takes no --wait (only the bootstrapper does): it is the installer, and runs until it is done.
         Assert.Equal(["modify", "--installPath", @"C:\VS\Visual Studio Professional 2022", "--add", Sdk, "--passive", "--norestart"], command.Arguments);
     }
 
@@ -148,8 +142,6 @@ public class BuildToolsTests
 
         Assert.Throws<InvalidOperationException>(() => plan.Command(@"C:\Installer", @"C:\dl\vs_buildtools.exe"));
     }
-
-    // --- Mirador's small tools ---
 
     private static ToolPin TestPin(byte[] zip, string url = "https://github.com/Kitware/CMake/releases/download/v9.9.9/cmake.zip") =>
         new("CMake", "cmake", "9.9.9", url, Convert.ToHexStringLower(SHA256.HashData(zip)), @"bin\cmake.exe");
@@ -305,8 +297,6 @@ public class BuildToolsTests
         Assert.Empty(Directory.GetFileSystemEntries(dir.Path));
     }
 
-    // --- vcpkg ---
-
     private static void WriteHead(string vcpkgDir, string head)
     {
         Directory.CreateDirectory(Path.Combine(vcpkgDir, ".git"));
@@ -392,7 +382,6 @@ public class BuildToolsTests
         Assert.DoesNotContain(runner.Commands, c => c.Arguments.Contains("clone"));
         Assert.Contains(runner.Commands, c => c.Arguments.Contains("fetch"));
 
-        // The program built from the old commit's sources goes: the recipe bootstraps it again from the pinned ones.
         Assert.False(File.Exists(Path.Combine(dir.Path, "vcpkg", "vcpkg.exe")));
     }
 
@@ -436,8 +425,6 @@ public class BuildToolsTests
         Assert.False(Directory.Exists(dir.File("vcpkg")));
     }
 
-    // --- Microsoft's bootstrapper ---
-
     private const string MicrosoftSubject = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US";
 
     [Fact]
@@ -456,7 +443,6 @@ public class BuildToolsTests
             Assert.NotEqual(dir.Path, folder);
             Assert.Equal(["vs_buildtools.exe"], Directory.GetFileSystemEntries(folder).Select(Path.GetFileName));
 
-            // Nobody can change it between the signer check and its end.
             Assert.Throws<IOException>(() => new FileStream(file.Path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite));
             using var read = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         }
@@ -480,8 +466,6 @@ public class BuildToolsTests
         Assert.Contains("Microsoft", e.Message);
         Assert.Empty(Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
     }
-
-    // --- the swap ---
 
     [Fact]
     public async Task A_new_copy_that_cant_be_moved_in_puts_the_old_one_back()

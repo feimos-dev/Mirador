@@ -24,7 +24,6 @@ public sealed class VerifyBuildTests : IDisposable
             dir.File("install", "bin", "monado-service.exe"), dir.File("install", "bin", "service"), false);
         runner.Answer = _ => ([Ok], 0);
 
-        // The game's runtime starts the stand-in, which asks Mirador: here, while the stand-in step's client runs.
         runner.Effect = async (_, ct) =>
         {
             if (services.Waiting is { WasAsked: false } wait)
@@ -35,7 +34,6 @@ public sealed class VerifyBuildTests : IDisposable
                 }
                 catch (MiradorException)
                 {
-                    // The step reports it.
                 }
             }
         };
@@ -371,7 +369,7 @@ public sealed class VerifyBuildTests : IDisposable
         Assert.True(report.Ok);
         Assert.Equal(300, report.Frames);
         Assert.Equal("Monado: Simulated HMD", report.System);
-        Assert.Equal(-1, report.Submitted); // an older xr-check didn't say how many rendered
+        Assert.Equal(-1, report.Submitted);
         Assert.Null(XrCheckReport.Parse(["XR-CHECK not json"]));
 
         var counted = XrCheckReport.Parse(["""XR-CHECK {"api":"d3d11","ok":true,"frames":300,"submitted":297,"runtime":"Monado","system":"Sim","error":""}"""]);

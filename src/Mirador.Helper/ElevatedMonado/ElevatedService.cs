@@ -5,11 +5,6 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Mirador.Helper.ElevatedMonado;
 
-/// <summary>
-/// One elevated <c>monado-service</c> the helper started: inside a kill-on-close job, its output pumped to the log
-/// file, ended when the caller process exits, on <see cref="Stop"/>, or when the helper stops. The SteamVR driver hold
-/// is released once Monado's pipe is up or after 60 s. Its Win32 path runs only on a PC.
-/// </summary>
 internal sealed class ElevatedService : IDisposable
 {
     private const uint CreateSuspended = 0x00000004;
@@ -24,7 +19,6 @@ internal sealed class ElevatedService : IDisposable
     private const uint ExtendedStartupInfoPresent = 0x00080000;
     private const uint ResumeFailed = 0xFFFFFFFF;
 
-    /// <summary><c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>: the only handles the new process inherits.</summary>
     private static readonly IntPtr ProcThreadAttributeHandleList = new(0x00020002);
 
     private static readonly TimeSpan HoldLimit = TimeSpan.FromSeconds(60);
@@ -34,8 +28,6 @@ internal sealed class ElevatedService : IDisposable
     private readonly SafeFileHandle job;
     private readonly SafeProcessHandle process;
 
-    // Monado's own (elevated) token and environment, and the program that writes the exit key into its console:
-    // Mirador.Helper.exe, started with them in the user's session (ConsoleExitKey). Null: a Stop only closes the job.
     private readonly SafeAccessTokenHandle? senderToken;
     private readonly byte[] senderEnvironment;
     private readonly string? exitKeySender;
@@ -43,7 +35,7 @@ internal sealed class ElevatedService : IDisposable
     private IDisposable hold;
     private readonly object gate = new();
     private bool disposed;
-    private bool stopping; // a Stop has asked Monado to end: a later one only closes the job
+    private bool stopping;
 
     private ElevatedService(
         SafeFileHandle job, SafeProcessHandle process, int processId, IDisposable hold, SafeAccessTokenHandle? senderToken,
@@ -62,7 +54,6 @@ internal sealed class ElevatedService : IDisposable
 
     public bool HasEnded => WaitForSingleObject(process, 0) == WaitObject0;
 
-    /// <summary>The exit code once Monado has ended, else null.</summary>
     public int? ExitCodeIfEnded()
     {
         if (WaitForSingleObject(process, 0) != WaitObject0)
@@ -73,11 +64,6 @@ internal sealed class ElevatedService : IDisposable
         return GetExitCodeProcess(process, out var code) ? unchecked((int)code) : 0;
     }
 
-    /// <summary>
-    /// With <paramref name="clean"/>, asks Monado to end by itself first (the exit key in its console), so that it tears
-    /// its devices down, and waits for that at most <see cref="Mirador.Ipc.ConsoleExitKey.StopLimit"/>. Then closes the job, which ends Monado
-    /// and anything it started if they are still there. An unelevated Mirador can do neither itself.
-    /// </summary>
     public void Stop(bool clean)
     {
         lock (gate)
@@ -95,10 +81,6 @@ internal sealed class ElevatedService : IDisposable
         job.Dispose();
     }
 
-    /// <summary>
-    /// Under the gate: runs the exit-key sender as Monado's own token in its session. True when it wrote the key, or may
-    /// have (still running at its limit); false when it surely didn't.
-    /// </summary>
     private bool SendExitKey()
     {
         if (senderToken is null || exitKeySender is null)
@@ -167,10 +149,6 @@ internal sealed class ElevatedService : IDisposable
         stop.Dispose();
     }
 
-    /// <param name="exitKeySender">
-    /// The program that ends Monado cleanly at a Stop (<c>Mirador.Helper.exe</c>, with
-    /// <see cref="Mirador.Ipc.ConsoleExitKey.Flag"/>), run with <paramref name="token"/>; null: a Stop only closes the job.
-    /// </param>
     public static ElevatedService Launch(
         string serviceExe, string serverDir, IReadOnlyDictionary<string, string> env, SafeAccessTokenHandle token,
         int callerProcessId, string logFile, IDisposable hold, string pipeName, string? exitKeySender = null)
@@ -185,16 +163,12 @@ internal sealed class ElevatedService : IDisposable
         {
             CreatePipePair(out readPipe, out writePipe);
 
-            // Created suspended, so it runs no code before it is in the job (below). Only the pipe's write end is handed
-            // over: PROC_THREAD_ATTRIBUTE_HANDLE_LIST limits what Monado inherits to that one handle, whatever else the
-            // helper may hold that is inheritable.
             var info = CreateSuspendedWithOnlyHandle(token, serviceExe, serverDir, envHandle.AddrOfPinnedObject(), writePipe);
             var process = new SafeProcessHandle(info.hProcess, ownsHandle: true);
             using var thread = new SafeProcessHandle(info.hThread, ownsHandle: true);
 
             if (Mirador.Ipc.ProcessJobs.AssignToJob(job, process) is var jobError and not 0)
             {
-                // Still suspended: it has run nothing. End it before it ever runs outside the job, and refuse.
                 TerminateProcess(process, 1);
                 process.Dispose();
                 throw new Win32Exception(jobError, "Windows wouldn't put Monado in the group that ends it when Mirador closes");
@@ -202,14 +176,12 @@ internal sealed class ElevatedService : IDisposable
 
             if (ResumeThread(info.hThread) == ResumeFailed)
             {
-                // In the job but never started: end it (the job also would, when it closes below).
                 var error = Marshal.GetLastPInvokeError();
                 TerminateProcess(process, 1);
                 process.Dispose();
                 throw new Win32Exception(error, "Windows wouldn't start Monado");
             }
 
-            // Hand the read end to the pump; the write end is closed here so the pump sees end-of-file when Monado exits.
             var service = new ElevatedService(job, process, info.dwProcessId, hold, exitKeySender is null ? null : Duplicate(token), senderBlock, exitKeySender);
             writePipe.Dispose();
             writePipe = null;
@@ -251,7 +223,6 @@ internal sealed class ElevatedService : IDisposable
             }
             catch (Exception)
             {
-                // Monado ended, the log couldn't be written, or we are stopping: nothing more to pump.
             }
         });
 
@@ -261,7 +232,7 @@ internal sealed class ElevatedService : IDisposable
             using var caller = OpenProcess(Synchronize, false, (uint)callerProcessId);
             if (caller.IsInvalid)
             {
-                return; // the caller is already gone, or can't be opened; its own exit will not reach us
+                return;
             }
 
             try
@@ -270,7 +241,7 @@ internal sealed class ElevatedService : IDisposable
                 {
                     if (WaitForSingleObject(caller, 0) == WaitObject0)
                     {
-                        Stop(clean: true); // the Mirador that asked has exited: end Monado, as the job does for an unelevated one
+                        Stop(clean: true);
                         return;
                     }
 
@@ -311,16 +282,11 @@ internal sealed class ElevatedService : IDisposable
             }
         });
 
-    /// <summary>
-    /// <c>CreateProcessAsUser</c> of the service, suspended, with no window, its output on <paramref name="output"/> and
-    /// nothing else inherited: a <c>STARTUPINFOEX</c> whose <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c> holds just that
-    /// handle (<c>EXTENDED_STARTUPINFO_PRESENT</c>). The caller must put it in the job before resuming it.
-    /// </summary>
     private static ProcessInformation CreateSuspendedWithOnlyHandle(
         SafeAccessTokenHandle token, string serviceExe, string serverDir, IntPtr environment, SafeFileHandle output)
     {
         nuint size = 0;
-        InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size); // asks for the size; fails by design
+        InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
         var attributes = Marshal.AllocHGlobal((nint)size);
         var handles = Marshal.AllocHGlobal(IntPtr.Size);
         var desktop = Marshal.StringToHGlobalUni(@"winsta0\default");
@@ -355,7 +321,6 @@ internal sealed class ElevatedService : IDisposable
                 lpAttributeList = attributes,
             };
 
-            // inheritHandles must be true for the handle list to apply; the list keeps it to the one handle.
             if (!CreateProcessAsUserW(
                     token, serviceExe, null, IntPtr.Zero, IntPtr.Zero, inheritHandles: true,
                     CreateSuspended | CreateNoWindow | CreateUnicodeEnvironment | CreateNewProcessGroup | ExtendedStartupInfoPresent,
@@ -384,10 +349,6 @@ internal sealed class ElevatedService : IDisposable
         }
     }
 
-    /// <summary>
-    /// A handle of our own to <paramref name="token"/>, which the caller disposes after the launch; null when Windows
-    /// won't give one, and then a Stop only closes the job (Monado ends at once, without its teardown).
-    /// </summary>
     private static SafeAccessTokenHandle? Duplicate(SafeAccessTokenHandle token)
     {
         var self = GetCurrentProcess();
@@ -398,7 +359,6 @@ internal sealed class ElevatedService : IDisposable
 
     private static byte[] EnvironmentBlock(IReadOnlyDictionary<string, string> env)
     {
-        // CREATE_UNICODE_ENVIRONMENT wants the block sorted case-insensitively, NAME=VALUE\0 … \0\0.
         var text = new StringBuilder();
         foreach (var (name, value) in env.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
         {
@@ -422,7 +382,6 @@ internal sealed class ElevatedService : IDisposable
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
 
-        // Only the write end is inherited by Monado; the read end stays with the helper.
         SetHandleInformation(read, HandleFlagInherit, 0);
     }
 
@@ -434,7 +393,6 @@ internal sealed class ElevatedService : IDisposable
         [MarshalAs(UnmanagedType.Bool)] public bool bInheritHandle;
     }
 
-    /// <summary><c>STARTUPINFOW</c>, blittable: its strings are pointers the caller allocates and frees.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct StartupInfo
     {
@@ -458,7 +416,6 @@ internal sealed class ElevatedService : IDisposable
         public IntPtr hStdError;
     }
 
-    /// <summary><c>STARTUPINFOEXW</c>: the startup info and the attribute list (the handle list).</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct StartupInfoEx
     {
@@ -530,7 +487,6 @@ internal sealed class ElevatedService : IDisposable
         IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access,
         [MarshalAs(UnmanagedType.Bool)] bool inherit, uint options);
 
-    /// <summary>A hold that holds nothing, after the real one has been released.</summary>
     private sealed class NoHold : IDisposable
     {
         public static NoHold Instance { get; } = new();

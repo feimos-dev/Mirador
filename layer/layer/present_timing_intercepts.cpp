@@ -1,12 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// VK_EXT_present_timing on the layer's swapchain: the results queue's size, the timing properties, the
-// time domains and the past presentation timings, answered from PresentTimings under the display-session lock. And
-// vkGetCalibratedTimestamps (KHR and EXT), whose VkSwapchainCalibratedTimestampInfoEXT can name the layer's swapchain:
-// its swapchain-local and present-stage-local domains are QPC nanoseconds, taken from the layer below's QPC reading, and
-// the driver never sees the handle. Swapchains that are not the layer's go down unchanged.
-
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
@@ -23,7 +17,6 @@
 namespace dvl {
 namespace {
 
-// The layer's swapchain named by a VkSwapchainCalibratedTimestampInfoEXT in the chain.
 bool names_our_swapchain(const void* next)
 {
     for (auto* s = static_cast<const VkBaseInStructure*>(next); s != nullptr; s = s->pNext) {
@@ -47,10 +40,6 @@ int64_t qpc_frequency()
     return frequency.QuadPart;
 }
 
-// Both commands. Without the layer's swapchain in any entry the call goes down unchanged. Otherwise the layer below
-// gets the entries with the swapchain's struct left out: a swapchain-local entry of the layer's (any id: the layer's
-// domains all read QPC) is answered from one QPC entry, the caller's own if it has one, converted to nanoseconds; any
-// other entry that named the layer's swapchain goes down with no pNext (the struct only matters for the local domains).
 VkResult calibrated_timestamps(const char* command, PFN_vkGetCalibratedTimestampsKHR down, VkDevice device,
                                uint32_t count, const VkCalibratedTimestampInfoKHR* infos, uint64_t* timestamps,
                                uint64_t* max_deviation)
@@ -65,8 +54,8 @@ VkResult calibrated_timestamps(const char* command, PFN_vkGetCalibratedTimestamp
 
     constexpr size_t kNone = SIZE_MAX;
     std::vector<VkCalibratedTimestampInfoKHR> below;
-    std::vector<size_t> from(count, kNone); // the entry below whose value each entry takes
-    std::vector<bool> local(count, false);  // ...converted from QPC ticks to nanoseconds
+    std::vector<size_t> from(count, kNone);
+    std::vector<bool> local(count, false);
     size_t qpc = kNone;
     for (uint32_t i = 0; i < count; ++i) {
         if (names_our_swapchain(infos[i].pNext)) {
@@ -114,7 +103,7 @@ VkResult calibrated_timestamps(const char* command, PFN_vkGetCalibratedTimestamp
     return VK_SUCCESS;
 }
 
-} // namespace
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_SetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain,
                                                                           uint32_t size)
@@ -137,7 +126,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetSwapchainTimingPropertiesEXT(VkDevice de
 {
     return guarded("vkGetSwapchainTimingPropertiesEXT", [&] {
         if (find_swapchain(swapchain)) {
-            // A fixed refresh rate: the mode's period, as vkGetRefreshCycleDurationGOOGLE gives it.
             const uint64_t period = static_cast<uint64_t>(presenter().refresh_ns);
             properties->refreshDuration = period;
             properties->refreshInterval = period;
@@ -204,4 +192,4 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetCalibratedTimestampsEXT(VkDevice device,
     });
 }
 
-} // namespace dvl
+}

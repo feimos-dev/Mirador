@@ -23,19 +23,17 @@ FenceSlot FencePool::hand_out(FenceSlot slot)
 {
     Slot& s = slots_[slot];
     s.state = FenceState::Taken;
-    s.seen = false; // the caller resets it before its next submit
+    s.seen = false;
     return slot;
 }
 
 std::optional<FenceSlot> FencePool::take()
 {
-    // 1. The pool.
     for (FenceSlot slot = 0; slot < slots_.size(); ++slot) {
         if (slots_[slot].state == FenceState::InPool && !slots_[slot].waited_on) {
             return hand_out(slot);
         }
     }
-    // 2. A left-over one whose status says signalled, the oldest first.
     std::optional<FenceSlot> best;
     for (FenceSlot slot = 0; slot < slots_.size(); ++slot) {
         const Slot& s = slots_[slot];
@@ -52,7 +50,6 @@ std::optional<FenceSlot> FencePool::take()
     if (best) {
         return hand_out(*best);
     }
-    // 3. A new one below the cap.
     if (slots_.size() < cap_) {
         slots_.push_back(Slot{});
         return static_cast<FenceSlot>(slots_.size() - 1);
@@ -106,7 +103,7 @@ void FencePool::seen_signalled(FenceSlot slot)
     }
     Slot& s = slots_[slot];
     if (!s.waited_on) {
-        return; // stale: the slot may have been handed out again since whatever saw it signalled (see the header)
+        return;
     }
     if (s.state == FenceState::Attached) {
         s.seen = true;
@@ -143,4 +140,4 @@ FenceState FencePool::state(FenceSlot slot) const
     return slots_[slot].state;
 }
 
-} // namespace nvdm
+}

@@ -4,18 +4,13 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Mirador.Ipc;
 
-/// <summary>The Win32 calls the app and the helper both need to keep Monado in check: a kill-on-close job, and a pipe test.</summary>
 public static class ProcessJobs
 {
-    /// <summary><c>ERROR_SEM_TIMEOUT</c>: <c>WaitNamedPipeW</c> gives up because every instance of the pipe is busy.</summary>
     private const int ErrorSemTimeout = 121;
 
     private const int JobObjectExtendedLimitInformation = 9;
     private const uint JobObjectLimitKillOnJobClose = 0x2000;
 
-    /// <summary>Creates a job object that ends every process in it when its last handle closes.</summary>
-    /// <returns>The job's handle. Closing it (dispose) ends the processes.</returns>
-    /// <exception cref="Win32Exception">Windows refused; the message is its own wording.</exception>
     public static SafeFileHandle CreateKillOnCloseJob()
     {
         var job = CreateJobObject(0, 0);
@@ -38,20 +33,9 @@ public static class ProcessJobs
         return job;
     }
 
-    /// <summary>Puts <paramref name="process"/> into <paramref name="job"/>. Returns the Win32 error, or 0 when it worked.</summary>
     public static int AssignToJob(SafeFileHandle job, SafeHandle process) =>
         AssignProcessToJobObject(job, process) ? 0 : Marshal.GetLastPInvokeError();
 
-    /// <summary>
-    /// Whether a named pipe exists: a call that succeeds means an instance is waiting for a client, and one that
-    /// times out with <see cref="ErrorSemTimeout"/> means every instance is busy. Any other failure (file not found
-    /// above all) means no such pipe.
-    /// </summary>
-    /// <remarks>
-    /// The name is normalized first. <c>CreateNamedPipe</c> and <c>CreateFile</c> turn <c>/</c> into <c>\</c> and collapse
-    /// doubled backslashes, so Monado's <c>...\Temp\/monado_comp_ipc</c> is filed as <c>...\Temp\monado_comp_ipc</c>;
-    /// <c>WaitNamedPipe</c> only converts the slash, so given the literal name it looks for a pipe that doesn't exist.
-    /// </remarks>
     public static bool PipeExists(string name)
     {
         string normalized;
@@ -61,7 +45,7 @@ public static class ProcessJobs
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException)
         {
-            return false; // a name Windows can't make sense of is no pipe
+            return false;
         }
 
         return WaitNamedPipe(normalized, 1) || Marshal.GetLastPInvokeError() == ErrorSemTimeout;
@@ -82,8 +66,6 @@ public static class ProcessJobs
     [DllImport("kernel32.dll", EntryPoint = "WaitNamedPipeW", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WaitNamedPipe(string name, uint timeoutMs);
-
-    // The x64 layout of JOBOBJECT_EXTENDED_LIMIT_INFORMATION (144 bytes); the project builds for x64 only.
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BasicLimitInformation

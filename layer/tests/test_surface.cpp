@@ -1,10 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The surface on the layer's display: the answers alone, then the surface commands through the layer's
-// chain to a fake driver. No surface query on our surface fails or reaches the driver; any other surface (Monado's
-// peek window) goes down unchanged.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <vulkan/vk_icd.h>
@@ -44,7 +40,6 @@ VkSwapchainCreateInfoKHR swapchain_info(VkFormat format, VkImageUsageFlags usage
     return ci;
 }
 
-// The layer's surface on its display's mode, plane 0, with Monado's GLOBAL alpha.
 VkSurfaceKHR make_our_surface(ChainRig& rig)
 {
     const auto query = rig.fn<PFN_vkGetPhysicalDeviceDisplayPropertiesKHR>("vkGetPhysicalDeviceDisplayPropertiesKHR");
@@ -86,14 +81,13 @@ void check_our_caps(const VkSurfaceCapabilitiesKHR& c)
     CHECK((c.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) != 0);
 }
 
-// A capability struct the layer does not know: sType, pNext, one VkBool32.
 struct PresentFlag {
     VkStructureType sType;
     void* pNext;
     VkBool32 supported;
 };
 
-} // namespace
+}
 
 TEST_CASE("surface_caps_values")
 {
@@ -102,7 +96,6 @@ TEST_CASE("surface_caps_values")
     CHECK(c.minImageExtent.height == 3840);
     CHECK(c.maxImageExtent.width == 7104);
     CHECK(c.supportedUsageFlags == dvl::kSurfaceUsage);
-    // The usage comes from the spec (the trial import gives its own).
     CHECK(dvl::surface_capabilities({{7104, 3840}, VK_IMAGE_USAGE_STORAGE_BIT}).supportedUsageFlags ==
           VK_IMAGE_USAGE_STORAGE_BIT);
 
@@ -143,19 +136,16 @@ TEST_CASE("present_modes_include_fifo_mailbox_immediate_relaxed")
 
 TEST_CASE("graphics_compositor_swapchain_accepted")
 {
-    // Review focus 4: Monado with XRT_COMPOSITOR_COMPUTE=0 renders into SRGB with colour-attachment usage.
     const dvl::SwapchainCheck graphics = dvl::check_swapchain_parameters(
         swapchain_info(VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
         kSpec);
     CHECK_FALSE(graphics.refused);
     CHECK(graphics.notes.empty());
-    // Its default compute compositor: UNORM with storage.
     const dvl::SwapchainCheck compute = dvl::check_swapchain_parameters(
         swapchain_info(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT), kSpec);
     CHECK_FALSE(compute.refused);
     CHECK(compute.notes.empty());
 
-    // SRGB with storage is the one refused combination, whatever else is in the usage.
     for (const VkFormat format : {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB}) {
         constexpr uint32_t kStorage = VK_IMAGE_USAGE_STORAGE_BIT;
         constexpr uint32_t kLastBit = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
@@ -171,7 +161,6 @@ TEST_CASE("graphics_compositor_swapchain_accepted")
     CHECK(refused.refused);
     CHECK(refused.reason.find("SRGB") != std::string::npos);
 
-    // What the caps would not allow is accepted and named (the swapchain is made from the caps).
     VkSwapchainCreateInfoKHR odd = swapchain_info(VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     odd.imageExtent = {1920, 1080};
     odd.minImageCount = 5;
@@ -188,7 +177,6 @@ TEST_CASE("capabilities_chain_offers_present_ids_and_timing_and_nothing_else_opt
     VkSurfaceProtectedCapabilitiesKHR protect{VK_STRUCTURE_TYPE_SURFACE_PROTECTED_CAPABILITIES_KHR, &shared, VK_TRUE};
     VkSurfaceCapabilitiesFullScreenExclusiveEXT exclusive{
         VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_FULL_SCREEN_EXCLUSIVE_EXT, &protect, VK_TRUE};
-    // Design 6.11: present timing, with the present-id2 ids it reports, and present-wait2 on them.
     VkPresentTimingSurfaceCapabilitiesEXT timing{VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT, &exclusive};
     timing.presentAtAbsoluteTimeSupported = VK_TRUE;
     timing.presentAtRelativeTimeSupported = VK_TRUE;
@@ -201,7 +189,6 @@ TEST_CASE("capabilities_chain_offers_present_ids_and_timing_and_nothing_else_opt
     VkSurfacePresentScalingCapabilitiesEXT scaling{VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT,
                                                    &compat};
     scaling.supportedPresentScaling = VK_PRESENT_SCALING_STRETCH_BIT_EXT;
-    // A struct the layer does not know stays as it was.
     PresentFlag unknown{static_cast<VkStructureType>(1000999000), &scaling, VK_TRUE};
 
     dvl_test::ScopedEnv present_at(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", nullptr);
@@ -215,7 +202,7 @@ TEST_CASE("capabilities_chain_offers_present_ids_and_timing_and_nothing_else_opt
     CHECK(id2.presentId2Supported == VK_TRUE);
     CHECK(wait2.presentWait2Supported == VK_TRUE);
     CHECK(timing.presentTimingSupported == VK_TRUE);
-    CHECK(timing.presentAtAbsoluteTimeSupported == VK_TRUE); // present at a time
+    CHECK(timing.presentAtAbsoluteTimeSupported == VK_TRUE);
     CHECK(timing.presentAtRelativeTimeSupported == VK_FALSE);
     CHECK(timing.presentStageQueries == (VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT |
                                          VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
@@ -224,12 +211,10 @@ TEST_CASE("capabilities_chain_offers_present_ids_and_timing_and_nothing_else_opt
     CHECK(protect.supportsProtected == VK_FALSE);
     CHECK(shared.sharedPresentSupportedUsageFlags == 0);
 
-    // The input side: the queried present mode, if any.
     VkSurfacePresentModeEXT mode{VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, nullptr, VK_PRESENT_MODE_IMMEDIATE_KHR};
     VkSurfaceFullScreenExclusiveInfoEXT fse{VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT, &mode};
     CHECK(dvl::queried_present_mode(&fse) == VK_PRESENT_MODE_IMMEDIATE_KHR);
     CHECK_FALSE(dvl::queried_present_mode(nullptr).has_value());
-    // Without one, no mode is compatible; a count query gives the count.
     compat.pPresentModes = nullptr;
     compat.presentModeCount = 9;
     dvl::fill_surface_capabilities_chain(&compat, kSpec, std::nullopt);
@@ -245,7 +230,7 @@ TEST_CASE("capabilities_chain_offers_no_present_at_a_time_with_MIRADOR_DIRECT_MO
         dvl_test::ScopedEnv off(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", L"1");
         dvl::fill_surface_capabilities_chain(&timing, kSpec, VK_PRESENT_MODE_FIFO_KHR);
     }
-    CHECK(timing.presentTimingSupported == VK_TRUE); // timings stay
+    CHECK(timing.presentTimingSupported == VK_TRUE);
     CHECK(timing.presentAtAbsoluteTimeSupported == VK_FALSE);
     CHECK(timing.presentAtRelativeTimeSupported == VK_FALSE);
 }
@@ -268,9 +253,6 @@ TEST_CASE("surface_registry_knows_only_its_own")
 
 TEST_CASE("our_surface_handle_reads_as_a_vk_icd_surface_display")
 {
-    // Design 5's first fallback: a layer above ours that looks inside a surface handle, as ICD WSI
-    // code does, finds a display surface (VkIcdSurfaceDisplay of vk_icd.h) with what the application asked for, not a
-    // pointer it would take for another platform's surface.
     ChainRig rig;
     REQUIRE(rig.ready());
     const auto query = rig.fn<PFN_vkGetPhysicalDeviceDisplayPropertiesKHR>("vkGetPhysicalDeviceDisplayPropertiesKHR");
@@ -312,7 +294,7 @@ TEST_CASE("our_surface_answers_every_query_without_calling_down")
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkSurfaceKHR surface = make_our_surface(rig);
-    const size_t session_lines = rig.session_log.size(); // the driver version and "display session open"
+    const size_t session_lines = rig.session_log.size();
     g_driver.clear_calls();
     const VkPhysicalDevice gpu = ChainRig::gpu(0);
 
@@ -389,7 +371,6 @@ TEST_CASE("our_surface_answers_every_query_without_calling_down")
                 gpu, &info, &n, nullptr) == VK_SUCCESS);
     CHECK(n == 4);
 
-    // The device-group queries, on a device.
     dvl_test::MonadoQueue monado;
     VkDevice device = VK_NULL_HANDLE;
     REQUIRE(rig.create_device(0, {monado.info}, {"VK_KHR_swapchain"}, &device) == VK_SUCCESS);
@@ -403,11 +384,9 @@ TEST_CASE("our_surface_answers_every_query_without_calling_down")
                 device, "vkGetDeviceGroupSurfacePresentModes2EXT")(device, &info, &group) == VK_SUCCESS);
     CHECK(group == VK_DEVICE_GROUP_PRESENT_MODE_LOCAL_BIT_KHR);
 
-    // None of it reached the driver, and nothing was logged as failing.
     CHECK(g_driver.calls().empty());
     CHECK(rig.session_log.size() == session_lines);
 
-    // Destroying it does not go down either.
     rig.fn<PFN_vkDestroySurfaceKHR>("vkDestroySurfaceKHR")(rig.instance, surface, nullptr);
     CHECK(g_driver.count("vkDestroySurfaceKHR") == 0);
     rig.destroy_device(device);
@@ -415,7 +394,6 @@ TEST_CASE("our_surface_answers_every_query_without_calling_down")
 
 TEST_CASE("foreign_surface_queries_go_down_unchanged")
 {
-    // Monado's peek window: a Win32 surface on the same physical device, next to our display.
     ChainRig rig;
     REQUIRE(rig.ready());
     const VkSurfaceKHR ours = make_our_surface(rig);
@@ -433,7 +411,7 @@ TEST_CASE("foreign_surface_queries_go_down_unchanged")
     VkSurfaceCapabilitiesKHR caps{};
     REQUIRE(rig.fn<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>("vkGetPhysicalDeviceSurfaceCapabilitiesKHR")(
                 gpu, peek, &caps) == VK_SUCCESS);
-    CHECK(caps.minImageCount == 2); // the driver's answer
+    CHECK(caps.minImageCount == 2);
     uint32_t n = 0;
     REQUIRE(rig.fn<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>("vkGetPhysicalDeviceSurfaceFormatsKHR")(
                 gpu, peek, &n, nullptr) == VK_SUCCESS);
@@ -448,7 +426,6 @@ TEST_CASE("foreign_surface_queries_go_down_unchanged")
     CHECK(caps2.surfaceCapabilities.minImageCount == 2);
     REQUIRE(rig.fn<PFN_vkGetPhysicalDeviceSurfaceFormats2KHR>("vkGetPhysicalDeviceSurfaceFormats2KHR")(
                 gpu, &info, &n, nullptr) == VK_SUCCESS);
-    // ...Capabilities2EXT goes down too: the loader's terminator emulates it for a driver without it.
     VkSurfaceCapabilities2EXT ext{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_EXT};
     REQUIRE(rig.fn<PFN_vkGetPhysicalDeviceSurfaceCapabilities2EXT>("vkGetPhysicalDeviceSurfaceCapabilities2EXT")(
                 gpu, peek, &ext) == VK_SUCCESS);

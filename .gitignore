@@ -1,14 +1,11 @@
-# Build output
 bin/
 obj/
 artifacts/
 *.binlog
 
-# IDE and user files
 .vs/
 .vscode/
 *.user
 *.suo
 
-# Test results
 TestResults/

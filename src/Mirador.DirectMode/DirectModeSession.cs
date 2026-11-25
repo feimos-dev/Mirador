@@ -3,13 +3,8 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.DirectMode;
 
-/// <summary>
-/// The direct-mode layer while Monado runs: the layer's variables, the display's status line from the layer's output,
-/// and a stop when the display never comes up.
-/// </summary>
 public sealed class DirectModeSession : ModuleSession, IDisposable
 {
-    /// <summary>How often the session looks whether the display has come up in time.</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
     private readonly DirectModeLogParser parser;
@@ -19,9 +14,6 @@ public sealed class DirectModeSession : ModuleSession, IDisposable
     private bool ended;
     private bool stopRequested;
 
-    /// <param name="environment">The variables Monado gets for the layer.</param>
-    /// <param name="notUsed">Why the layer leaves this headset to Windows; null when it drives the display.</param>
-    /// <param name="time">The clock for the display's wait.</param>
     public DirectModeSession(IReadOnlyList<EnvVar> environment, string? notUsed, TimeProvider time)
     {
         Environment = environment;
@@ -60,7 +52,6 @@ public sealed class DirectModeSession : ModuleSession, IDisposable
         timer.Dispose();
     }
 
-    /// <summary>Raises the warning from getting ready (Mirador listens only once it has the session), and stops Monado once the display is late.</summary>
     private void Poll()
     {
         SessionWarning? warning;

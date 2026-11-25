@@ -1,13 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The headset's scenarios, walked against the frame model. A small simulation moves time in 0.1 ms steps; each step
-// runs the display (a counter that increments every 11.111 ms while the display is alive), a simplified display thread
-// and Monado's call pattern
-// (acquire, render, vkQueuePresentKHR, wait for the queue to go idle, wait for the present id with a 2.5-frame
-// timeout). Every model call is followed by check_invariants(), and every acquire that returns nothing is checked to
-// be before the bound.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -44,7 +37,6 @@ constexpr int64_t kMs = 1'000'000;
 constexpr int64_t kRefresh = 11'111'111;
 constexpr int64_t kStep = 100 * kUs;
 
-// One VkDevice: its fence pool, and when the GPU signals each of its fences.
 struct Device {
     std::map<FenceSlot, int64_t> ready_at;
     const int64_t* now;
@@ -72,13 +64,11 @@ struct Sim {
     FrameModel m;
     std::vector<std::string> log;
 
-    // The display.
     bool alive = true;
     uint32_t hw_counter = 40000;
     int64_t hw_qpc = 0;
     int64_t hw_next = kRefresh;
 
-    // The display thread.
     bool thread_on = true;
     bool have_read = false;
     uint32_t last_read = 0;
@@ -96,7 +86,6 @@ struct Sim {
     std::vector<int64_t> present_times;
     bool ever_stopped = false;
 
-    // Monado.
     enum class Phase { Off, Waiting, Acquiring, Rendering, Idling, PresentWaiting };
     Phase phase = Phase::Off;
     SwapchainGen gen = 0;
@@ -113,8 +102,8 @@ struct Sim {
     FrameSeq seq = 0;
     uint64_t id = 0;
     uint64_t next_id = 1;
-    uint64_t frames = 0;       // presented (queued) by Monado
-    uint64_t stop_after = 0;   // 0: keep going
+    uint64_t frames = 0;
+    uint64_t stop_after = 0;
     std::vector<MonadoFrame> history;
     std::set<FrameSeq> shown_before_destroy;
     uint64_t acquire_misses = 0;
@@ -166,7 +155,6 @@ struct Sim {
         }
     }
 
-    // Steps until `done` says so (at most 60 s of simulated time).
     void step_until(const std::function<bool()>& done)
     {
         const int64_t limit = t + 60'000 * kMs;
@@ -176,7 +164,6 @@ struct Sim {
         }
     }
 
-    // Runs until Monado has stopped (stop_after reached), then `tail` more.
     void run_frames(int64_t tail = 3 * kRefresh, const std::function<void()>& each = {})
     {
         const int64_t limit = t + 120'000 * kMs;
@@ -205,7 +192,7 @@ struct Sim {
     {
         if (call) {
             if (t < call->returns) {
-                return; // inside NVAPI
+                return;
             }
             if (!call->left_behind) {
                 m.present_returned(call->seq, call->code, call->returns);
@@ -243,8 +230,6 @@ struct Sim {
             }
             return;
         }
-        // The fence protocol (frame_model.hpp): the wait or status check was marked first; seen and unmarked in one
-        // lock hold.
         if (c->fence != kNoFence) {
             if (!waiting_on) {
                 m.fence_waiting(c->fence, true);
@@ -285,7 +270,7 @@ struct Sim {
                 return;
             }
             phase = Phase::Acquiring;
-            frame_start = next_start; // its pacer's time, not the step's, so the period does not drift
+            frame_start = next_start;
             [[fallthrough]];
         case Phase::Acquiring: {
             const int64_t bound = m.acquire_bound_ns();
@@ -294,7 +279,7 @@ struct Sim {
             check();
             if (!got) {
                 ++acquire_misses;
-                REQUIRE(t < bound); // after the bound an acquire never comes back empty
+                REQUIRE(t < bound);
                 return;
             }
             longest_acquire_wait = std::max(longest_acquire_wait, t - frame_start);
@@ -342,7 +327,6 @@ struct Sim {
         }
     }
 
-    // Monado's teardown in its order: the swapchain, the display thread, the device.
     void teardown()
     {
         phase = Phase::Off;
@@ -368,7 +352,6 @@ struct Sim {
         check();
     }
 
-    // Monado's retry: a new device with its own pool, a new swapchain, a new display thread.
     SwapchainGen retry()
     {
         device = std::make_unique<Device>(&t);
@@ -380,9 +363,6 @@ struct Sim {
         return g;
     }
 
-    // Every frame Monado presented has had its id completed exactly once: on screen now, or ended in a way that
-    // completes it (the model throws on a second completion). Frames destroyed with their device complete nothing,
-    // unless they had gone on screen before. Also checks each live swapchain's record holds its newest completed id.
     void check_every_id_completed_once(bool allow_in_flight = false)
     {
         uint64_t expected = 0;
@@ -409,7 +389,7 @@ struct Sim {
         CHECK(m.ids_completed() == expected);
         for (const auto& [g, id_done] : newest) {
             const uint64_t record = m.completed_present_id(g);
-            CHECK((record == id_done || record == 0)); // 0: that swapchain is gone, its record with it
+            CHECK((record == id_done || record == 0));
         }
         check();
     }
@@ -421,7 +401,7 @@ struct Sim {
     }
 };
 
-} // namespace
+}
 
 TEST_CASE("scenario: normal 90 Hz, 2700 frames")
 {
@@ -459,7 +439,7 @@ TEST_CASE("scenario: a GPU frame late past the refresh")
 
     const FrameModel::Counters c = s.m.counters();
     CHECK(c.presents == 300);
-    CHECK(c.missed == 1); // the refresh it was late for showed the frame before it again
+    CHECK(c.missed == 1);
     CHECK(c.dropped == 0);
     CHECK(c.failed == 0);
     CHECK(s.m.completed_present_id(g) == 300);
@@ -478,7 +458,7 @@ TEST_CASE("scenario: Monado faster than refreshes")
     s.monado_start(g);
     s.run_until(2000 * kMs);
     const FrameModel::Counters running = s.m.counters();
-    CHECK(running.presents + 1 >= running.refreshes); // a new frame for every refresh
+    CHECK(running.presents + 1 >= running.refreshes);
     s.phase = Sim::Phase::Off;
     s.run_until(s.t + 4 * kRefresh);
 
@@ -487,8 +467,8 @@ TEST_CASE("scenario: Monado faster than refreshes")
     CHECK(c.dropped == 0);
     CHECK(c.failed == 0);
     CHECK(c.unconfirmed == 0);
-    CHECK(s.acquire_misses > 0);                         // it had to wait for a back-buffer
-    CHECK(s.longest_acquire_wait <= kRefresh + 1 * kMs); // never longer than a refresh
+    CHECK(s.acquire_misses > 0);
+    CHECK(s.longest_acquire_wait <= kRefresh + 1 * kMs);
     s.check_every_id_completed_once();
 }
 
@@ -502,27 +482,27 @@ TEST_CASE("scenario: link drop, one 400 ms Present, then the counter reset")
     bool back = false;
     int64_t back_at = 0;
     s.run_frames(3 * kRefresh, [&] {
-        if (!down && s.presents_made == 101) { // the long Present has started: the link is down meanwhile
+        if (!down && s.presents_made == 101) {
             REQUIRE(s.call.has_value());
             s.alive = false;
             back_at = s.call->returns;
             down = true;
         }
-        if (down && !back && s.t >= back_at) { // back up, counting again from 0
+        if (down && !back && s.t >= back_at) {
             s.hw_counter = 0;
             s.hw_qpc = s.t;
             s.alive = true;
             s.hw_next = s.t + kRefresh;
             back = true;
         }
-        REQUIRE_FALSE(s.m.flips_stopped()); // 400 ms is shorter than the 600 ms rule
+        REQUIRE_FALSE(s.m.flips_stopped());
     });
 
     const FrameModel::Counters c = s.m.counters();
     CHECK(back);
     CHECK(c.link_drops == 1);
     CHECK(s.logged("link drop"));
-    CHECK(c.dropped == 0); // acquire waited it out within its bound
+    CHECK(c.dropped == 0);
     CHECK(c.failed == 0);
     CHECK(c.unconfirmed == 0);
     CHECK(c.reserved == 0);
@@ -536,19 +516,19 @@ TEST_CASE("scenario: dead display with an outstanding Present")
     Sim s;
     const SwapchainGen g = s.m.add_swapchain();
     s.monado_start(g);
-    s.step_until([&] { return s.presents_made == 101; }); // Present #100 made and returned
+    s.step_until([&] { return s.presents_made == 101; });
     REQUIRE_FALSE(s.call.has_value());
-    s.alive = false; // the display dies right after it
+    s.alive = false;
     const uint64_t presents_at_death = s.presents_made;
     const uint64_t dropped_before = s.m.counters().dropped;
     s.run_until(s.t + 2000 * kMs, [&] {
-        REQUIRE(s.presents_made == presents_at_death); // the outstanding Present stays the only one
+        REQUIRE(s.presents_made == presents_at_death);
     });
     CHECK(s.ever_stopped);
     CHECK(s.m.flips_stopped());
     CHECK(s.logged("flips stopped"));
-    CHECK(s.m.counters().dropped > dropped_before + 50); // Monado ran at its own pace meanwhile
-    CHECK(s.longest_acquire_wait <= 610 * kMs);          // one wait of about the bound, when the display died
+    CHECK(s.m.counters().dropped > dropped_before + 50);
+    CHECK(s.longest_acquire_wait <= 610 * kMs);
     CHECK(s.m.counters().unconfirmed == 0);
 
     s.alive = true;
@@ -567,15 +547,15 @@ TEST_CASE("scenario: dead display without an outstanding Present")
     Sim s;
     const SwapchainGen g = s.m.add_swapchain();
     s.monado_start(g, 100);
-    s.run_frames(500 * kMs); // the app session ends; the last frame stays on screen
+    s.run_frames(500 * kMs);
     s.alive = false;
     s.run_until(s.t + 1000 * kMs);
     CHECK(s.m.flips_stopped());
     const uint64_t presents_at_stop = s.presents_made;
 
-    s.monado_start(g); // a new app session while the display is dead
+    s.monado_start(g);
     s.run_until(s.t + 1000 * kMs);
-    CHECK(s.presents_made == presents_at_stop + 1); // the newest frame is Presented once
+    CHECK(s.presents_made == presents_at_stop + 1);
     CHECK(s.m.counters().dropped > 50);
 
     s.alive = true;
@@ -602,13 +582,12 @@ TEST_CASE("scenario: a non-zero Present")
     CHECK(c.missed <= 1);
     CHECK(c.dropped == 0);
     CHECK(c.presents == 300);
-    // The Present after the failed one waited for the next refresh.
     REQUIRE(s.present_times.size() > 101);
     const int64_t failed_at = s.present_times[100];
     const int64_t next_refresh = (failed_at / kRefresh + 1) * kRefresh;
     CHECK(s.present_times[101] >= next_refresh);
     for (uint32_t b = 0; b < 3; ++b) {
-        CHECK(s.m.buffer_state(b) != BufferState::Reserved); // freed by a later credit
+        CHECK(s.m.buffer_state(b) != BufferState::Reserved);
     }
     CHECK(s.m.completed_present_id(g) == 300);
     s.check_every_id_completed_once();
@@ -620,14 +599,12 @@ TEST_CASE("scenario: a left-behind thread, its return time never written")
     s.present_ns = [](uint64_t n) { return n == 100 ? 3000 * kMs : 50 * kUs; };
     const SwapchainGen g1 = s.m.add_swapchain();
     s.monado_start(g1);
-    s.step_until([&] { return s.presents_made == 101; }); // Present #100 is stuck inside NVAPI
+    s.step_until([&] { return s.presents_made == 101; });
     s.run_until(s.t + 5 * kMs);
     REQUIRE(s.call.has_value());
     const FrameSeq stuck = s.call->seq;
     const int64_t old_exit = s.call->returns;
 
-    // Monado tears down: the join times out after 1 s and the thread is left behind (it will exit when its call
-    // returns, writing nothing); the device goes.
     s.phase = Sim::Phase::Off;
     s.m.remove_swapchain(g1);
     s.check();
@@ -641,15 +618,14 @@ TEST_CASE("scenario: a left-behind thread, its return time never written")
     s.destroy_device();
     CHECK(s.m.frame_end(stuck) == FrameEnd::Destroyed);
 
-    // The retry: a new epoch, which makes no NVAPI call until the old thread is out of its Present.
     const SwapchainGen g2 = s.retry();
     REQUIRE(old_exit > s.t);
     s.monado_start(g2, 200);
     s.run_frames();
 
     const FrameModel::Counters c = s.m.counters();
-    CHECK(c.reserved == 1);    // its back-buffer, after three uncredited refreshes
-    CHECK(c.unconfirmed == 0); // no live frame, no id
+    CHECK(c.reserved == 1);
+    CHECK(c.unconfirmed == 0);
     CHECK(s.logged("not credited"));
     CHECK(s.m.completed_present_id(g1) == 0);
     CHECK(s.m.completed_present_id(g2) == s.history.back().id);
@@ -664,11 +640,11 @@ TEST_CASE("scenario: recreate with oldSwapchain")
     SwapchainGen g2 = 0;
     FrameSeq last_old = 0;
     s.run_until(150 * kRefresh, [&] {
-        if (g2 == 0 && s.frames == 100 && s.phase == Sim::Phase::Idling) { // just presented its 100th frame
+        if (g2 == 0 && s.frames == 100 && s.phase == Sim::Phase::Idling) {
             last_old = s.seq;
-            g2 = s.m.add_swapchain(); // vkCreateSwapchainKHR with oldSwapchain
+            g2 = s.m.add_swapchain();
             s.check();
-            s.m.remove_swapchain(g1); // then the old one is destroyed
+            s.m.remove_swapchain(g1);
             s.check();
             s.gen = g2;
             s.phase = Sim::Phase::Waiting;
@@ -680,7 +656,7 @@ TEST_CASE("scenario: recreate with oldSwapchain")
     s.run_until(s.t + 3 * kRefresh);
 
     CHECK(s.m.frame_end(last_old).has_value());
-    CHECK(s.m.completed_present_id(g1) == 0); // never written after it was destroyed
+    CHECK(s.m.completed_present_id(g1) == 0);
     CHECK(s.m.completed_present_id(g2) == s.history.back().id);
     CHECK(s.frames > 140);
     CHECK(s.m.counters().failed == 0);
@@ -702,7 +678,6 @@ TEST_CASE("scenario: device destroyed during a Present")
     });
     REQUIRE(during != 0);
     CHECK(s.m.frame_end(during) == FrameEnd::Destroyed);
-    // Its Present returned and was credited after the device had gone: on screen, with no frame and no id.
     uint32_t on_screen = 3;
     for (uint32_t b = 0; b < 3; ++b) {
         if (s.m.buffer_state(b) == BufferState::OnScreen) {
@@ -732,7 +707,7 @@ TEST_CASE("scenario: a retry with a new pool")
     for (FenceSlot slot = 0; slot < old->pool.created(); ++slot) {
         old_states.push_back(old->pool.state(slot));
     }
-    std::unique_ptr<Device> keep = std::move(s.device); // the old pool outlives this test's retry, untouched
+    std::unique_ptr<Device> keep = std::move(s.device);
 
     const SwapchainGen g2 = s.retry();
     s.monado_start(g2, 50);
@@ -753,11 +728,10 @@ TEST_CASE("scenario: a 5 s gap with no app session, then acquire at session star
     Sim s;
     const SwapchainGen g = s.m.add_swapchain();
     s.monado_start(g, 100);
-    s.run_frames(5000 * kMs); // no app session: refreshes go on, nothing is credited
+    s.run_frames(5000 * kMs);
     REQUIRE(s.t - s.m.last_credited_ns() > 4900 * kMs);
     REQUIRE(s.t - s.m.last_refresh_ns() < kRefresh);
 
-    // Session start: Monado presents faster than the display at first (no present-wait yet).
     s.present_wait = false;
     s.period = 2 * kMs;
     s.think_ns = 200 * kUs;
@@ -767,8 +741,8 @@ TEST_CASE("scenario: a 5 s gap with no app session, then acquire at session star
     s.monado_start(g, 20);
     s.run_frames();
 
-    CHECK(s.acquire_misses > misses);                    // it had to wait for a back-buffer
-    CHECK(s.m.counters().dropped == 0);                  // and waited instead of dropping
-    CHECK(s.longest_acquire_wait <= kRefresh + 1 * kMs); // for one refresh at most
+    CHECK(s.acquire_misses > misses);
+    CHECK(s.m.counters().dropped == 0);
+    CHECK(s.longest_acquire_wait <= kRefresh + 1 * kMs);
     s.check_every_id_completed_once();
 }

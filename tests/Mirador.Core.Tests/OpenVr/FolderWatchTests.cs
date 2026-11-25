@@ -12,7 +12,6 @@ public sealed class FolderWatchTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
-    /// <summary>Counts <see cref="FolderWatch.Changed"/>, and completes <see cref="Next"/> at each one.</summary>
     private sealed class Counter
     {
         private int count;
@@ -45,7 +44,6 @@ public sealed class FolderWatchTests : IDisposable
         using var watch = new FolderWatch([openvr], Debounce);
         var counter = new Counter(watch);
 
-        // As OpenLamina's installer and SteamVR write it: a temp file, moved over the old one.
         var temp = Path.Combine(openvr, "x.tmp");
         File.WriteAllText(temp, """{"runtime": ["C:\\OpenLamina"]}""");
         File.Move(temp, file, overwrite: true);
@@ -63,7 +61,7 @@ public sealed class FolderWatchTests : IDisposable
         var counter = new Counter(watch);
 
         Directory.CreateDirectory(target);
-        await counter.Next.WaitAsync(EventLimit); // the folder appearing is a change too
+        await counter.Next.WaitAsync(EventLimit);
         await Task.Delay(Quiet);
         counter.Reset();
 
@@ -110,13 +108,11 @@ public sealed class FolderWatchTests : IDisposable
         using var watch = new FolderWatch([openLamina], Debounce);
         var counter = new Counter(watch);
 
-        // Uninstalled: a change.
         Directory.Delete(openLamina, recursive: true);
         await counter.Next.WaitAsync(EventLimit);
         await Task.Delay(Quiet);
         counter.Reset();
 
-        // Installed again: watched again.
         Directory.CreateDirectory(Path.Combine(openLamina, "bin"));
         await counter.Next.WaitAsync(EventLimit);
         await Task.Delay(Quiet);
@@ -132,7 +128,6 @@ public sealed class FolderWatchTests : IDisposable
         Directory.CreateDirectory(openvr);
         var gone = false;
 
-        // The folder goes between the look and the watcher: the watcher can't be made, and nothing throws.
         using var watch = new FolderWatch([openvr], Debounce, log: null, folder =>
         {
             if (!gone && string.Equals(folder, openvr, StringComparison.OrdinalIgnoreCase))
@@ -166,7 +161,6 @@ public sealed class FolderWatchTests : IDisposable
             throw new UnauthorizedAccessException("Access is denied.");
         }, retryBase: TimeSpan.FromMilliseconds(10));
 
-        // 10 + 20 + 40 + 80 ms of pauses: well within the limit.
         var deadline = DateTime.UtcNow + EventLimit;
         while (Volatile.Read(ref tries) < FolderWatch.MaxAttempts && DateTime.UtcNow < deadline)
         {

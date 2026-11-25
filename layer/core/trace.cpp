@@ -25,7 +25,6 @@ void Trace::add(TraceKind kind, int64_t t_ns, uint64_t a, int64_t b) noexcept
             try {
                 on_full_();
             } catch (...) {
-                // A notice only.
             }
         }
         return;
@@ -56,7 +55,6 @@ const Trace::Record& Trace::at(size_t i) const
 Trace::Written Trace::append_csv(const std::wstring& path, size_t newest_at_most)
 {
     std::lock_guard<std::mutex> hold(write_mutex_);
-    // The records finished so far, in order: up to the first one another thread is still writing.
     const size_t held = size();
     size_t end = written_;
     while (end < held && records_[end].kind.load(std::memory_order_acquire) != 0) {
@@ -68,7 +66,7 @@ Trace::Written Trace::append_csv(const std::wstring& path, size_t newest_at_most
     if (from < end) {
         FILE* f = nullptr;
         if (_wfopen_s(&f, path.c_str(), header_written_ ? L"ab" : L"wb") != 0 || f == nullptr) {
-            return out; // the records wait for the next call
+            return out;
         }
         std::setvbuf(f, nullptr, _IOFBF, 1 << 16);
         if (!header_written_) {
@@ -91,4 +89,4 @@ Trace::Written Trace::append_csv(const std::wstring& path, size_t newest_at_most
     return out;
 }
 
-} // namespace nvdm
+}

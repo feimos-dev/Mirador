@@ -130,7 +130,7 @@ public sealed class BuildToolsSetupTests : IDisposable
         Assert.Equal("The administrator prompt was declined, so Visual Studio wasn't changed. Build again to try once more.", problem);
         Assert.StartsWith("Getting the build tools ready first: ", lines[0]);
         var report = await setup.CheckAsync(CancellationToken.None);
-        Assert.True(report.Parts.Skip(1).All(p => p.State == ToolState.Found)); // Git, CMake and vcpkg went in all the same
+        Assert.True(report.Parts.Skip(1).All(p => p.State == ToolState.Found));
     }
 
     [Fact]
@@ -143,12 +143,10 @@ public sealed class BuildToolsSetupTests : IDisposable
 
         Assert.Equal("Visual Studio's installer wants Windows restarted before its new parts can be used: restart Windows, then build again.", problem);
 
-        // The next build, before the restart: no second prompt.
         elevated.Commands.Clear();
         Assert.Equal(problem, await setup.PrepareAsync(lines.Add, CancellationToken.None));
         Assert.Empty(elevated.Commands);
 
-        // Nor when a tool is missing too: the tool is installed, Visual Studio left alone.
         Directory.Delete(dir.File("tools", "git"), recursive: true);
         Assert.Equal(problem, await setup.PrepareAsync(lines.Add, CancellationToken.None));
         Assert.Empty(elevated.Commands);
@@ -185,7 +183,7 @@ public sealed class BuildToolsSetupTests : IDisposable
         release.SetResult();
 
         Assert.All(await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10)), p => Assert.StartsWith("The administrator prompt was declined", p));
-        Assert.Single(runner.Commands, c => c.Arguments.Contains("clone")); // the second found vcpkg there
+        Assert.Single(runner.Commands, c => c.Arguments.Contains("clone"));
     }
 
     [Fact]

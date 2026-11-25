@@ -4,7 +4,6 @@ namespace Mirador.Core.Tests;
 
 public class TextLogTests
 {
-    /// <summary>Reads a log that may still be open for writing.</summary>
     private static string[] ReadLines(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -21,7 +20,6 @@ public class TextLogTests
         log.Write("one");
         log.Write("two");
 
-        // The log is still open; each line was flushed as it was written.
         Assert.Equal(["one", "two"], ReadLines(dir.File("a.log")));
     }
 
@@ -59,7 +57,7 @@ public class TextLogTests
         log.Dispose();
 
         Assert.Equal("Zoë — ok\r\n", File.ReadAllText(dir.File("a.log"), Encoding.UTF8));
-        Assert.Equal(Encoding.UTF8.GetBytes("Zoë — ok\r\n"), File.ReadAllBytes(dir.File("a.log"))); // no byte order mark
+        Assert.Equal(Encoding.UTF8.GetBytes("Zoë — ok\r\n"), File.ReadAllBytes(dir.File("a.log")));
     }
 
     [Fact]
@@ -71,18 +69,18 @@ public class TextLogTests
 
         for (var i = 10; i < 40; i++)
         {
-            log.Write($"line {i}"); // 7 bytes plus the line break: 11 lines fit in 100
+            log.Write($"line {i}");
         }
 
         var current = ReadLines(path);
         var rolled = ReadLines(path + ".1");
         Assert.Equal("line 39", current[^1]);
         Assert.NotEmpty(rolled);
-        Assert.Equal(current[0], $"line {int.Parse(rolled[^1][5..]) + 1}"); // no line lost between the two files
+        Assert.Equal(current[0], $"line {int.Parse(rolled[^1][5..]) + 1}");
         Assert.False(File.Exists(path + ".2"));
         Assert.True(new FileInfo(path).Length <= 100);
         Assert.True(new FileInfo(path + ".1").Length <= 100);
-        Assert.Equal(30, log.Tail.Count); // the tail is not cut by the roll
+        Assert.Equal(30, log.Tail.Count);
     }
 
     [Fact]
@@ -92,9 +90,9 @@ public class TextLogTests
         var path = dir.File("a.log");
         using var log = new TextLog(path, maxBytes: 20);
 
-        log.Write("aaaaaaaaa"); // 11 bytes with the line break
-        log.Write("bbbbbbbbb"); // 22 would be over the limit: rolls, .1 holds the a line
-        log.Write("ccccccccc"); // rolls again, .1 holds the b line
+        log.Write("aaaaaaaaa");
+        log.Write("bbbbbbbbb");
+        log.Write("ccccccccc");
 
         Assert.Equal(["bbbbbbbbb"], ReadLines(path + ".1"));
         Assert.Equal(["ccccccccc"], ReadLines(path));
@@ -108,15 +106,14 @@ public class TextLogTests
         using var log = new TextLog(path, maxBytes: 100);
         log.Write(new string('a', 60));
 
-        // Like Get-Content -Wait: open for reading, sharing read and write but not delete, so it can't be renamed.
         using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
-            log.Write(new string('b', 60)); // over the limit, but the roll fails: the line goes to the same file
+            log.Write(new string('b', 60));
             Assert.Equal([new string('a', 60), new string('b', 60)], ReadLines(path));
             Assert.False(File.Exists(path + ".1"));
         }
 
-        log.Write(new string('c', 60)); // grown by more than a tenth of the limit since: rolls, now that it can
+        log.Write(new string('c', 60));
         Assert.Equal([new string('c', 60)], ReadLines(path));
         Assert.Equal([new string('a', 60), new string('b', 60)], ReadLines(path + ".1"));
     }
@@ -182,12 +179,12 @@ public class TextLogTests
         var path = dir.File("a.log");
         using (var first = new TextLog(path, maxBytes: 30))
         {
-            first.Write("aaaaaaaaa"); // 11 bytes
-            first.Write("bbbbbbbbb"); // 22 bytes
+            first.Write("aaaaaaaaa");
+            first.Write("bbbbbbbbb");
         }
 
         using var second = new TextLog(path, maxBytes: 30);
-        second.Write("ccccccccc"); // 33 would be over the limit: rolls first
+        second.Write("ccccccccc");
 
         Assert.Equal(["aaaaaaaaa", "bbbbbbbbb"], ReadLines(path + ".1"));
         Assert.Equal(["ccccccccc"], ReadLines(path));

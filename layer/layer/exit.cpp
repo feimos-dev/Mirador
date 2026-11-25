@@ -12,8 +12,6 @@ namespace {
 
 using Hook = std::function<void()>;
 
-// The hook, shared so the helper thread keeps its copy alive if the hook is replaced meanwhile. Made at first use
-// and never destroyed: nothing here runs at process exit.
 struct HookSlot {
     std::mutex mutex;
     std::shared_ptr<const Hook> hook;
@@ -38,12 +36,11 @@ DWORD WINAPI run_hook(LPVOID param)
     try {
         (**hook)();
     } catch (...) {
-        // Nothing may leave a thread procedure; the exit goes on.
     }
     return 0;
 }
 
-} // namespace
+}
 
 void set_console_stop_hook(std::function<void()> hook)
 {
@@ -70,19 +67,16 @@ BOOL handle_console_event(DWORD event)
     if (!hook) {
         return FALSE;
     }
-    // The hook runs on its own thread so that this one can give up after kConsoleHookWaitMs. The thread is left
-    // running if it hangs: the default handler ends the process right after.
     auto handed = std::make_unique<std::shared_ptr<const Hook>>(std::move(hook));
     HANDLE thread = CreateThread(nullptr, 0, run_hook, handed.get(), 0, nullptr);
     if (thread == nullptr) {
-        // No thread to be had: run it here; the hook bounds its own wait.
         try {
             (**handed)();
         } catch (...) {
         }
         return FALSE;
     }
-    handed.release(); // the thread owns it now
+    handed.release();
     WaitForSingleObject(thread, kConsoleHookWaitMs);
     CloseHandle(thread);
     return FALSE;
@@ -117,9 +111,9 @@ bool console_handler_installed()
 void on_process_detach(void* reserved)
 {
     if (reserved != nullptr) {
-        return; // process exit
+        return;
     }
     remove_console_handler();
 }
 
-} // namespace dvl
+}

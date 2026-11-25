@@ -25,7 +25,6 @@ public sealed class NvidiaDirectModeTests : IDisposable
     private IReadOnlyList<MonitorEntry> monitors = [];
     private bool monadoRuns;
 
-    /// <summary>What the display check writes and its exit code.</summary>
     private (string[] Lines, int ExitCode) check = (["PASS: 1800 flips, 0 missed"], 0);
 
     public NvidiaDirectModeTests()

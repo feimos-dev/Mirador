@@ -5,7 +5,6 @@ namespace Mirador.Core.Tests.Diagnostics;
 
 public class UpdateCheckTests
 {
-    // Trimmed from a real answer of api.github.com/repos/{owner}/{repo}/releases/latest.
     private const string Latest = """
         {
           "url": "https://api.github.com/repos/feimos-dev/mirador/releases/123",
@@ -85,7 +84,6 @@ public class UpdateCheckTests
         Assert.Equal("https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SHA256SUMS.txt.sig", release?.SignatureUrl);
         Assert.Equal("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", release?.InstallerSha256);
 
-        // A release from before signed checksums has neither.
         Assert.Null(UpdateCheck.ParseLatest(WithAsset)?.SumsUrl);
         Assert.Null(UpdateCheck.ParseLatest(WithAsset)?.SignatureUrl);
     }
@@ -95,7 +93,6 @@ public class UpdateCheckTests
     {
         var json = WithAsset.Replace("\"digest\": \"sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789\"", "\"digest\": null");
 
-        // Without a digest the zip can't be checked, so neither part is offered.
         Assert.Equal(new Release("v2026.11.20", "https://github.com/feimos-dev/OpenLamina/releases/tag/v2026.11.20", null, null), UpdateCheck.ParseLatest(json));
     }
 

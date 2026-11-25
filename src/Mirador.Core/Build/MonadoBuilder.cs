@@ -5,42 +5,18 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.Core.Build;
 
-/// <summary>How a build ended.</summary>
-/// <param name="Ok">Whether the build (not the checks) passed and the profile now runs it.</param>
-/// <param name="Message">What happened, in plain words.</param>
-/// <param name="Commit">The commit built, when the source was fetched.</param>
-/// <param name="Checks">The checks of a build that passed; null otherwise.</param>
-/// <param name="Log">The build's log file.</param>
 public sealed record BuildOutcome(bool Ok, string Message, string? Commit, BuildCheckResult? Checks, string Log);
 
-/// <summary>
-/// Builds a branch profile's Monado: clones or pulls the branch into
-/// <c>Builds\&lt;profile&gt;\src</c>, builds it in <c>…\build</c> with Mirador's recipe and installs it in
-/// <c>…\install</c>, then runs the checks. The last good install stays until a new build passes; the checks only warn
-/// (a build cancelled during them stays: it built).
-/// Each build's log is kept in <c>…\logs</c>. One build at a time per profile.
-/// </summary>
-/// <param name="prepareTools">
-/// Gets the build tools ready before a build starts (<see cref="BuildToolsSetup.PrepareAsync"/>: what is missing is
-/// installed, its lines in the build's log): null when they are, else why not. Null: not done (the recipe then finds
-/// its tools itself, as on CI).
-/// </param>
 public sealed class MonadoBuilder(
     ICommandRunner runner, MonadoLocator locator, BuildTools tools, BuildChecks checks, TimeProvider time,
     Func<Action<string>, CancellationToken, Task<string?>>? prepareTools = null)
 {
-    /// <summary>How many build logs are kept per profile.</summary>
     public const int KeptLogs = 10;
 
-    /// <summary>
-    /// The recipe's exit code when a build tool is missing or can't be used (<c>tools\build-monado.ps1</c>), before it
-    /// builds anything.
-    /// </summary>
     public const int ToolsExitCode = 3;
 
     private readonly HashSet<string> building = [];
 
-    /// <summary>Whether <paramref name="profileId"/> is being built now.</summary>
     public bool IsBuilding(string profileId)
     {
         lock (building)
@@ -49,18 +25,12 @@ public sealed class MonadoBuilder(
         }
     }
 
-    /// <summary>The newest build log of <paramref name="profileId"/>, or null.</summary>
     public string? LastLog(string profileId)
     {
         var logs = Path.Combine(locator.BranchDir(profileId), "logs");
         return Directory.Exists(logs) ? Directory.GetFiles(logs, "build-*.log").OrderDescending(StringComparer.Ordinal).FirstOrDefault() : null;
     }
 
-    /// <summary>
-    /// Fetches <paramref name="profile"/>'s branch and builds it, passing every line to <paramref name="onLine"/>.
-    /// Cancelling ends the build and keeps the last good install.
-    /// </summary>
-    /// <exception cref="OperationCanceledException">The build was cancelled; the last good install is untouched.</exception>
     public async Task<BuildOutcome> BuildAsync(Profile profile, Action<string> onLine, CancellationToken ct)
     {
         var source = profile.Monado;
@@ -119,7 +89,6 @@ public sealed class MonadoBuilder(
             return new BuildOutcome(false, problem, null, null, logPath);
         }
 
-        // 0. The tools first, installed when missing: without them the recipe would stop after the fetch.
         if (prepareTools is not null && await prepareTools(Line, ct).ConfigureAwait(false) is { } notReady)
         {
             Line(notReady);
@@ -128,7 +97,6 @@ public sealed class MonadoBuilder(
 
         Line($"Building {source.Url} {source.Ref} for this profile.");
 
-        // 1. The source: fetched shallow, the branch's tip checked out, anything left from an earlier build removed.
         var commit = await FetchAsync(src, source, Line, ct).ConfigureAwait(false);
         if (commit is null)
         {
@@ -136,8 +104,6 @@ public sealed class MonadoBuilder(
             return new BuildOutcome(false, fetchFailed, null, null, logPath);
         }
 
-        // 2. The recipe, into a new install folder: the last good one stays until this one is built. The configure cache
-        //    starts afresh, so an option taken out of the profile (or another fork's) doesn't linger; objects are kept.
         DeleteFolder(fresh);
         Cleanup.TryDelete(Path.Combine(build, "CMakeCache.txt"));
         var optionsFile = Path.Combine(root, "cmake-options.txt");
@@ -179,8 +145,6 @@ public sealed class MonadoBuilder(
             return new BuildOutcome(false, failed, commit, null, logPath);
         }
 
-        // 3. The new install replaces the last one: moved aside whole first, which fails cleanly (and keeps it) while
-        //    Monado runs from it, where deleting it would stop half way.
         var old = install + ".old";
         try
         {
@@ -206,7 +170,6 @@ public sealed class MonadoBuilder(
 
         TryDeleteFolder(old);
 
-        // 4. The checks: they warn, they don't undo the build.
         var result = await checks.RunAsync(install, build, tools.Ctest, commit, Line, ct).ConfigureAwait(false);
         result.Save(install);
         var done = $"Built {commit[..Math.Min(10, commit.Length)]}. {result.Summary()}";
@@ -214,12 +177,10 @@ public sealed class MonadoBuilder(
         return new BuildOutcome(true, done, commit, result, logPath);
     }
 
-    /// <summary>The commit checked out, or null when git failed.</summary>
     private async Task<string?> FetchAsync(string src, BuildSource source, Action<string> line, CancellationToken ct)
     {
         Directory.CreateDirectory(src);
 
-        // Never a prompt for a name or password (a private repository just fails), and no helper of the user's asked.
         var environment = new Dictionary<string, string?> { ["GIT_TERMINAL_PROMPT"] = "0", ["GCM_INTERACTIVE"] = "never" };
         async Task<int> Git(params string[] args)
         {
@@ -237,7 +198,6 @@ public sealed class MonadoBuilder(
 
         RemoveStaleLocks(Path.Combine(src, ".git"), line);
 
-        // The URL is set every time: the profile's link may have changed since the last build.
         await Git("remote", "remove", "origin").ConfigureAwait(false);
         if (await Git("remote", "add", "origin", source.Url!).ConfigureAwait(false) != 0
             || await Git("fetch", "--depth", "1", "--no-tags", "origin", source.Ref!).ConfigureAwait(false) != 0
@@ -262,11 +222,6 @@ public sealed class MonadoBuilder(
         return code == 0 ? commit : null;
     }
 
-    /// <summary>
-    /// The lock files a git that was ended mid-command left (a cancelled build kills the process tree, so git can't
-    /// remove its own): with one there, every later fetch or checkout of the profile fails. Only one build of a profile
-    /// runs at a time, so no git of Mirador's holds them now.
-    /// </summary>
     internal static void RemoveStaleLocks(string gitDir, Action<string> line)
     {
         foreach (var name in new[] { "index.lock", "shallow.lock", "config.lock", "HEAD.lock", "FETCH_HEAD.lock", "packed-refs.lock" })
@@ -309,7 +264,6 @@ public sealed class MonadoBuilder(
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // A program the build started may still be letting go of it; the next build clears it.
         }
     }
 

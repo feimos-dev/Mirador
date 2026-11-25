@@ -4,22 +4,12 @@ using Mirador.Ipc;
 
 namespace Mirador.Pimax;
 
-/// <summary>
-/// What the Dream Air needs on this PC, checked before each Start and for the first-run checks and Home: Pimax Play's
-/// eye tracking runtime and eye geometry, SteamVR's Lighthouse driver and the headset itself. Each
-/// run looks again, so a moved or missing file after an update is found.
-/// </summary>
-/// <param name="reg">The registry, to find Pimax Play.</param>
-/// <param name="usb">The USB devices, to find the headset's parts.</param>
-/// <param name="fileExists">Whether a file is there.</param>
-/// <param name="steamVrDir">SteamVR's folder, or null when it isn't installed (<see cref="FindSteamVr"/>).</param>
 public sealed class DreamAirChecks(
     IRegistryReader reg, IUsbDevices usb, Func<string, bool> fileExists, Func<string?> steamVrDir)
 {
     private const string InstallPimax = "Install Pimax Play: Mirador uses its eye tracking runtime.";
     private const string RepairPimax = "Repair or update Pimax Play.";
 
-    /// <summary>The headset's parts, in the order they are named when missing.</summary>
     private static readonly (UsbId Id, string Name)[] Parts =
     [
         (DreamAirIds.Board, "headset board"),
@@ -27,15 +17,8 @@ public sealed class DreamAirChecks(
         (DreamAirIds.Receiver, "Lighthouse receiver"),
     ];
 
-    /// <summary>
-    /// Runs every check, in this order: Pimax Play, Eye geometry, SteamVR, Headset. A missing headset is a warning;
-    /// everything else that fails is an error, which stops a Start. Never throws for a check that fails. Blocks while
-    /// Windows lists the USB devices (up to 5 s), so call it off the UI thread.
-    /// </summary>
-    /// <param name="blobVariant">The eye geometry variant to look for, one of <see cref="EyeBlobVariants.All"/>; any other is an error.</param>
     public IReadOnlyList<CheckResult> Run(string blobVariant) => Run(blobVariant, PimaxModels.DreamAir);
 
-    /// <summary>The checks <paramref name="model"/> needs: its eye geometry and SteamVR only when it has those steps.</summary>
     public IReadOnlyList<CheckResult> Run(string blobVariant, PimaxModel model)
     {
         var pimax = PimaxInstall.Locate(reg);
@@ -54,21 +37,12 @@ public sealed class DreamAirChecks(
         return results;
     }
 
-    /// <summary>
-    /// SteamVR's folder on this PC, found as Monado finds it (<see cref="SteamVr.FindInstall"/>), or null. Never
-    /// throws: Steam's <c>libraryfolders.vdf</c> reads as missing while Steam holds it open.
-    /// </summary>
     public static string? FindSteamVr() =>
         SteamVr.FindInstall(
             SteamVr.SteamPathFromRegistry(), Environment.GetEnvironmentVariable("STEAMVR_PATH"), ReadTextOrNull, Directory.Exists);
 
-    /// <summary>
-    /// The file's text; null when it is missing or can't be read. A file another program holds open (Steam may be
-    /// writing it) is tried three times, 100 ms apart, so that a Start isn't refused for a moment's write.
-    /// </summary>
     internal static string? ReadTextOrNull(string path) => ReadTextOrNull(path, Thread.Sleep);
 
-    /// <summary>For tests: <paramref name="sleep"/> stands in for the wait between tries.</summary>
     internal static string? ReadTextOrNull(string path, Action<TimeSpan> sleep)
     {
         const int Tries = 3;
@@ -113,7 +87,6 @@ public sealed class DreamAirChecks(
         const string Label = "Eye geometry";
         if (!EyeBlobVariants.All.Contains(variant))
         {
-            // dreamair.json edited by hand, or written by a newer Mirador.
             return new(Label, StatusLevel.Error, $"Mirador doesn't know the eye geometry variant {variant}.", "Pick your headset's variant in Profiles.");
         }
 
@@ -158,7 +131,6 @@ public sealed class DreamAirChecks(
             return new(Label, StatusLevel.Warning, e.Message);
         }
 
-        // The board of the model; the eye tracker and Lighthouse receiver only for a model with those steps.
         (UsbId Id, string Name)[] parts =
         [
             (model.Board, "headset board"),

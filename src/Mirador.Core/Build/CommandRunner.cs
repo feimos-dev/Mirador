@@ -2,30 +2,17 @@ using System.Diagnostics;
 
 namespace Mirador.Core.Build;
 
-/// <summary>A command Mirador runs to build or check Monado: a program, its arguments, and where.</summary>
-/// <param name="FileName">The program: a full path, or a name found on <c>PATH</c>.</param>
-/// <param name="Arguments">Its arguments, each passed as one (no shell, no quoting to get wrong).</param>
-/// <param name="WorkingDirectory">Where it runs; null for Mirador's own.</param>
-/// <param name="Environment">Variables to set (a null value removes one), on top of Mirador's own environment.</param>
 public sealed record CommandSpec(
     string FileName,
     IReadOnlyList<string> Arguments,
     string? WorkingDirectory = null,
     IReadOnlyDictionary<string, string?>? Environment = null);
 
-/// <summary>Runs build and check commands; the seam that lets the builder and the checks be tested without them.</summary>
 public interface ICommandRunner
 {
-    /// <summary>
-    /// Runs <paramref name="spec"/> to its end, passing each line it writes (output and errors alike) to
-    /// <paramref name="onLine"/>, and returns its exit code. Cancelling ends it and everything it started.
-    /// </summary>
-    /// <exception cref="MiradorException">The program couldn't be started.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the program has been ended.</exception>
     Task<int> RunAsync(CommandSpec spec, Action<string> onLine, CancellationToken ct);
 }
 
-/// <summary>Runs commands through <see cref="Process"/>, with no window (<c>CREATE_NO_WINDOW</c>) and their output read.</summary>
 public sealed class CommandRunner : ICommandRunner
 {
     public async Task<int> RunAsync(CommandSpec spec, Action<string> onLine, CancellationToken ct)
@@ -72,7 +59,6 @@ public sealed class CommandRunner : ICommandRunner
             throw new MiradorException($"{Path.GetFileName(spec.FileName)} couldn't be started: {e.Message.TrimEnd('.')}.");
         }
 
-        // Nothing is ever typed into a build: a command that asks for input gets end of input instead of waiting.
         process.StandardInput.Close();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -88,13 +74,11 @@ public sealed class CommandRunner : ICommandRunner
             }
             catch (InvalidOperationException)
             {
-                // It ended meanwhile.
             }
 
             throw;
         }
 
-        // WaitForExitAsync returns once the output is read to its end too.
         return process.ExitCode;
 
         void Deliver(string? line)

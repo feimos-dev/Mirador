@@ -21,7 +21,7 @@ public class VdfTests
         var root = Vdf.Parse("\"b\" \"1\" \"a\" \"2\" \"b\" \"3\"")!;
 
         Assert.Equal(["b", "a", "b"], root.Members.Select(m => m.Key));
-        Assert.Equal("1", root.Get("b")!.Text); // the first one answers
+        Assert.Equal("1", root.Get("b")!.Text);
     }
 
     [Fact]
@@ -83,16 +83,16 @@ public class VdfTests
     }
 
     [Theory]
-    [InlineData("\"a\"")] // key with no value
-    [InlineData("\"a\" \"unterminated")] // string never closes
-    [InlineData("\"a\" \"ends in a backslash\\")] // escape at the end
-    [InlineData("\"a\" {")] // object never closes
-    [InlineData("\"a\" { \"b\" \"1\"")] // object never closes, after a member
-    [InlineData("\"a\" \"1\" }")] // closing brace with nothing open
-    [InlineData("{ \"a\" \"1\" }")] // object with no key
-    [InlineData("a \"1\"")] // unquoted key
-    [InlineData("\"a\" 1")] // unquoted value
-    [InlineData("\"a\" { \"b\" } ")] // key inside an object with no value
+    [InlineData("\"a\"")]
+    [InlineData("\"a\" \"unterminated")]
+    [InlineData("\"a\" \"ends in a backslash\\")]
+    [InlineData("\"a\" {")]
+    [InlineData("\"a\" { \"b\" \"1\"")]
+    [InlineData("\"a\" \"1\" }")]
+    [InlineData("{ \"a\" \"1\" }")]
+    [InlineData("a \"1\"")]
+    [InlineData("\"a\" 1")]
+    [InlineData("\"a\" { \"b\" } ")]
     public void Malformed_text_gives_null(string text)
     {
         Assert.Null(Vdf.Parse(text));

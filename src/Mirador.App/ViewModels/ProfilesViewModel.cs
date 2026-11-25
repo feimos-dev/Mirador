@@ -12,25 +12,21 @@ using Mirador.Pimax;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>A headset choice in the profile editor's Windows tools; a null id is "None".</summary>
 public sealed record HeadsetItem(string? Id, string Name)
 {
     public override string ToString() => Name;
 }
 
-/// <summary>A direct-mode layer choice in the profile editor's Windows tools.</summary>
 public sealed record DirectModeItem(DirectModeKind Kind, string Name)
 {
     public override string ToString() => Name;
 }
 
-/// <summary>An eye tracker variant choice in the profile editor; a null id is Automatic.</summary>
 public sealed record EyeVariantItem(string? Id, string Name)
 {
     public override string ToString() => Name;
 }
 
-/// <summary>One extra environment variable in the editor.</summary>
 public sealed partial class EnvRow : ObservableObject
 {
     [ObservableProperty]
@@ -40,17 +36,12 @@ public sealed partial class EnvRow : ObservableObject
     public partial string Value { get; set; } = "";
 }
 
-/// <summary>
-/// The Profiles page: the list (add, duplicate, rename, delete) and the editor of the selected profile, which saves
-/// only a profile without problems. While the editor holds unsaved changes the list is locked, so nothing is lost.
-/// </summary>
 public sealed partial class ProfilesViewModel : ObservableObject
 {
     private readonly AppHost host;
     private Profile? editing;
     private bool loading;
 
-    /// <summary>The profile's "Lighthouse base stations" as the user set it; null while untouched (it follows the profile).</summary>
     private bool? lighthouse;
 
     public ProfilesViewModel(AppHost host)
@@ -96,19 +87,12 @@ public sealed partial class ProfilesViewModel : ObservableObject
         };
     }
 
-    /// <summary>The picker's items: the profiles, then <see cref="AddItem"/>.</summary>
     public ObservableCollection<ProfileItem> Profiles { get; } = [];
 
-    /// <summary>The picker's last item, which adds a profile instead of picking one.</summary>
     public static readonly ProfileItem AddItem = new("", "Add a profile…");
 
-    /// <summary>The picker card's description.</summary>
     public string PickerDescription => IsDirty ? "Save or revert to pick another." : "";
 
-    /// <summary>
-    /// Whether the picked profile can be deleted: not with unsaved changes, not the last one, not the one Monado runs
-    /// with now, and not while its branch is being built (the build writes into the folder the delete removes).
-    /// </summary>
     public bool CanDelete =>
         !IsDirty
         && Selected is { } selected && selected != AddItem
@@ -118,13 +102,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     private bool IsBuilding(string profileId) => host.Builds.RunOf(profileId) is { Outcome: null, Cancelled: false };
 
-    /// <summary>The build card of a branch profile.</summary>
     public BuildViewModel Build { get; }
 
-    /// <summary>"Verify build for Windows".</summary>
     public VerifyViewModel Verify { get; }
 
-    /// <summary>The card of Mirador's Monado: installed, newest, Update, Roll back.</summary>
     public MiradorMonadoViewModel MiradorMonado { get; }
 
     public ObservableCollection<HeadsetItem> Headsets { get; } = [];
@@ -151,35 +132,23 @@ public sealed partial class ProfilesViewModel : ObservableObject
     [ObservableProperty]
     public partial EyeVariantItem? EyeVariant { get; set; }
 
-    /// <summary>Whether the eye tracker variant card shows: for the Pimax headset type.</summary>
     public bool ShowsEyeVariant => Headset?.Id == PimaxModule.ModuleId;
 
     [ObservableProperty]
     public partial DirectModeItem? DirectMode { get; set; }
 
-    /// <summary>
-    /// The "Monado" drop-down: 0 Mirador's Monado, 1 build upstream main, 2 build from a
-    /// link, 3 a build folder.
-    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonadoFromFolder), nameof(MonadoFromLink), nameof(ShowBranchCard), nameof(RunAsAdministratorDescription))]
     public partial int MonadoSource { get; set; }
 
-    /// <summary>The pasted link of a branch or merge request (or the repository's URL).</summary>
     [ObservableProperty]
     public partial string MonadoLink { get; set; } = "";
 
-    /// <summary>The branch or ref to build; filled in from <see cref="MonadoLink"/>, and picked from <see cref="Branches"/>.</summary>
     [ObservableProperty]
     public partial string MonadoBranch { get; set; } = "";
 
-    /// <summary>The branches of the repository the link names, for the "Branch" drop-down; empty until listed.</summary>
     public ObservableCollection<string> Branches { get; } = [];
 
-    /// <summary>
-    /// The drop-down's pick: copied into <see cref="MonadoBranch"/> when it is a branch. The drop-down sets it to null
-    /// while its list is emptied, which must not empty the profile's branch.
-    /// </summary>
     [ObservableProperty]
     public partial string? SelectedBranch { get; set; }
 
@@ -191,19 +160,15 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the "Branch" drop-down shows: a repository link whose repository has two branches or more.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowBranchCard))]
     public partial bool ShowBranches { get; set; }
 
-    /// <summary>Whether the "Branch" card shows: only while the source is a link.</summary>
     public bool ShowBranchCard => ShowBranches && MonadoFromLink;
 
-    /// <summary>Whether the branches are being listed (a ring by the link).</summary>
     [ObservableProperty]
     public partial bool IsListingBranches { get; set; }
 
-    /// <summary>Why the branches couldn't be listed, shown under the link; null otherwise.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasBranchListProblem))]
     public partial string? BranchListProblem { get; set; }
@@ -214,20 +179,13 @@ public sealed partial class ProfilesViewModel : ObservableObject
     private string? listingUrl;
     private BranchOffer? branchOffer;
 
-    /// <summary>The branches offered for the link, listed once per link.</summary>
     private BranchOffer Offer => branchOffer ??= new BranchOffer(() => host.Tools.Git, new CommandRunner());
 
-    /// <summary>
-    /// The profile's "Run as administrator": for Mirador's Monado the user's
-    /// consent (one UAC prompt, at Save) is enough; a branch or build folder also needs its build approved.
-    /// </summary>
     [ObservableProperty]
     public partial bool RunAsAdministrator { get; set; }
 
-    /// <summary>False for a standard account, which has no administrator token to run Monado with.</summary>
     public bool CanRunAsAdministrator { get; } = !SafeIsStandardAccount();
 
-    /// <summary>The toggle's description: why the saved profile can't be approved, when it can't; else what the switch does.</summary>
     public string RunAsAdministratorDescription
     {
         get
@@ -244,7 +202,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
             var text = MonadoSource == MiradorSource
                 ? "Gives Monado realtime GPU priority."
-                : "Only for a branch you trust: it gets full control of your PC.";
+                : "Only for a branch you trust.";
             return CanRunAsAdministrator ? text : $"{text} Needs an administrator account.";
         }
     }
@@ -261,21 +219,17 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the saved profile is approved as it is (its build and its variables): the toggle shows a check.</summary>
     [ObservableProperty]
     public partial bool IsApproved { get; set; }
 
-    /// <summary>Whether the saved profile, run as administrator, has an approval of its build, and the build differs from it now.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RunAsAdministratorDescription))]
     public partial bool BuildChanged { get; set; }
 
-    /// <summary>Why the saved profile, run as administrator, can't be approved; null when it can, or needs no approval.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RunAsAdministratorDescription))]
     public partial string? ApprovalBlocked { get; set; }
 
-    /// <summary>Extra CMake options for a branch, one per line or separated by spaces.</summary>
     [ObservableProperty]
     public partial string MonadoOptions { get; set; } = "";
 
@@ -291,7 +245,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial bool HasProblems { get; set; }
 
-    /// <summary>The problems, one per line, for the page's message.</summary>
     public string ProblemsText => string.Join(Environment.NewLine, Problems);
 
     [ObservableProperty]
@@ -311,10 +264,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
     private const int LinkSource = 2;
     private const int FolderSource = 3;
 
-    /// <summary>
-    /// The "Lighthouse base stations" toggle: the user's choice, else whether the headset and the variables being edited
-    /// use the base stations (so it follows them until it is flipped). Flipping it makes the choice the user's.
-    /// </summary>
     public bool UsesBaseStations
     {
         get => lighthouse ?? Edited().UsesBaseStations(HeadsetUsesLighthouse());
@@ -330,12 +279,10 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether another profile may be picked: not while the editor holds unsaved changes.</summary>
     public bool CanSwitch => !IsDirty;
 
     public bool HasMessage => Message is not null;
 
-    /// <summary>The message bar was closed.</summary>
     public void DismissMessage() => Message = null;
 
     public void Attach()
@@ -350,13 +297,12 @@ public sealed partial class ProfilesViewModel : ObservableObject
         MiradorMonado.MonadoRuns = IsRunning;
         if (!IsDirty)
         {
-            LoadList(keep: Selected?.Id); // unsaved edits stay as they were left
+            LoadList(keep: Selected?.Id);
         }
     }
 
     public void Detach()
     {
-        // The list stays for a return to the page (it is kept in the cache); only a listing under way stops.
         CancelListing();
         host.Session.Changed -= OnSessionChanged;
         host.Builds.Changed -= OnBuildsChanged;
@@ -364,10 +310,8 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Detach();
     }
 
-    // A build started or ended: Delete follows it.
     private void OnBuildsChanged(string profileId) => App.Current.Ui.TryEnqueue(() => OnPropertyChanged(nameof(CanDelete)));
 
-    // The profile's build ended or its approval did: the approval card follows it.
     private void OnBuildStateChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(BuildViewModel.IsBuilding) or nameof(BuildViewModel.IsApproving))
@@ -376,7 +320,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>A name no profile has yet: <paramref name="wanted"/>, else with 2, 3, … after it.</summary>
     public string FreeName(string wanted)
     {
         var names = Profiles.Where(p => p != AddItem).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -395,7 +338,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Deletes the selected profile; the page asked first. The consent goes with the last profile that needed it.</summary>
     public async Task DeleteAsync()
     {
         var id = Selected!.Id;
@@ -409,8 +351,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         {
             Message = await TakeBackUnneededAsync();
 
-            // What was the profile's alone goes with it: its branch's source, build and install (often gigabytes),
-            // and its Verify result.
             _ = Task.Run(() => RemoveLeftovers(id));
         }
     }
@@ -421,8 +361,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         {
             if (host.Locator.BuildsRoot is not null && host.Locator.BranchDir(profileId) is var dir && Directory.Exists(dir))
             {
-                // Git keeps its objects read-only, which a recursive delete refuses: clear that first. Links in the
-                // tree aren't followed (the enumeration doesn't recurse into them), and a delete removes the link only.
                 foreach (var file in Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
                 {
                     File.SetAttributes(file, FileAttributes.Normal);
@@ -435,7 +373,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
         catch (DirectoryNotFoundException)
         {
-            // Already gone.
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -443,7 +380,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>"Add a profile…" was picked: adds one and picks it, or picks the one before again when adding failed.</summary>
     private async Task AddFromPickerAsync()
     {
         var before = editing?.Id;
@@ -455,8 +391,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     private async Task<bool> AddAsync()
     {
-        // New profiles start with no headset module, unless a headset a module knows is plugged in.
-        // Listing the USB devices is a WMI query (up to seconds): off the UI thread.
         string? module = null;
         try
         {
@@ -465,7 +399,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
         catch (Exception e)
         {
-            // The devices can't be listed: no module.
             AppLog.Write("Couldn't list the USB devices for a new profile", e);
         }
 
@@ -513,15 +446,9 @@ public sealed partial class ProfilesViewModel : ObservableObject
             return;
         }
 
-        // "Run as administrator" needs the user's consent: Windows asks once, here. Without it the profile runs as you.
         string? problem = null;
-        // Only the installed copy asks: the helper starts Monado as administrator for it alone, so a consent recorded
-        // from another copy would buy nothing (Home says why this copy runs as you).
         var needsConsent = profile.RunAsAdministrator && !host.ElevatedMonadoAllowed() && host.IsInstalledCopy(askHelper: false);
 
-        // Turning the switch on, or changing the variables while it is on, approves the profile (its build, its variables)
-        // here too, behind the same one prompt. Declining the prompt saves a switch just turned on as off; one that was
-        // on stays on, and the profile runs as you until approved. Turning the switch off later keeps the approval.
         if (ElevatedChoice.ApprovesOnSave(editing, profile) && Approvable(profile) && !host.FullyApproved(profile)
             && host.ApprovalTarget(profile, out _, out _) is null)
         {
@@ -545,7 +472,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
         else if (profile.RunAsAdministrator && ElevatedChoice.ApprovalProblem(profile) is { } blocked)
         {
-            // No prompt: it couldn't make this profile run as administrator.
             problem = $"Saved, but it runs as you: {blocked}";
         }
         else if (needsConsent)
@@ -553,7 +479,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
             var code = await ElevatedMonado.AllowAsync();
             if (code == 0)
             {
-                // The consent step recorded SteamVR's Lighthouse files as they are now.
                 host.SteamVrAllowedAgain();
             }
             else
@@ -565,8 +490,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
             }
         }
 
-        // Saved or not, a consent no profile uses goes (the prompt may have recorded one for a save that then failed), and
-        // so does an approved build no profile can use any more.
         var saved = Change(set => set.Replace(profile), profile.Id);
         var takeBack = await TakeBackUnneededAsync();
         if (saved)
@@ -575,10 +498,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Takes back the consent no profile uses and the approvals no profile can use any more, each whether or not the
-    /// other worked; what went wrong, or null.
-    /// </summary>
     private async Task<string?> TakeBackUnneededAsync()
     {
         var consent = await host.TakeBackUnneededConsentAsync();
@@ -600,7 +519,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
         if (value == AddItem)
         {
-            // After the drop-down has closed: adding reloads the list it shows.
             App.Current.Ui.TryEnqueue(() => _ = AddFromPickerAsync());
             return;
         }
@@ -617,7 +535,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnNameChanged(string value) => Changed();
 
-    /// <summary>A new headset type brings its own direct-mode layer, which the user can change after.</summary>
     partial void OnHeadsetChanged(HeadsetItem? value)
     {
         if (!loading)
@@ -632,7 +549,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnEyeVariantChanged(EyeVariantItem? value) => Changed();
 
-    /// <summary>"Automatic", with the variant Mirador knows for the tracker when it knows one.</summary>
     private string AutomaticVariantName()
     {
         try
@@ -657,10 +573,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Changed();
     }
 
-    /// <summary>
-    /// A pasted link fills in its branch (a merge request's ref). The branches of another repository than the one
-    /// listed go: the link is listed again when the box loses focus or on Enter (<see cref="ListBranchesAsync"/>).
-    /// </summary>
     partial void OnMonadoLinkChanged(string value)
     {
         if (!loading)
@@ -671,7 +583,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
             }
             catch (MiradorException)
             {
-                // Validate says why.
             }
 
             ClearBranches();
@@ -680,14 +591,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Changed();
     }
 
-    /// <summary>
-    /// Lists the branches of the repository the link names (<c>git ls-remote --heads</c>, at most 20 s) into the "Branch"
-    /// drop-down: only for a repository's own link, not one naming a merge request, pull request, commit or branch.
-    /// The branch picked is the profile's, else <c>main</c>, else the first (<see cref="BranchOffer.Offer"/>). The same
-    /// link isn't listed again (leaving the box, Enter): the list and the branch stay as they are, with no git run. A
-    /// listing of another link cancels this one; a failure is shown under the link and the branch stays as it was.
-    /// </summary>
-    /// <param name="keepCurrent">A saved profile's branch stays picked even when the repository no longer lists it.</param>
     public async Task ListBranchesAsync(bool keepCurrent = false)
     {
         if (MonadoSource != LinkSource || BranchLink.NamesItsBranch(MonadoLink) || MonadoBranch.StartsWith("refs/", StringComparison.Ordinal))
@@ -703,13 +606,13 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
         catch (MiradorException)
         {
-            ClearBranches(); // Validate says why.
+            ClearBranches();
             return;
         }
 
         if (listing is not null && url == listingUrl)
         {
-            return; // this very link is being listed now
+            return;
         }
 
         listing?.Cancel();
@@ -722,10 +625,9 @@ public sealed partial class ProfilesViewModel : ObservableObject
         {
             if (await Offer.ListAsync(url, cts.Token) is not { } branches || cts.IsCancellationRequested)
             {
-                return; // listed already for this link: nothing changes
+                return;
             }
 
-            // The saved profile's own repository keeps its branch, even one it no longer lists; another link's doesn't.
             var savedLink = editing?.Monado.Kind == SourceKind.Branch && string.Equals(editing.Monado.Url, url, StringComparison.OrdinalIgnoreCase);
             var (items, pick) = BranchOffer.Offer(branches, MonadoBranch, keepCurrent || savedLink);
             Branches.Clear();
@@ -740,7 +642,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            // A newer listing, or another link.
         }
         catch (GitRemoteException e)
         {
@@ -758,7 +659,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Stops a listing under way (the page is left): git doesn't outlive the page.</summary>
     private void CancelListing()
     {
         listing?.Cancel();
@@ -782,7 +682,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     partial void OnRunAsAdministratorChanged(bool value) => Changed();
 
-    /// <summary>Whether <paramref name="profile"/> has something to approve: a branch's or build folder's build, or the bundled Monado's extra variables.</summary>
     private static bool Approvable(Profile profile) =>
         profile.Monado.Kind is SourceKind.Branch or SourceKind.Folder
         || (profile.Monado.Kind == SourceKind.Mirador && profile.ExtraEnvironment.Count > 0);
@@ -802,7 +701,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e) => Changed();
 
-    /// <summary>Applies <paramref name="change"/> to the saved profiles and saves them; a refusal is shown, not thrown.</summary>
     private bool Change(Func<ProfileSet, ProfileSet> change, string? keep)
     {
         Message = null;
@@ -861,7 +759,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Show(set.Profiles.FirstOrDefault(p => p.Id == Selected?.Id));
     }
 
-    /// <summary>Puts <paramref name="p"/> into the editor, with no unsaved changes.</summary>
     private void Show(Profile? p)
     {
         editing = p;
@@ -919,7 +816,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         OnPropertyChanged(nameof(UsesBaseStations));
     }
 
-    /// <summary>The profile as the editor shows it; the module options the editor doesn't show are kept.</summary>
     private Profile Edited()
     {
         IReadOnlyDictionary<string, string> options = new Dictionary<string, string>(editing?.ModuleOptions ?? new Dictionary<string, string>());
@@ -928,7 +824,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
             options = EyeVariantChoice.With(options, EyeVariant?.Id);
         }
 
-        // Left unset while it is the headset type's default.
         var directMode = DirectMode?.Kind ?? DirectModeKind.None;
         return new Profile(
             editing?.Id ?? "",
@@ -942,10 +837,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
             editing?.DirectMode is null && directMode == DefaultDirectMode(Headset) ? null : directMode);
     }
 
-    /// <summary>
-    /// The Monado the editor shows. A link that can't be read is kept as typed, so that validation names the problem
-    /// (<see cref="LinkProblem"/>).
-    /// </summary>
     private BuildSource EditedSource() => MonadoSource switch
     {
         FolderSource => new BuildSource(SourceKind.Folder, MonadoFolder.Trim()),
@@ -967,7 +858,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Why the pasted link can't be built from, or null.</summary>
     private string? LinkProblem()
     {
         if (MonadoSource != LinkSource)
@@ -986,7 +876,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the headset being edited tracks with Lighthouse (its module says so).</summary>
     private bool HeadsetUsesLighthouse() =>
         Headset?.Id is { } id && host.Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
 
@@ -1002,7 +891,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         Verify.Unsaved = true;
         Validate(Edited());
 
-        // While untouched, the toggle follows the headset and the variables.
         OnPropertyChanged(nameof(UsesBaseStations));
     }
 
@@ -1011,7 +899,6 @@ public sealed partial class ProfilesViewModel : ObservableObject
         var problems = ProfileValidation.Problems(p, host.Locator, _ => null).ToList();
         if (LinkProblem() is { } linkProblem)
         {
-            // Instead of the URL's own problem: the link is what the owner typed.
             problems.RemoveAll(x => x.Contains(MonadoLink.Trim(), StringComparison.Ordinal) && MonadoLink.Trim().Length > 0);
             problems.Insert(0, linkProblem);
         }

@@ -14,15 +14,10 @@
 namespace nvdm {
 namespace {
 
-// Between two frames shown, a gap longer than this is idle (no app session), not missed.
 constexpr int64_t kIdleGapNs = 1'000'000'000;
-// A failed Present is logged at most this often.
 constexpr int64_t kFailedLogNs = 1'000'000'000;
-// How many ended frames frame_end() remembers, and how many refresh times wait for drain_refreshes().
 constexpr size_t kEndedKept = 4096;
 constexpr size_t kRefreshesKept = 4096;
-// hold(): a flip's stats time more than this before the time its count gives (the last flip + increments x period) is
-// stale, and the count's time stands in. NVAPI's times are within ~0.1 ms of the period grid (2026-11-02 trace).
 constexpr int64_t kStaleFlipNs = 500'000;
 
 std::string format(const char* fmt, ...)
@@ -75,7 +70,7 @@ unsigned long long ull(uint64_t value)
     return static_cast<unsigned long long>(value);
 }
 
-} // namespace
+}
 
 FrameModel::FrameModel(FrameModelConfig config, FencePool* pool)
     : config_(config), pool_(pool), buffers_(config.buffers)
@@ -117,8 +112,6 @@ void FrameModel::report(FrameSeq seq, const Frame& frame) const
     }
 }
 
-// --- Swapchains --------------------------------------------------------------------------------------------------
-
 SwapchainGen FrameModel::add_swapchain()
 {
     const SwapchainGen gen = next_gen_++;
@@ -128,7 +121,6 @@ SwapchainGen FrameModel::add_swapchain()
 
 void FrameModel::remove_swapchain(SwapchainGen gen)
 {
-    // The record goes first, so the ids of the frames dropped below are not written anywhere.
     if (completed_.erase(gen) == 0) {
         return;
     }
@@ -143,8 +135,6 @@ void FrameModel::remove_swapchain(SwapchainGen gen)
         end_frame(seq, FrameEnd::Dropped);
     }
 }
-
-// --- Acquire -----------------------------------------------------------------------------------------------------
 
 std::optional<uint32_t> FrameModel::presented_buffer() const
 {
@@ -211,7 +201,6 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
     if (now_ns < acquire_bound_ns()) {
         return std::nullopt;
     }
-    // After the bound: 1. the oldest queued frame's back-buffer.
     for (const auto& [seq, frame] : frames_) {
         if (frame.state == FrameState::Queued) {
             const uint32_t b = frame.buffer;
@@ -219,7 +208,6 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
             return take(b, gen, Acquired::Via::DroppedQueued);
         }
     }
-    // 2. The reserved one (the older, if two are).
     std::optional<uint32_t> reserved;
     for (uint32_t b = 0; b < buffers_.size(); ++b) {
         if (buffers_[b].state == BufferState::Reserved &&
@@ -232,10 +220,6 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
         make_idle(*reserved);
         return take(*reserved, gen, Acquired::Via::Reserved);
     }
-    // 3. Only while flips have stopped: the presented one. Acquire does not wait for the display thread's tick() to
-    //    notice (every wait is bounded); if it has not yet, flips stop here (no frame is queued to drop, step 1 found
-    //    none). The Present it takes counts as the one Present of the stopped period, so none follows until the
-    //    counter moves.
     if (stopped_at(now_ns)) {
         if (const std::optional<uint32_t> p = presented_buffer()) {
             if (!stopped_) {
@@ -250,7 +234,7 @@ std::optional<Acquired> FrameModel::acquire(SwapchainGen gen, int64_t now_ns)
             return take(*p, gen, Acquired::Via::Presented);
         }
     }
-    return std::nullopt; // only the on-screen one is left (more images held than Vulkan allows)
+    return std::nullopt;
 }
 
 void FrameModel::release(FrameSeq seq)
@@ -260,8 +244,6 @@ void FrameModel::release(FrameSeq seq)
         end_frame(seq, FrameEnd::Dropped);
     }
 }
-
-// --- Present -----------------------------------------------------------------------------------------------------
 
 bool FrameModel::present_allowed() const
 {
@@ -282,8 +264,6 @@ bool FrameModel::queue(FrameSeq seq, uint64_t present_id, FenceSlot fence, int64
 {
     const auto it = frames_.find(seq);
     if (it == frames_.end() || it->second.state != FrameState::Acquired) {
-        // Not a frame waiting for its present (its swapchain or device went meanwhile): nothing to show, and the
-        // fence, submitted already, is left over.
         if (pool_ != nullptr && fence != kNoFence) {
             pool_->attach(fence);
             pool_->frame_ended(fence);
@@ -295,7 +275,7 @@ bool FrameModel::queue(FrameSeq seq, uint64_t present_id, FenceSlot fence, int64
     frame.present_id = present_id;
     frame.fence = fence;
     if (fence == kNoFence) {
-        frame.times.queue_done_ns = qpc_ns; // the present waited for its queue to go idle
+        frame.times.queue_done_ns = qpc_ns;
     }
     if (pool_ != nullptr) {
         pool_->attach(fence);
@@ -332,8 +312,6 @@ void FrameModel::hold(FrameSeq seq, int64_t not_before_flip_ns)
     }
 }
 
-// A Present made now lands on the flip after the last one seen: at about flip_ns_ + the period, or later if that flip
-// has passed unseen. So the frame may go if that flip is not before its limit.
 bool FrameModel::shown_at_next_flip(const Frame& frame) const
 {
     if (frame.not_before_ns == 0 || !have_flip_ || stopped_) {
@@ -342,7 +320,6 @@ bool FrameModel::shown_at_next_flip(const Frame& frame) const
     return frame.not_before_ns <= flip_ns_ + config_.refresh_ns;
 }
 
-// The newest of the queued frames, taken oldest first, before the first one that is held back.
 std::optional<FrameSeq> FrameModel::newest_presentable() const
 {
     std::optional<FrameSeq> newest;
@@ -382,11 +359,11 @@ bool FrameModel::present_started(FrameSeq seq, int64_t qpc_ns)
             break;
         }
         if (frame.state == FrameState::Queued && !shown_at_next_flip(frame)) {
-            return false; // held back, itself or by an older queued frame
+            return false;
         }
     }
     std::vector<FrameSeq> older;
-    int64_t not_before_ns = it->second.not_before_ns; // the latest limit of the frames this Present takes the place of
+    int64_t not_before_ns = it->second.not_before_ns;
     for (const auto& [other, frame] : frames_) {
         if (other >= seq) {
             break;
@@ -402,10 +379,10 @@ bool FrameModel::present_started(FrameSeq seq, int64_t qpc_ns)
     Frame& frame = it->second;
     frame.state = FrameState::Presented;
     if (frame.times.queue_done_ns == 0) {
-        frame.times.queue_done_ns = qpc_ns; // its fence was seen signalled in this lock hold (DisplayLoop)
+        frame.times.queue_done_ns = qpc_ns;
     }
     frame.times.dequeued_ns = qpc_ns;
-    make_idle(frame.buffer); // clears what an earlier Present left
+    make_idle(frame.buffer);
     Buffer& buf = buffers_[frame.buffer];
     buf.state = BufferState::Presented;
     buf.present_seq = seq;
@@ -421,7 +398,6 @@ bool FrameModel::present_started(FrameSeq seq, int64_t qpc_ns)
 void FrameModel::present_returned(FrameSeq seq, int code, int64_t qpc_ns)
 {
     if (code != 0) {
-        // The next Present waits for a counter increment after this one.
         wait_increment_ = true;
         wait_after_ns_ = qpc_ns;
     }
@@ -440,13 +416,12 @@ void FrameModel::present_returned(FrameSeq seq, int code, int64_t qpc_ns)
         failed_logged_ns_ = qpc_ns;
     }
     if (!found) {
-        return; // acquire took its back-buffer meanwhile (flips stopped)
+        return;
     }
     Buffer& buf = buffers_[*found];
     buf.returned = true;
     buf.return_ns = qpc_ns;
     if (buf.state == BufferState::Reserved) {
-        // Reserved already, after three uncredited increments: now the real return time is known.
         buf.reserved_ref_ns = std::max(buf.reserved_ref_ns, qpc_ns);
         buf.reserved_failed = buf.reserved_failed || code != 0;
         return;
@@ -458,8 +433,6 @@ void FrameModel::present_returned(FrameSeq seq, int code, int64_t qpc_ns)
         make_reserved(*found, qpc_ns, true);
     }
 }
-
-// --- Refreshes ---------------------------------------------------------------------------------------------------
 
 void FrameModel::thread_started(int64_t now_ns)
 {
@@ -487,7 +460,7 @@ void FrameModel::on_counter(uint32_t counter, int64_t qpc_ns)
         ++counters_.link_drops;
         say(format("link drop: refresh counter went from %u to %u", counter_, counter));
         counter_ = counter;
-        have_flip_ = false; // the phase may have moved
+        have_flip_ = false;
         return;
     }
     const uint32_t delta = counter - counter_;
@@ -495,8 +468,6 @@ void FrameModel::on_counter(uint32_t counter, int64_t qpc_ns)
     refresh_count_ += delta;
     counters_.refreshes += delta;
     last_refresh_ns_ = qpc_ns;
-    // hold()'s flip: the stats' time, unless it is well before what the count gives (a stale time would hold frames a
-    // flip too long). After a stop the phase may have moved: the stats' time as it is.
     if (have_flip_ && !stopped_) {
         const int64_t counted = flip_ns_ + static_cast<int64_t>(delta) * config_.refresh_ns;
         flip_ns_ = qpc_ns < counted - kStaleFlipNs ? counted : qpc_ns;
@@ -565,8 +536,6 @@ void FrameModel::credit(uint32_t buffer, int64_t qpc_ns)
     if (prev_credit_valid_ && qpc_ns - prev_credit_ns_ <= kIdleGapNs && refresh_count_ - prev_credit_count_ > 1) {
         const uint64_t gap = refresh_count_ - prev_credit_count_;
         counters_.missed += gap - 1;
-        // Of those, the flips before the first one its target allowed (the target of this frame or of
-        // one it took the place of): asked for, not late.
         const int64_t period = std::max<int64_t>(config_.refresh_ns, 1);
         if (buf.not_before_ns > prev_credit_ns_ + period) {
             const auto allowed = static_cast<uint64_t>((buf.not_before_ns - prev_credit_ns_ + period - 1) / period);
@@ -648,7 +617,7 @@ void FrameModel::tick(int64_t now_ns)
 void FrameModel::enter_stopped(int64_t now_ns)
 {
     stopped_ = true;
-    stopped_present_used_ = presented_buffer().has_value(); // an outstanding Present stays the only one
+    stopped_present_used_ = presented_buffer().has_value();
     const long long silent_ms = static_cast<long long>((now_ns - last_refresh_ns_) / 1'000'000);
     say(format("flips stopped: no refresh for %lld ms", silent_ms));
     drop_queued_for_stop();
@@ -683,8 +652,6 @@ bool FrameModel::present_outstanding() const
     return presented_buffer().has_value();
 }
 
-// --- Frames ------------------------------------------------------------------------------------------------------
-
 void FrameModel::complete_id(Frame& frame)
 {
     if (frame.id_done) {
@@ -692,7 +659,7 @@ void FrameModel::complete_id(Frame& frame)
     }
     frame.id_done = true;
     ++ids_completed_;
-    const auto it = completed_.find(frame.gen); // only while that swapchain is alive
+    const auto it = completed_.find(frame.gen);
     if (it != completed_.end()) {
         it->second = std::max(it->second, frame.present_id);
     }
@@ -705,7 +672,7 @@ void FrameModel::end_frame(FrameSeq seq, FrameEnd end)
         return;
     }
     Frame& frame = it->second;
-    const bool has_id = frame.state != FrameState::Acquired; // an acquired frame has no present id yet
+    const bool has_id = frame.state != FrameState::Acquired;
     switch (end) {
     case FrameEnd::Retired:
     case FrameEnd::Dropped:
@@ -715,12 +682,12 @@ void FrameModel::end_frame(FrameSeq seq, FrameEnd end)
             complete_id(frame);
         }
         break;
-    case FrameEnd::Replaced:  // completed when it went on screen
-    case FrameEnd::Destroyed: // completes nothing
+    case FrameEnd::Replaced:
+    case FrameEnd::Destroyed:
         break;
     }
     if (has_id && frame.state != FrameState::OnScreen) {
-        report(seq, frame); // a frame on screen was reported when it went there
+        report(seq, frame);
     }
     if (end == FrameEnd::Dropped) {
         ++counters_.dropped;
@@ -755,8 +722,6 @@ void FrameModel::device_destroyed()
     pool_ = nullptr;
     ++pool_serial_;
 }
-
-// --- Queries -----------------------------------------------------------------------------------------------------
 
 uint64_t FrameModel::completed_present_id(SwapchainGen gen) const
 {
@@ -823,12 +788,8 @@ uint64_t FrameModel::ids_completed() const
     return ids_completed_;
 }
 
-// --- Invariants ---------------------------------------------------------------------------------------
-
 void FrameModel::check_invariants() const
 {
-    // 1. Back-buffers and the frames holding them agree; acquired and queued frames hold idle ones; a presented or
-    //    on-screen frame's back-buffer has the same NVAPI state; a reserved one is held by no frame; one on screen.
     int on_screen = 0;
     int presented = 0;
     for (uint32_t b = 0; b < buffers_.size(); ++b) {
@@ -868,7 +829,6 @@ void FrameModel::check_invariants() const
         broken(1, format("%d back-buffers on screen", on_screen));
     }
 
-    // 2. A frame's fence is attached to it alone; an acquired frame has none yet; an attached fence has a frame.
     std::set<FenceSlot> fences;
     for (const auto& [seq, frame] : frames_) {
         if (frame.fence == kNoFence) {
@@ -893,8 +853,6 @@ void FrameModel::check_invariants() const
         }
     }
 
-    // 3. Only on-screen frames have had their id completed (ended frames are gone); a swapchain's completed id never
-    //    goes back.
     for (const auto& [seq, frame] : frames_) {
         if (frame.id_done != (frame.state == FrameState::OnScreen)) {
             broken(3, format("frame %llu is %s with its id %s", ull(seq), name(frame.state),
@@ -913,7 +871,6 @@ void FrameModel::check_invariants() const
         seen = id;
     }
 
-    // 4. At most one Present outstanding; a back-buffer went on screen only at a refresh after its Present returned.
     if (presented > 1) {
         broken(4, format("%d Presents outstanding", presented));
     }
@@ -926,4 +883,4 @@ void FrameModel::check_invariants() const
     }
 }
 
-} // namespace nvdm
+}

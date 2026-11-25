@@ -24,7 +24,6 @@ public class PeImportsTests
             return;
         }
 
-        // Windows' own kernel32.dll imports ntdll.dll.
         Assert.Contains("ntdll.dll", PeImports.Read(Path.Combine(Environment.SystemDirectory, "kernel32.dll")), StringComparer.OrdinalIgnoreCase);
     }
 
@@ -52,7 +51,6 @@ public class PeImportsTests
     public void An_import_address_outside_every_section_is_refused()
     {
         var pe = TestPe.Build("a.dll");
-        // The first descriptor's name RVA, far beyond the one section.
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(pe.AsSpan(0x200 + 12), 0x7FFF0000);
         Assert.Throws<InvalidDataException>(() => PeImports.Parse(pe));
     }
@@ -61,7 +59,6 @@ public class PeImportsTests
     public void An_optional_header_too_short_for_its_directories_has_no_imports_and_no_overrun()
     {
         var pe = TestPe.Build("a.dll");
-        // SizeOfOptionalHeader 2: only the magic; the directories would be past its end.
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(pe.AsSpan(0x80 + 4 + 16), 2);
         var cut = pe.AsSpan(0, 0x80 + 4 + 20 + 2);
 

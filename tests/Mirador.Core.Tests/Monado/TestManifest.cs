@@ -2,7 +2,6 @@ using System.Text.Json;
 
 namespace Mirador.Core.Tests.Monado;
 
-/// <summary>The text of a Monado runtime manifest, the way Monado's build writes it.</summary>
 internal static class TestManifest
 {
     public static string Json(string libraryPath) =>

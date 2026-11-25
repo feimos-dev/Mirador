@@ -5,31 +5,13 @@ using Mirador.Core.SignIn;
 
 namespace Mirador.Core;
 
-/// <summary>What <c>Mirador.exe</c> was started for.</summary>
-/// <param name="Start">Start Monado (<c>--start</c>): the tray's Start from a second Mirador, or a shortcut.</param>
-/// <param name="Background">Start without the window (<c>--background</c>): the stand-in, or Windows' startup.</param>
-/// <param name="SignIn"><c>--sign-in</c>: Windows started Mirador at sign-in, which may mean no window (App settings, "Start minimized").</param>
-/// <param name="RemoveSignIn"><c>--remove-sign-in</c>: the uninstaller's step that stops Mirador starting at sign-in.</param>
-/// <param name="AllowElevatedMonado"><c>--allow-elevated-monado</c>: the elevated step (and the installer's) that records this user's consent to run Monado as administrator.</param>
-/// <param name="ApproveBuild">
-/// <c>--approve-build &lt;profile&gt; &lt;commit&gt; &lt;install folder&gt; [NAME=VALUE…]</c>: the elevated step that approves a
-/// profile's build and its variables, which follow as <c>NAME=VALUE</c> arguments up to the first argument that isn't one.
-/// For the bundled Monado the commit and the folder are both <c>bundled</c>: only the variables are approved. Null
-/// without it, and with fewer values.
-/// </param>
-/// <param name="ApproveVariables">
-/// <c>--approve-variables &lt;profile&gt; [NAME=VALUE…]</c>: the elevated step that approves only a profile's variables,
-/// keeping its approved copy as it is (no copy, no hashing). Null without it.
-/// </param>
 public sealed record AppArgs(
     bool Start, bool Background, bool SignIn = false, bool RemoveSignIn = false, bool AllowElevatedMonado = false,
     (string ProfileId, string Commit, string Source, IReadOnlyList<KeyValuePair<string, string>> Variables)? ApproveBuild = null,
     (string ProfileId, IReadOnlyList<KeyValuePair<string, string>> Variables)? ApproveVariables = null)
 {
-    /// <summary>The commit and the folder of an approval of the bundled Monado's variables.</summary>
     public const string Bundled = "bundled";
 
-    /// <summary>Reads the command line; flags are matched without regard to case, and anything else is ignored.</summary>
     public static AppArgs Parse(string[] args)
     {
         bool start = false, background = false;
@@ -72,7 +54,6 @@ public sealed record AppArgs(
         return new AppArgs(start, background, signIn, removeSignIn, allowElevatedMonado, approveBuild, approveVariables);
     }
 
-    /// <summary>The <c>NAME=VALUE</c> arguments after <paramref name="i"/>, up to the first that isn't one; <paramref name="i"/> ends on the last read.</summary>
     private static List<KeyValuePair<string, string>> ReadVariables(string[] args, ref int i)
     {
         var variables = new List<KeyValuePair<string, string>>();
@@ -85,13 +66,6 @@ public sealed record AppArgs(
         return variables;
     }
 
-    /// <summary>
-    /// What the approval step approves: for the bundled Monado (commit <see cref="Bundled"/>) the commit
-    /// <see cref="Mirador.Ipc.ApprovedBuilds.BundledCommit"/> and no folder, only when the folder is
-    /// <see cref="Bundled"/> too; else the build's commit and folder. Decided from the commit, which a build folder's own
-    /// files could name.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The commit and the folder don't go together.</exception>
     public static (string Commit, string Source) ApprovalTarget(string commit, string source)
     {
         if (commit == Bundled)
@@ -106,9 +80,7 @@ public sealed record AppArgs(
             : (commit, source);
     }
 
-    /// <summary>The flag of the approval step.</summary>
     public const string ApproveBuildFlag = "--approve-build";
 
-    /// <summary>The flag of the step that approves a profile's variables alone.</summary>
     public const string ApproveVariablesFlag = "--approve-variables";
 }

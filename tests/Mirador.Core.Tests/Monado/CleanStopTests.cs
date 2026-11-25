@@ -37,7 +37,6 @@ public class CleanStopTests
             Assert.Equal([process.Id], asked);
         }
 
-        // A sender that says it wrote the key, to a process that doesn't end: the wait runs out.
         using var ignored = new JobProcessLauncher(_ => true);
         await using var stubborn = ignored.Start(LongPing());
         Assert.False(await stubborn.EndCleanlyAsync(TimeSpan.FromMilliseconds(300)).WaitAsync(Limit));
@@ -54,11 +53,6 @@ public class CleanStopTests
     public void The_sender_mode_takes_one_process_id(string flag, string pid, int? expected) =>
         Assert.Equal(expected, ConsoleExitKey.Requested([flag, pid]));
 
-    /// <summary>
-    /// A real Monado, headless, started as Mirador starts it, then ended through Mirador.Helper.exe --send-exit-key: it
-    /// ends by itself with exit code 0. Runs when <c>MIRADOR_TEST_MONADO_INSTALL</c> names an install (Monado's layout)
-    /// and the helper is built; skipped otherwise.
-    /// </summary>
     [RealMonadoFact]
     public async Task A_real_monado_ends_by_itself_on_the_exit_key()
     {
@@ -93,10 +87,6 @@ public class CleanStopTests
     }
 }
 
-/// <summary>
-/// Needs a real Monado install (<c>MIRADOR_TEST_MONADO_INSTALL</c>, Monado's layout) and a built Mirador.Helper.exe;
-/// skipped otherwise.
-/// </summary>
 public sealed class RealMonadoFactAttribute : FactAttribute
 {
     public static string? Service =>

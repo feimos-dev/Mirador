@@ -5,7 +5,6 @@ namespace Mirador.Helper.Tests;
 
 public class SteamVrDriverCheckTests
 {
-    /// <summary>The real signer subject of SteamVR's <c>driver_lighthouse.dll</c> (Get-AuthenticodeSignature, 2026-11-07).</summary>
     private const string ValveSubject = "CN=Valve Corp., O=Valve Corp., L=Bellevue, S=Washington, C=US";
 
     private static readonly IReadOnlyDictionary<string, string> NoneApproved = new Dictionary<string, string>();
@@ -18,15 +17,15 @@ public class SteamVrDriverCheckTests
         Assert.True(SteamVrDriverCheck.IsValve("C=US, S=Washington, L=Bellevue, O=Valve Corp., CN=Valve Corp."));
 
     [Theory]
-    [InlineData("CN=Valve Corp.evil, O=Valve Corp., L=Bellevue, S=Washington, C=US")] // only starts with Valve's CN
-    [InlineData("CN=Valve Corp., O=Evil, L=Bellevue, S=Washington, C=US")]           // another organisation
-    [InlineData("CN=Valve Corp., L=Bellevue, S=Washington, C=US")]                    // no O at all
-    [InlineData("O=Valve Corp., L=Bellevue, C=US")]                                    // no CN at all
-    [InlineData("CN=\"Valve Corp., O=Valve Corp.\"")]                                  // one quoted CN holding both
-    [InlineData("CN=Valve Corp., CN=Evil, O=Valve Corp.")]                             // two CNs
-    [InlineData("CN=Valve Corp. + O=Valve Corp.")]                                     // a multi-valued RDN
-    [InlineData("cn=valve corp., o=valve corp.")]                                      // the name, but not Valve's spelling
-    [InlineData("garbage ,,= =")]                                                      // not a distinguished name
+    [InlineData("CN=Valve Corp.evil, O=Valve Corp., L=Bellevue, S=Washington, C=US")]
+    [InlineData("CN=Valve Corp., O=Evil, L=Bellevue, S=Washington, C=US")]
+    [InlineData("CN=Valve Corp., L=Bellevue, S=Washington, C=US")]
+    [InlineData("O=Valve Corp., L=Bellevue, C=US")]
+    [InlineData("CN=\"Valve Corp., O=Valve Corp.\"")]
+    [InlineData("CN=Valve Corp., CN=Evil, O=Valve Corp.")]
+    [InlineData("CN=Valve Corp. + O=Valve Corp.")]
+    [InlineData("cn=valve corp., o=valve corp.")]
+    [InlineData("garbage ,,= =")]
     [InlineData("")]
     public void Anything_but_valves_exact_name_is_refused(string subject) =>
         Assert.False(SteamVrDriverCheck.IsValve(subject));
@@ -45,7 +44,6 @@ public class SteamVrDriverCheckTests
         }
     }
 
-    /// <summary>Makes a SteamVR folder with Lighthouse driver DLLs, each with its own bytes; returns the SteamVR root.</summary>
     private static string MakeSteamVr(TempDir dir, params string[] dlls)
     {
         var steamVr = Path.Combine(dir.Path, "SteamVR");
@@ -65,7 +63,6 @@ public class SteamVrDriverCheckTests
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    /// <summary>Valve signs <c>driver_lighthouse.dll</c> and <c>vrcamera_api.dll</c>, nothing else (as on a real PC).</summary>
     private static string? ValveSignsTheDriver(string path) =>
         Path.GetFileName(path) is "driver_lighthouse.dll" or "vrcamera_api.dll" ? ValveSubject : null;
 
@@ -113,7 +110,6 @@ public class SteamVrDriverCheckTests
         {
             Assert.Null(refusal);
 
-            // Held like the signed ones: the approved copy can't be swapped before Monado loads it.
             Assert.ThrowsAny<IOException>(() => File.Delete(Path.Combine(Win64(steamVr), "ArcturusPerception.dll")));
         }
     }
@@ -139,7 +135,6 @@ public class SteamVrDriverCheckTests
             Assert.DoesNotContain("AitH264Capture.dll", refusal.Error);
         }
 
-        // A refusal holds nothing.
         File.Delete(Path.Combine(Win64(steamVr), "ArcturusPerception.dll"));
     }
 
@@ -159,7 +154,6 @@ public class SteamVrDriverCheckTests
             Assert.NotNull(refusal);
             Assert.Equal(HelperRefusal.SteamVrChanged, refusal.Refusal);
 
-            // Every file that isn't as allowed is named, not just the first.
             Assert.Contains("AitH264Capture.dll", refusal.Error);
             Assert.Contains("AitUVCExtApi.dll", refusal.Error);
             Assert.DoesNotContain("ArcturusPerception.dll", refusal.Error);
@@ -186,7 +180,6 @@ public class SteamVrDriverCheckTests
         var steamVr = MakeSteamVr(dir, "driver_lighthouse.dll", "ArcturusPerception.dll");
         var approved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            // The right bytes under another name: a copy renamed into the folder is not what was allowed.
             ["Other.dll"] = Sha256(Bytes("ArcturusPerception.dll")),
         };
 
@@ -208,7 +201,7 @@ public class SteamVrDriverCheckTests
         using (hold)
         {
             Assert.NotNull(refusal);
-            Assert.Null(refusal.Refusal); // fails the Start as before, with no fallback
+            Assert.Null(refusal.Refusal);
         }
     }
 
@@ -222,13 +215,11 @@ public class SteamVrDriverCheckTests
         var (hold, refusal) = SteamVrDriverCheck.Verify(steamVr, _ => ValveSubject, NoneApproved);
         Assert.Null(refusal);
 
-        // While held, the DLLs can't be written to, deleted or replaced.
         Assert.ThrowsAny<IOException>(() => File.Open(dll, FileMode.Open, FileAccess.Write, FileShare.None));
         Assert.ThrowsAny<IOException>(() => File.Delete(dll));
 
         hold.Dispose();
 
-        // Freed again once the hold is released.
         File.Delete(dll);
         Assert.False(File.Exists(dll));
     }
@@ -257,7 +248,6 @@ public class SteamVrDriverCheckTests
         Assert.Equal(2, files.Count);
         Assert.Equal(Sha256(Bytes("ArcturusPerception.dll")), files["ArcturusPerception.dll"]);
         Assert.Equal(Sha256(Bytes("AitH264Capture.dll")), files["AitH264Capture.dll"]);
-        // What the consent records is exactly what the helper then accepts.
         var (hold, refusal) = SteamVrDriverCheck.Verify(steamVr, ValveSignsTheDriver, files);
         using (hold)
         {
@@ -281,7 +271,6 @@ public class SteamVrDriverCheckTests
         using var dir = new TempDir();
         var steamVr = MakeSteamVr(dir, "driver_lighthouse.dll", "ArcturusPerception.dll", "AitH264Capture.dll");
 
-        // Another program writing the file: it can't be held and hashed, so no list is made at all.
         using (File.Open(Path.Combine(Win64(steamVr), "AitH264Capture.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
         {
             var e = Assert.ThrowsAny<IOException>(() => SteamVrDriverCheck.UnsignedFiles(steamVr, ValveSignsTheDriver));
@@ -289,7 +278,6 @@ public class SteamVrDriverCheckTests
         }
     }
 
-    /// <summary>Makes a junction (no administrator needed) at <paramref name="link"/> pointing at <paramref name="target"/>.</summary>
     private static void Junction(string link, string target)
     {
         var info = new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true };
@@ -321,13 +309,11 @@ public class SteamVrDriverCheckTests
             Assert.Null(check.Refusal);
             Assert.NotNull(check.SteamVrPath);
 
-            // The folder the held files are really in, not the junction a user could point elsewhere after the check.
             Assert.DoesNotContain("linked-library", check.SteamVrPath);
             Assert.EndsWith(@"\real-library\SteamVR", check.SteamVrPath, StringComparison.OrdinalIgnoreCase);
             Assert.False(check.SteamVrPath.StartsWith(@"\\?\", StringComparison.Ordinal));
             Assert.True(File.Exists(Path.Combine(Win64(check.SteamVrPath), "driver_lighthouse.dll")));
 
-            // And that is the folder Monado is told.
             var env = Mirador.Helper.ElevatedMonado.ElevatedEnvironment.Build(
                 new ElevatedStart(3000, 100, 6, "pimax"),
                 new Mirador.Helper.ElevatedMonado.UserFolders(@"C:\Users\u", @"C:\Users\u\AppData\Roaming", @"C:\Users\u\AppData\Local", @"C:\Users\u\AppData\Local\Temp"),
@@ -360,7 +346,6 @@ public class SteamVrDriverCheckTests
         var steamVr = MakeSteamVr(dir, "driver_lighthouse.dll", "ArcturusPerception.dll");
         var realWin64 = Path.Combine(dir.Path, "SteamVR", "drivers", "lighthouse", "bin", "win64");
 
-        // As if ArcturusPerception.dll were a link to a file in a folder of the user's.
         var check = SteamVrDriverCheck.Verify(steamVr, ValveSignsTheDriver, NoneApproved, held =>
             Path.GetFileName(held.Name) == "ArcturusPerception.dll"
                 ? @"\\?\C:\Users\someone\Downloads\ArcturusPerception.dll"
@@ -368,12 +353,11 @@ public class SteamVrDriverCheckTests
         using (check.Hold)
         {
             Assert.NotNull(check.Refusal);
-            Assert.Null(check.Refusal.Refusal); // a plain refusal: no running as the user instead
+            Assert.Null(check.Refusal.Refusal);
             Assert.Contains("ArcturusPerception.dll", check.Refusal.Error);
             Assert.Null(check.SteamVrPath);
         }
 
-        // A refusal holds nothing.
         File.Delete(Path.Combine(Win64(steamVr), "ArcturusPerception.dll"));
     }
 

@@ -80,8 +80,8 @@ public class LighthouseLogParserTests
         var p = new LighthouseLogParser();
 
         Assert.True(p.Feed(Hmd("LHR-2A2E5F48")));
-        Assert.False(p.Feed(Hmd("LHR-2A2E5F48")));  // same headset again
-        Assert.True(p.Feed(Hmd("LHR-CCCC0003")));   // a different one
+        Assert.False(p.Feed(Hmd("LHR-2A2E5F48")));
+        Assert.True(p.Feed(Hmd("LHR-CCCC0003")));
         Assert.True(p.Feed(Controller("LHR-AAAA0001")));
         Assert.False(p.Feed(Controller("LHR-AAAA0001")));
     }
@@ -94,7 +94,7 @@ public class LighthouseLogParserTests
         Assert.False(p.Feed(""));
         Assert.False(p.Feed(" INFO [client_connected] Client 1 connected"));
         Assert.False(p.Feed(" INFO [TrackedDeviceAdded] Something else happened"));
-        Assert.False(p.Feed(" INFO [TrackedDeviceAdded] Found lighthouse controller:")); // no serial
+        Assert.False(p.Feed(" INFO [TrackedDeviceAdded] Found lighthouse controller:"));
         Assert.False(p.Feed(" INFO [TrackedDeviceAdded] Found lighthouse tracker: "));
         Assert.False(p.Feed(" INFO [TrackedDeviceAdded] Found lighthouse HMD: "));
 

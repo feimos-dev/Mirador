@@ -1,13 +1,4 @@
 #Requires -Version 7
-<#
-.SYNOPSIS
-    Removes the Mirador helper service that tools\dev-install-helper.ps1 installed. Run it as administrator.
-.DESCRIPTION
-    Puts back the OpenXR runtime Mirador replaced (the helper's --restore-runtime, which does nothing when Mirador
-    replaced none), stops and deletes the MiradorHelper service, and deletes the helper's files from
-    %ProgramFiles%\Mirador\: all of them when no Mirador is installed there, else only those the app doesn't use
-    (the app's Mirador.deps.json doesn't name them).
-#>
 [CmdletBinding()]
 param()
 
@@ -46,7 +37,6 @@ if ($service) {
 
 $helperDeps = Join-Path $appDir 'Mirador.Helper.deps.json'
 if (Test-Path -LiteralPath (Join-Path $appDir 'Mirador.exe')) {
-    # Beside an installed Mirador: the files only the helper's deps.json names, and the helper itself.
     $names = { param($deps) (Get-Content -LiteralPath $deps -Raw | ConvertFrom-Json).targets.PSObject.Properties.Value |
         ForEach-Object { $_.PSObject.Properties.Value } | ForEach-Object { @($_.runtime, $_.native) } |
         Where-Object { $_ } | ForEach-Object { $_.PSObject.Properties.Name } | ForEach-Object { Split-Path $_ -Leaf } }
@@ -59,7 +49,6 @@ if (Test-Path -LiteralPath (Join-Path $appDir 'Mirador.exe')) {
     Get-ChildItem -LiteralPath $appDir -Filter 'Mirador.Helper.*' -File | Remove-Item -Force
 }
 elseif (Test-Path -LiteralPath $appDir) {
-    # Only the dev helper was there.
     Remove-Item -LiteralPath $appDir -Recurse -Force
 }
 $staging = Join-Path $appDir 'helper.new'

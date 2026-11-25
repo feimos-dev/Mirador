@@ -1,25 +1,13 @@
 namespace Mirador.Pimax;
 
-/// <summary>Which eye geometry to upload, and the state that remembers it.</summary>
-/// <param name="Variant">The variant to use.</param>
-/// <param name="NeedsOwner">Mirador doesn't know the headset's variant: it uses <see cref="EyeBlobVariants.Fallback"/>, and the owner should pick theirs.</param>
-/// <param name="State">The state to keep (it remembers a variant read from Pimax).</param>
 public sealed record BlobDecision(string Variant, bool NeedsOwner, DreamAirState State);
 
-/// <summary>
-/// Which eye geometry variant the headset needs: the one Pimax's software was started with,
-/// read while it runs, wins and is remembered; else the one remembered; else <see cref="EyeBlobVariants.Fallback"/>, and
-/// the owner is asked.
-/// </summary>
 public static class BlobChoice
 {
-    /// <param name="s">What Mirador remembers.</param>
-    /// <param name="detected">The variant Pimax's eye runtime runs with now; null when it doesn't run or didn't say.</param>
     public static BlobDecision Resolve(DreamAirState s, string? detected)
     {
         if (detected is not null && EyeBlobVariants.All.Contains(detected))
         {
-            // Read for the headset on now: the next upload stores its serial instead of taking it for another one.
             return new BlobDecision(detected, false, s with { BlobVariant = detected, BlobTrackerSerial = null });
         }
 
@@ -31,10 +19,6 @@ public static class BlobChoice
         return new BlobDecision(EyeBlobVariants.Fallback, true, s);
     }
 
-    /// <summary>
-    /// After an upload that named the tracker: the first serial is stored; a different one means a different headset,
-    /// whose variant may differ, so a remembered variant is cleared.
-    /// </summary>
     public static DreamAirState AfterUpload(DreamAirState s, string? trackerSerial)
     {
         if (string.IsNullOrEmpty(trackerSerial) || s.BlobTrackerSerial == trackerSerial)
@@ -47,6 +31,5 @@ public static class BlobChoice
             : s with { BlobTrackerSerial = trackerSerial, BlobVariant = null };
     }
 
-    /// <summary>Whether <see cref="AfterUpload"/> cleared a remembered variant.</summary>
     public static bool Cleared(DreamAirState before, DreamAirState after) => before.BlobVariant is not null && after.BlobVariant is null;
 }

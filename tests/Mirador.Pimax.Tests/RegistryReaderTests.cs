@@ -1,6 +1,5 @@
 namespace Mirador.Pimax.Tests;
 
-/// <summary>Reads this PC's real registry: values every Windows has.</summary>
 public class RegistryReaderTests
 {
     private readonly WindowsRegistryReader reg = new();
@@ -14,7 +13,6 @@ public class RegistryReaderTests
     [Fact]
     public void Expands_variables_in_expandable_values()
     {
-        // ProgramFilesPath is stored as %ProgramFiles%.
         var path = reg.GetString(@"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion", "ProgramFilesPath");
 
         Assert.NotNull(path);
@@ -44,7 +42,6 @@ public class RegistryReaderTests
     [Fact]
     public void A_value_that_isnt_a_string_reads_as_missing()
     {
-        // CurrentMajorVersionNumber is a DWORD.
         Assert.Null(reg.GetString(@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentMajorVersionNumber"));
     }
 

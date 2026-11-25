@@ -11,7 +11,6 @@ public class SessionControllerTests
 {
     private static readonly TimeSpan Limit = Harness.Limit;
 
-    /// <summary>How often the controller looks for Monado's pipe.</summary>
     private static readonly TimeSpan Poll = TimeSpan.FromMilliseconds(100);
 
     private static readonly IReadOnlyDictionary<string, string> WasRunning = new Dictionary<string, string> { ["wasRunning"] = "true" };
@@ -22,7 +21,6 @@ public class SessionControllerTests
 
     private static StatusLine MonadoLine(StatusLevel level, string text) => new("monado", "Monado", level, text);
 
-    /// <summary>The lines of a log that Mirador still has open for writing.</summary>
     private static string[] ReadWhileWritten(string path)
     {
         using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
@@ -39,7 +37,6 @@ public class SessionControllerTests
 
         var outcome = await h.StartRunningAsync();
 
-        // A copy the helper would refuse (a portable or dev bundle) runs as the user instead of failing.
         Assert.True(outcome.Ok);
         Assert.Equal(installedCopy ? 1 : 0, h.ElevatedStarts.Count);
         Assert.Equal(1, h.Launcher.Starts);
@@ -274,7 +271,6 @@ public class SessionControllerTests
         Assert.Equal("fake", saved?.ModuleId);
         Assert.Equal(recovery, saved?.Data);
 
-        // What Mirador set itself: the settings and the module's variables, nothing inherited.
         var mine = h.Controller.LastMiradorEnvironment;
         Assert.NotNull(mine);
         Assert.Equal("1", mine["FAKE_HEADSET"]);
@@ -287,7 +283,6 @@ public class SessionControllerTests
         Assert.Contains(SessionState.Starting, h.Changes);
         Assert.Equal(SessionState.Running, h.Changes.Last());
 
-        // The bundled Monado's stand-in is the installer's business.
         Assert.Equal(Path.Combine(h.RuntimeDir, "service"), h.Controller.CurrentInstall?.StandInDir);
         Assert.False(Directory.Exists(h.Controller.CurrentInstall!.StandInDir));
 
@@ -315,7 +310,6 @@ public class SessionControllerTests
     [Fact]
     public async Task No_start_once_starts_have_ended()
     {
-        // Mirador quits: a Start asked for afterwards (a room setup step, a game) starts nothing.
         await using var h = new Harness();
         h.Controller.EndStarts();
 
@@ -353,7 +347,6 @@ public class SessionControllerTests
         var moduleCallsAtStart = -1;
         hook.OnStarted = () => moduleCallsAtStart = h.Module.BeforeStartCalls;
 
-        // Refused by SteamVR running, or by a Monado outside Mirador: the hook is never told.
         h.Processes.Running.Add(new ProcInfo("vrserver", 42));
         Assert.False((await Start(h).WaitAsync(Limit)).Ok);
         h.Processes.Running.Clear();
@@ -391,7 +384,7 @@ public class SessionControllerTests
         await using var h = new Harness(hook);
         h.Usb.Devices.Clear();
 
-        await h.StartRunningAsync(); // goes on as before: the module's steps run
+        await h.StartRunningAsync();
         await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
 
         Assert.Equal(1, h.Module.BeforeStartCalls);
@@ -416,7 +409,7 @@ public class SessionControllerTests
         await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
 
         Assert.Equal(new[] { "started:p1:fake", "ended:p1:fake" }, hook.Calls);
-        Assert.Equal(1, endsAtEnded); // last of all: after the module's session ended
+        Assert.Equal(1, endsAtEnded);
         Assert.True(killedAtEnded);
     }
 
@@ -439,7 +432,6 @@ public class SessionControllerTests
 
         await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
 
-        // While it stops, until the very end.
         Assert.Equal(Harness.DreamAir.Id, atEnded?.Profile.Id);
         Assert.Same(h.Module, atEnded?.Module);
         Assert.Null(h.Controller.CurrentProfile);
@@ -550,7 +542,7 @@ public class SessionControllerTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(2)] // two games, each with its stand-in waiting
+    [InlineData(2)]
     public async Task Stand_ins_are_not_a_monado(int standIns)
     {
         await using var h = new Harness();
@@ -583,7 +575,7 @@ public class SessionControllerTests
     public async Task A_monado_service_whose_file_cannot_be_read_counts_as_a_monado()
     {
         await using var h = new Harness();
-        h.Processes.Add("monado-service", 1234); // ended a moment ago, or not this user's to ask
+        h.Processes.Add("monado-service", 1234);
 
         var outcome = await Start(h).WaitAsync(Limit);
 
@@ -634,7 +626,6 @@ public class SessionControllerTests
         var start = h.Controller.StartAsync(StartReason.Button, CancellationToken.None);
         await h.Module.Entered.Task.WaitAsync(Limit);
 
-        // Were Mirador killed now, its next launch would find this and undo the module's step (Review Focus 4).
         var saved = new SessionFile(h.Paths.SessionFile).Read();
         Assert.NotNull(saved);
         Assert.Equal("p1", saved.Value.ProfileId);
@@ -651,7 +642,7 @@ public class SessionControllerTests
     {
         await using var h = new Harness();
         h.Module.SavedDuringStart = new Dictionary<string, string> { ["wasRunning"] = "true" };
-        h.Module.SavedBeforeRefusal = new Dictionary<string, string>(); // undone: nothing left
+        h.Module.SavedBeforeRefusal = new Dictionary<string, string>();
         h.Module.Refusal = new MiradorException("The eye tracker isn't on USB.");
 
         var outcome = await Start(h).WaitAsync(Limit);
@@ -695,7 +686,7 @@ public class SessionControllerTests
     public async Task A_monado_service_that_ended_before_its_file_could_be_read_does_not_count()
     {
         await using var h = new Harness();
-        h.Processes.Add("monado-service", 1234); // a stand-in that gave up just as Start looked
+        h.Processes.Add("monado-service", 1234);
         h.Processes.EndAfterSnapshot.Add(1234);
         h.Pipe.Up = true;
 
@@ -727,7 +718,6 @@ public class SessionControllerTests
         Assert.Equal(1, h.Module.BeforeStartCalls);
     }
 
-    /// <summary>A stand-in file in <paramref name="runtimeDir"/>'s <c>service</c> folder, as a game's runtime DLL would start it.</summary>
     private static string StandInBelow(string runtimeDir)
     {
         var path = Path.Combine(runtimeDir, "service", StandIn.FileName);
@@ -755,7 +745,7 @@ public class SessionControllerTests
         await using var h = new Harness();
         h.Pipe.Up = true;
         h.Module.UsesSteamVrLighthouse = true;
-        h.Processes.Running.Add(new ProcInfo("vrserver", 42)); // a later step would refuse with its own words
+        h.Processes.Running.Add(new ProcInfo("vrserver", 42));
         h.Usb.Devices.Clear();
         var standIn = StandInBelow(h.RuntimeDir);
 
@@ -876,7 +866,7 @@ public class SessionControllerTests
 
         var start = Start(h);
         await h.Pipe.FirstPoll.Task.WaitAsync(Limit);
-        await h.Timers.Set(Poll).WaitAsync(Limit); // the controller now waits 100 ms
+        await h.Timers.Set(Poll).WaitAsync(Limit);
         h.Time.Advance(TimeSpan.FromMilliseconds(99));
         Assert.Single(h.Pipe.Asked);
         Assert.False(start.IsCompleted);
@@ -909,7 +899,7 @@ public class SessionControllerTests
         Assert.Equal(1, h.Module.Session!.Ends);
         Assert.Equal(SessionState.Stopped, h.Controller.State);
         Assert.False(File.Exists(h.Paths.SessionFile));
-        Assert.Empty(h.EndedMessages); // a failed Start is told through its outcome
+        Assert.Empty(h.EndedMessages);
 
         string[] all = ["line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7"];
         Assert.Equal(all, h.Module.Session.Lines);
@@ -1055,21 +1045,20 @@ public class SessionControllerTests
     {
         await using var h = new Harness();
         var start = h.Controller.StartAsync(StartReason.Button, CancellationToken.None);
-        await h.Pipe.FirstPoll.Task.WaitAsync(Limit); // Monado runs, its pipe isn't up yet: the run is still Starting
+        await h.Pipe.FirstPoll.Task.WaitAsync(Limit);
         h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
-        await Task.Delay(100); // the asynchronous request has taken the lock and left its reason with the run
+        await Task.Delay(100);
         Assert.Equal(SessionState.Starting, h.Controller.State);
 
         h.Pipe.Up = true;
         h.Time.Advance(TimeSpan.FromSeconds(1));
         var outcome = await start.WaitAsync(Limit);
 
-        // The Start fails with the reason: a game is never told Monado runs, and Monado is stopped.
         Assert.False(outcome.Ok);
         Assert.StartsWith("Monado couldn't start its compositor", outcome.Message);
         Assert.Equal(SessionState.Stopped, h.Controller.State);
         Assert.True(h.Launcher.Last!.Killed);
-        Assert.Empty(h.EndedMessages); // a failed Start says so through its outcome
+        Assert.Empty(h.EndedMessages);
     }
 
     [Fact]
@@ -1080,10 +1069,12 @@ public class SessionControllerTests
         h.Pipe.Up = true;
 
         var start = Start(h);
-        await h.Libmonado.Entered.Task.WaitAsync(Limit); // the pipe is there, libmonado waits for Monado's system
+        await h.Libmonado.Entered.Task.WaitAsync(Limit);
         h.Launcher.Last!.Emit("ERROR [comp_main_create_system_compositor] Failed to init compositor 000001F2A3B4C5D6");
         await Task.Delay(100);
         await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
+        await h.Timers.Set(TimeSpan.FromSeconds(10), 2).WaitAsync(Limit);
         h.Time.Advance(TimeSpan.FromSeconds(10));
         var outcome = await start.WaitAsync(Limit);
         h.Libmonado.Gate.SetResult();
@@ -1182,7 +1173,7 @@ public class SessionControllerTests
         var standInDir = Path.Combine(Harness.MakeBuild(folder), "service");
         var copy = Path.Combine(standInDir, "monado-service.exe");
         Directory.CreateDirectory(standInDir);
-        File.WriteAllBytes(copy, [9, 9, 9]); // an older stand-in
+        File.WriteAllBytes(copy, [9, 9, 9]);
         h.UseProfile(Harness.DreamAir with { Monado = new BuildSource(SourceKind.Folder, folder) });
 
         await h.StartRunningAsync();
@@ -1194,7 +1185,6 @@ public class SessionControllerTests
         Assert.Equal(Path.GetDirectoryName(server), h.Launcher.Spec.WorkingDirectory);
         Assert.DoesNotContain(h.Controller.Status, line => line.Key == "standin");
 
-        // A build whose service folder is gone gets the folder and the stand-in again.
         await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
         Directory.Delete(standInDir, recursive: true);
         await h.Controller.StartAsync(StartReason.Button, CancellationToken.None).WaitAsync(Limit);
@@ -1224,7 +1214,7 @@ public class SessionControllerTests
         await using var h = new Harness();
         var folder = Path.Combine(h.Root, "odd build");
         var targets = Path.Combine(folder, "src", "xrt", "targets");
-        var dll = Harness.Touch(targets, "openxr_monado.dll"); // so that service\ below the DLL is the real service's folder
+        var dll = Harness.Touch(targets, "openxr_monado.dll");
         File.WriteAllText(Path.Combine(folder, "openxr_monado-dev.json"), Mirador.Core.Tests.Monado.TestManifest.Json(dll));
         var server = Harness.Touch(targets, "service", "monado-service.exe");
         File.WriteAllText(server, "the real service");
@@ -1260,7 +1250,7 @@ public class SessionControllerTests
         Assert.False(Directory.Exists(Path.Combine(h.RuntimeDir, "service")));
 
         h.UseProfile(Harness.DreamAir with { Monado = new BuildSource(SourceKind.Folder, Path.Combine(h.Root, "gone")) });
-        h.Controller.PlaceStandIn(); // no throw
+        h.Controller.PlaceStandIn();
     }
 
     [Theory]
@@ -1452,12 +1442,11 @@ public class SessionControllerTests
     public async Task A_log_that_cannot_be_written_is_one_warning()
     {
         await using var h = new Harness();
-        Directory.CreateDirectory(h.MonadoLog); // a folder where the file should be: every write fails
+        Directory.CreateDirectory(h.MonadoLog);
         h.Launcher.FirstLines = ["one"];
 
         await h.StartRunningAsync();
 
-        // Heard for the line written before Mirador listened, then not again for the same failure.
         var warning = Assert.Single(h.Warnings);
         Assert.Equal("log", warning.Key);
         Assert.StartsWith("Mirador couldn't write Monado's log: ", warning.Text);
@@ -1471,7 +1460,7 @@ public class SessionControllerTests
     public async Task A_module_that_fails_on_its_lines_is_one_warning_and_the_log_goes_on()
     {
         await using var h = new Harness();
-        h.Module.SessionLineFailure = line => new InvalidOperationException($"Bad line {line}."); // a new message each time
+        h.Module.SessionLineFailure = line => new InvalidOperationException($"Bad line {line}.");
 
         await h.StartRunningAsync();
         h.Launcher.Last!.Emit("one", "two", "three");
@@ -1487,7 +1476,7 @@ public class SessionControllerTests
     public async Task Log_and_module_failures_are_one_warning_each_under_their_own_keys()
     {
         await using var h = new Harness();
-        Directory.CreateDirectory(h.MonadoLog); // every log write fails
+        Directory.CreateDirectory(h.MonadoLog);
         h.Module.SessionLineFailure = line => new InvalidOperationException($"Bad line {line}.");
 
         await h.StartRunningAsync();
@@ -1509,7 +1498,7 @@ public class SessionControllerTests
         Assert.Equal(new[] { new SessionWarning("headset", "Mirador couldn't start the headset's software again.") }, h.Warnings);
         Assert.Equal(new[] { "Stopped." }, h.EndedMessages);
         Assert.Equal(SessionState.Stopped, h.Controller.State);
-        Assert.True(File.Exists(h.Paths.SessionFile)); // for the next launch's RecoverAsync
+        Assert.True(File.Exists(h.Paths.SessionFile));
     }
 
     [Fact]
@@ -1521,7 +1510,6 @@ public class SessionControllerTests
         await h.StartRunningAsync();
         await h.Controller.StopAsync(CancellationToken.None).WaitAsync(Limit);
 
-        // The headset's software is still stopped, so the next session would record that it wasn't running.
         h.Module.RecoveryData = WasNotRunning;
         h.Module.SessionEndFailure = null;
         await h.Controller.StartAsync(StartReason.Button, CancellationToken.None).WaitAsync(Limit);
@@ -1536,10 +1524,10 @@ public class SessionControllerTests
     public async Task A_start_before_recovery_undoes_the_session_left_behind()
     {
         await using var h = new Harness();
-        new SessionFile(h.Paths.SessionFile).Write("p1", "fake", WasRunning); // Mirador was killed mid-session
+        new SessionFile(h.Paths.SessionFile).Write("p1", "fake", WasRunning);
         h.Module.RecoveryData = WasNotRunning;
 
-        await h.StartRunningAsync(); // a game's START, served before the app called RecoverAsync
+        await h.StartRunningAsync();
 
         Assert.Equal(WasRunning, h.Module.Recovered);
         Assert.Equal(new[] { "processes", "recover", "before-start", "launch", "pipe", "libmonado" }, h.Steps.All);
@@ -1754,14 +1742,13 @@ public class SessionControllerTests
         var stop = h.Controller.StopAsync(CancellationToken.None);
         await h.Timers.Set(TimeSpan.FromSeconds(5)).WaitAsync(Limit);
         Assert.DoesNotContain("end cleanly", h.Steps.All);
-        Assert.Empty(monado.Devices()); // a new call doesn't wait behind the stuck one
+        Assert.Empty(monado.Devices());
         h.Time.Advance(TimeSpan.FromSeconds(5));
         await stop.WaitAsync(Limit);
 
         Assert.Contains("end cleanly", h.Steps.All);
         Assert.False(client.Disposed);
 
-        // Monado has ended, so the stuck call returns, and the close that waited for it completes.
         client.DevicesGate.SetResult();
         await stuck.WaitAsync(Limit);
         await client.Closed.Task.WaitAsync(Limit);

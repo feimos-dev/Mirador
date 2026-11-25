@@ -22,7 +22,6 @@ public class ProfileValidationTests
     [Fact]
     public void A_bundled_build_isnt_looked_for_here()
     {
-        // Mirador's own Monado is checked when it starts; a dev build has none.
         Assert.Empty(Problems(Custom()));
     }
 

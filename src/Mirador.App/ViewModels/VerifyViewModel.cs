@@ -10,11 +10,6 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// The profile's "Verify build for Windows" card: Verify, then passed or failed with the
-/// date, for the profile's build as it is now (kept by its commit). Each step and the run's log are on Diagnostics,
-/// which a failure points to. Its elevation result shows by "Run as administrator" too.
-/// </summary>
 public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatching.DispatcherQueue ui) : ObservableObject
 {
     private readonly object logGate = new();
@@ -24,7 +19,6 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
     private CancellationTokenSource? running;
     private TextLog? log;
 
-    /// <summary>A verify run ended (Run as administrator's note may change).</summary>
     public event Action? Changed;
 
     [ObservableProperty]
@@ -42,28 +36,22 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
     [NotifyCanExecuteChangedFor(nameof(VerifyCommand))]
     public partial bool Unsaved { get; set; }
 
-    /// <summary>Passed or failed and when, or that this build isn't verified yet, or how far a run is.</summary>
     [ObservableProperty]
     public partial string Status { get; set; } = "";
 
-    /// <summary>Whether the card offers Diagnostics: a check failed or was skipped, or the run stopped.</summary>
     [ObservableProperty]
     public partial bool PointsToDiagnostics { get; set; }
 
-    /// <summary>What the last result says of the elevation fix, for Run as administrator; null when it didn't check.</summary>
     public string? ElevationNote { get; private set; }
 
-    /// <summary>The profile shown, for Diagnostics.</summary>
     public string? ProfileId => profile?.Id;
 
-    /// <summary>The log of this profile's last run (a run that stopped has one but no result), for Diagnostics.</summary>
     public string? LastLogFile { get; private set; }
 
     public void Attach() => host.Builds.Changed += OnBuildChanged;
 
     public void Detach() => host.Builds.Changed -= OnBuildChanged;
 
-    // A new build is a new key: the card shows that build's result, or none.
     private void OnBuildChanged(string profileId)
     {
         if (profileId == profile?.Id && !IsBusy)
@@ -72,7 +60,6 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
         }
     }
 
-    /// <summary>Shows the saved <paramref name="saved"/> profile (null: none).</summary>
     public void Show(Profile? saved)
     {
         profile = saved;
@@ -87,7 +74,6 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
             }
             catch (MiradorException)
             {
-                // No Monado yet: the card says so.
             }
         }
 
@@ -110,7 +96,6 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
             return;
         }
 
-        // The build as it is now (it may have been rebuilt since the card was shown).
         Show(profile);
         if (install is null || key is null)
         {
@@ -207,7 +192,7 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
 
         if (result is null || result.Key != key)
         {
-            Status = "Not verified yet for this build.";
+            Status = "";
             return;
         }
 
@@ -221,7 +206,6 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
         };
     }
 
-    /// <summary>A line of the run: to Mirador's log and the run's own, which Diagnostics shows.</summary>
     private void Add(string line)
     {
         AppLog.Write("Verify: " + line);
@@ -233,12 +217,10 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
             }
             catch (IOException)
             {
-                // Mirador's log still has the line.
             }
         }
     }
 
-    /// <summary>Tidies the run logs before a run writes its own, keeping every log a profile's result still names.</summary>
     private void PruneRunLogs()
     {
         try

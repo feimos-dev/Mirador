@@ -3,7 +3,6 @@ using Mirador.Core.Session;
 
 namespace Mirador.Core.Tests.Session;
 
-/// <summary>The table a module runs elevated with.</summary>
 public class ModuleIdTests
 {
     private static readonly TimeSpan Limit = Harness.Limit;

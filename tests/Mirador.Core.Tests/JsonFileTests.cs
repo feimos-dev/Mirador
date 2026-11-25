@@ -12,7 +12,6 @@ public partial class JsonFileTests
         var path = dir.File("file.json");
         JsonFile.Save(path, new Sample(1), SampleJsonContext.Default.Sample);
 
-        // As Load opens it: shared with writers and deleters.
         using (var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
         {
             JsonFile.Save(path, new Sample(2), SampleJsonContext.Default.Sample);
@@ -30,7 +29,6 @@ public partial class JsonFileTests
         var path = dir.File("file.json");
         JsonFile.Save(path, new Sample(1), SampleJsonContext.Default.Sample);
 
-        // Load and Save on two threads at once: every save succeeds and every load finds the file, whole.
         var saving = true;
         var loads = 0;
         var wrong = new List<string>();
@@ -48,7 +46,6 @@ public partial class JsonFileTests
                 }
             }
         });
-        // The saves start once the reader runs: on a fast machine they could otherwise all be done before it starts.
         reading.Wait();
         try
         {

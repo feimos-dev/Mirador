@@ -1,22 +1,5 @@
-/*
- * Mirador's stand-in for monado-service.exe.
- *
- * Monado's runtime DLL starts the service it was built to start (XRT_SERVICE_EXECUTABLE) from service\ below its own
- * folder when a game finds no Monado running, then retries the service's pipe every 100 ms for as long as that program
- * lives. Mirador puts this program there as mirador-standin.exe, the name Mirador's builds start, and as
- * monado-service.exe, for builds configured as upstream does. It asks Mirador (over \\.\pipe\mirador-app-<session id>)
- * to start Monado, starting Mirador first if it isn't running, waits for the answer, and:
- *   - OK:   lingers 2 s, so that the DLL's next retry finds Monado's pipe while this program still lives; exit 0;
- *   - FAIL: prints Mirador's reason and exits 1 at once, so that the game fails quickly instead of hanging.
- * When Mirador isn't running and its setting "Start Mirador when a game needs Monado" is off, it doesn't start Mirador:
- * it writes a line to Mirador's logs\standin.log and exits at once, so that the runtime DLL gives up. A running Mirador
- * still gets the request.
- * Exit codes: 0 Monado is up; 1 Mirador refused or failed (its message on stderr); 3 Mirador isn't running and this
- * process is elevated; 4 Mirador wasn't started: it couldn't be, or "Start Mirador when a game needs Monado" is off;
- * 5 Mirador did not answer within 15 s of starting; 6 no answer within 120 s.
- *
- * Copyright 2026, Finn Zeruhn. Boost Software License 1.0.
- */
+// Copyright 2026, Finn Zeruhn
+// SPDX-License-Identifier: BSL-1.0
 
 #ifndef UNICODE
 #define UNICODE
@@ -25,7 +8,7 @@
 #define _UNICODE
 #endif
 #define WIN32_LEAN_AND_MEAN
-#define _CRT_SECURE_NO_WARNINGS /* wcsncpy is used with its bound and a terminator */
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <windows.h>
 #include <aclapi.h>
@@ -72,7 +55,6 @@ static void say_error(const char *what, DWORD error)
     fflush(stderr);
 }
 
-/* Whether the name is a test's pipe: mirador-standin-test- and 12 hex digits. */
 static BOOL is_test_pipe(const wchar_t *name)
 {
     static const wchar_t prefix[] = L"mirador-standin-test-";
@@ -92,7 +74,6 @@ static BOOL is_test_pipe(const wchar_t *name)
     return TRUE;
 }
 
-/* Whether this process runs elevated. */
 static BOOL is_elevated(void)
 {
     HANDLE token;
@@ -110,10 +91,6 @@ static BOOL is_elevated(void)
     return elevated;
 }
 
-/*
- * Whether the pipe belongs to the user this process runs as (its token's user, also when elevated): pipe names are
- * machine-wide, so another user could make one of this name first.
- */
 static BOOL owned_by_this_user(HANDLE pipe)
 {
     PSID owner = NULL;
@@ -145,12 +122,10 @@ static BOOL owned_by_this_user(HANDLE pipe)
     return same;
 }
 
-/* Opens the pipe, waiting while every instance is busy. INVALID_HANDLE_VALUE and *error when it can't. */
 static HANDLE open_pipe(const wchar_t *name, DWORD *error)
 {
     for (;;)
     {
-        /* Identification only: whoever serves the pipe may learn who connected, never act as them. */
         HANDLE pipe = CreateFileW(
             name, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
         if (pipe != INVALID_HANDLE_VALUE)
@@ -175,11 +150,6 @@ static BOOL is_file(const wchar_t *path)
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
-/*
- * The Mirador this stand-in came with: installed, it sits in <app>\monado\<version>\bin\service\ (the bundled Monado)
- * or <app>\builds\<user>\<profile>\<commit>\bin\service\ (an approved build), so the nearest folder above it that holds
- * Mirador.exe, at most seven up. A copy in a user's build folder has none there.
- */
 static BOOL own_app(wchar_t *path, DWORD count)
 {
     DWORD length = GetModuleFileNameW(NULL, path, count);
@@ -212,11 +182,6 @@ static BOOL own_app(wchar_t *path, DWORD count)
     return FALSE;
 }
 
-/*
- * Where Mirador is: MIRADOR_APP_PATH (as it is: tests use it), else the Mirador this stand-in came with, else
- * HKCU\Software\Mirador AppPath (the one that ran last), else HKLM\SOFTWARE\Mirador AppPath. A registry path whose
- * file is gone (a deleted build that ran once) is passed over.
- */
 static BOOL find_app(wchar_t *path, DWORD count)
 {
     DWORD size;
@@ -243,7 +208,6 @@ static BOOL find_app(wchar_t *path, DWORD count)
         && is_file(path);
 }
 
-/* Whether text[0..length) holds the bytes of word at at. */
 static BOOL matches_at(const char *text, size_t length, size_t at, const char *word)
 {
     size_t word_length = strlen(word);
@@ -259,11 +223,6 @@ static size_t skip_space(const char *text, size_t length, size_t at)
     return at;
 }
 
-/*
- * Whether a game may start Mirador: "Start Mirador when a game needs Monado" in %LOCALAPPDATA%\Mirador\settings.json.
- * Off (0) only when the file holds "startMiradorForGames", optional white space, ':', optional white space, then
- * false. A file that is missing, can't be read or is over 64 KB counts as on.
- */
 static int games_may_start_app(void)
 {
     static const char key[] = "\"startMiradorForGames\"";
@@ -316,7 +275,6 @@ static int games_may_start_app(void)
     return 1;
 }
 
-/* Appends one line, with the local time, to %LOCALAPPDATA%\Mirador\logs\standin.log (the folders made when missing). */
 static void log_line(const char *text)
 {
     wchar_t path[MAX_PATH];
@@ -353,10 +311,6 @@ static void log_line(const char *text)
     }
 }
 
-/*
- * Starts Mirador hidden (--background). It must outlive the game: outside the game's job when the job allows that, and
- * with the user's default environment rather than the game's.
- */
 static BOOL start_app(const wchar_t *exe, HANDLE *app)
 {
     wchar_t command[MAX_PATH + 32];
@@ -398,7 +352,6 @@ static BOOL start_app(const wchar_t *exe, HANDLE *app)
     ok = CreateProcessW(exe, command, NULL, NULL, FALSE, flags, environment, slash != NULL ? folder : NULL, &startup, &process);
     if (!ok && GetLastError() == ERROR_ACCESS_DENIED)
     {
-        /* The game's job doesn't allow breaking away: Mirador then ends with the game, but it runs. */
         ok = CreateProcessW(exe, command, NULL, NULL, FALSE, flags & ~(DWORD)CREATE_BREAKAWAY_FROM_JOB, environment,
                             slash != NULL ? folder : NULL, &startup, &process);
     }
@@ -418,7 +371,6 @@ static BOOL start_app(const wchar_t *exe, HANDLE *app)
     return ok;
 }
 
-/* Reads one line (without its newline) within the 120 s; returns an exit code, or -1 with the line in *line. */
 static int read_reply(HANDLE pipe, char *line, DWORD count)
 {
     DWORD have = 0;
@@ -492,11 +444,6 @@ int main(void)
 
     started = GetTickCount64();
 
-    /*
-     * MIRADOR_STANDIN_PIPE is for tests, so that they can run beside a real Mirador: only a test's own name
-     * (mirador-standin-test- and 12 hex digits), so it can't lead anywhere but to a pipe, and never when elevated.
-     * The owner check still applies.
-     */
     override = GetEnvironmentVariableW(L"MIRADOR_STANDIN_PIPE", app, MAX_PATH);
     if (override > 0 && override < MAX_PATH && is_test_pipe(app) && !is_elevated())
     {
@@ -551,7 +498,6 @@ int main(void)
                     break;
                 }
 
-                /* A Mirador that ended with an error won't answer (one that ended well handed over to another). */
                 if (WaitForSingleObject(started_app, 0) == WAIT_OBJECT_0 && GetExitCodeProcess(started_app, &app_exit) && app_exit != 0)
                 {
                     CloseHandle(started_app);
@@ -606,7 +552,6 @@ int main(void)
 
     if (strcmp(line, "OK") == 0)
     {
-        /* The runtime DLL gives up once this program has ended: be there for its next look at Monado's pipe. */
         Sleep(LINGER_MS);
         return EXIT_UP;
     }

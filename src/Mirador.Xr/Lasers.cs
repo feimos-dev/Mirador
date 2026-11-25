@@ -2,7 +2,6 @@ using StereoKit;
 
 namespace Mirador.Xr;
 
-/// <summary>The controllers' lasers: StereoKit's line interactors, by hand.</summary>
 internal static class Lasers
 {
     public static Handed? HandOf(InteractorSource source) =>
@@ -10,7 +9,6 @@ internal static class Lasers
         : (source & InteractorSource.ControllerRight) != 0 ? Handed.Right
         : null;
 
-    /// <summary><paramref name="hand"/>'s laser while its controller is tracked.</summary>
     public static Interactor? Of(Handed hand)
     {
         foreach (var laser in Interactor.All)

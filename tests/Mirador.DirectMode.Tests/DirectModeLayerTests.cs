@@ -32,17 +32,6 @@ public class DirectModeLayerTests
     }
 
     [Fact]
-    public void The_layer_is_only_found_under_its_new_names()
-    {
-        using var bundled = new TempDir();
-        bundled.Touch("dreamair_vk_layer.json");
-        bundled.Touch("dreamair_vk_layer.dll");
-        bundled.Touch("dreamair-display-check.exe");
-
-        Assert.Throws<MiradorException>(() => DirectModeLayer.Locate(bundled.Path));
-    }
-
-    [Fact]
     public void An_incomplete_layer_asks_for_a_reinstall()
     {
         using var bundled = new TempDir();

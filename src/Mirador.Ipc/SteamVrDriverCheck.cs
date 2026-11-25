@@ -3,48 +3,17 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// Finds SteamVR as Monado does, then checks and holds its Lighthouse driver DLLs.
-/// Steam's folder is writable by every user, so before Monado loads <c>driver_lighthouse.dll</c> and the DLLs beside
-/// it, the helper opens each without write or delete sharing (so none can be swapped or its folder renamed) and accepts
-/// each that is signed by Valve Corp. or is the very copy the user allowed: its SHA-256, taken from the held handle,
-/// equals the one recorded at the consent. The consent step (<c>--allow-elevated-monado</c>) records those hashes with
-/// <see cref="UnsignedFiles"/>, through the same opening, signer check and hashing. Shared by the helper and Mirador
-/// so that the two can't drift.
-/// </summary>
 public static class SteamVrDriverCheck
 {
-    /// <summary>The longest list of file names a refusal spells out; the rest are counted (a reply is one line of 4 KB).</summary>
     private const int NamesShown = 200;
 
-    /// <summary>
-    /// SteamVR's folder as Monado's <c>steamvr_lh</c> finds it: <c>STEAMVR_PATH</c> is not used here (the helper never
-    /// trusts the request's environment), only the user's Steam folder and its <c>libraryfolders.vdf</c>.
-    /// </summary>
     public static string? Find(string? steamPath, Func<string, string?> readFile, Func<string, bool> dirExists) =>
         SteamVr.FindInstall(steamPath, steamVrPathEnv: null, readFile, dirExists);
 
-    /// <summary>
-    /// The helper's check at an elevated Start. Opens every <c>*.dll</c> in <c>drivers\lighthouse\bin\win64</c> without
-    /// write or delete sharing and keeps them open. Then, from the held handles, it reads where each file really is
-    /// (<c>GetFinalPathNameByHandle</c>): <c>driver_lighthouse.dll</c>'s real folder must be laid out as
-    /// <c>…\drivers\lighthouse\bin\win64</c>, every other DLL must really be in that same folder (not a link to a file
-    /// elsewhere), and the SteamVR folder above it is what Monado is told (<c>SteamVrPath</c>), never the path as found
-    /// through the user's Steam settings: a junction on that path could be pointed elsewhere after the check, but a
-    /// folder that holds open files can't be renamed, so the real path stays put while held. Each DLL then passes when
-    /// its Authenticode signer (through <paramref name="signer"/>, asked for the real path) is Valve's
-    /// (<see cref="IsValve"/>), or when its SHA-256, read from the held handle, equals <paramref name="approved"/>'s line
-    /// for its name. On success the open handles are returned in <c>Hold</c> and <c>Refusal</c> is null. Any DLL that
-    /// passes neither way refuses with <see cref="HelperRefusal.SteamVrChanged"/>, naming every such file; a folder or
-    /// file that can't be read, or a file or folder that isn't where it seems, refuses without a typed reason. A refusal
-    /// releases every handle and has no <c>SteamVrPath</c>.
-    /// </summary>
-    /// <param name="approved">The caller's recorded lines (<see cref="ElevatedConsent.ApprovedFiles"/>), never a request's.</param>
     public static SteamVrDriverHold Verify(
         string steamVrPath, Func<string, string?> signer, IReadOnlyDictionary<string, string> approved) =>
         Verify(steamVrPath, signer, approved, FinalPath);
 
-    /// <summary>For tests: <paramref name="finalPath"/> stands in for <c>GetFinalPathNameByHandle</c> on a held file.</summary>
     internal static SteamVrDriverHold Verify(
         string steamVrPath, Func<string, string?> signer, IReadOnlyDictionary<string, string> approved, Func<FileStream, string?> finalPath)
     {
@@ -69,8 +38,6 @@ public static class SteamVrDriverCheck
             return Refuse($"SteamVR has no Lighthouse driver in {win64}. Install or repair SteamVR.");
         }
 
-        // Every DLL held first, so that none of them, and none of the folders above them, can be swapped or renamed
-        // while the rest is checked.
         var holder = new Holder();
         var held = new List<(string Name, FileStream Stream)>();
         foreach (var dll in dlls)
@@ -134,10 +101,6 @@ public static class SteamVrDriverCheck
         return new SteamVrDriverHold(holder, null, realSteamVr);
     }
 
-    /// <summary>
-    /// Where the held files really are: each one's real path, and the SteamVR folder three levels above
-    /// <c>driver_lighthouse.dll</c>'s real <c>drivers\lighthouse\bin\win64</c>; or why not.
-    /// </summary>
     private static (string[]? RealPaths, string? SteamVr, string? Problem) Resolve(
         List<(string Name, FileStream Stream)> held, string win64, Func<FileStream, string?> finalPath)
     {
@@ -182,13 +145,11 @@ public static class SteamVrDriverCheck
         return (realPaths, steamVr, null);
     }
 
-    /// <summary>The folder above <paramref name="folder"/> when <paramref name="folder"/> is named <paramref name="expected"/>, else null.</summary>
     private static string? Parent(string? folder, string expected) =>
         folder is not null && string.Equals(Path.GetFileName(folder), expected, StringComparison.OrdinalIgnoreCase)
             ? Path.GetDirectoryName(folder)
             : null;
 
-    /// <summary><c>\\?\C:\…</c> as <c>C:\…</c>, and <c>\\?\UNC\server\…</c> as <c>\\server\…</c>.</summary>
     private static string? WithoutPrefix(string? path)
     {
         if (path is null)
@@ -204,7 +165,6 @@ public static class SteamVrDriverCheck
         return path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path[4..] : path;
     }
 
-    /// <summary>The held file's real, normalised path (<c>GetFinalPathNameByHandle</c>, DOS drive letters), or null.</summary>
     private static string? FinalPath(FileStream held)
     {
         const uint FileNameNormalized = 0;
@@ -236,13 +196,6 @@ public static class SteamVrDriverCheck
     private static extern uint GetFinalPathNameByHandleW(
         Microsoft.Win32.SafeHandles.SafeFileHandle file, [System.Runtime.InteropServices.Out] char[] path, uint length, uint flags);
 
-    /// <summary>
-    /// The consent step's list: file name to lower-case hex SHA-256 of each <c>*.dll</c> in
-    /// <c>drivers\lighthouse\bin\win64</c> whose signer isn't Valve's, each opened and checked as <see cref="Verify"/>
-    /// does it and hashed from the held handle. Empty when the folder is missing (no Lighthouse driver to allow).
-    /// </summary>
-    /// <exception cref="IOException">The folder can't be listed, or a file in it can't be opened or read: the list would
-    /// be incomplete, so there is none. The message is plain and names the file.</exception>
     public static IReadOnlyDictionary<string, string> UnsignedFiles(string steamVrPath, Func<string, string?> signer)
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -263,7 +216,6 @@ public static class SteamVrDriverCheck
                 $"Mirador couldn't read SteamVR's driver folder {win64} ({Trim(e.Message)}), so Monado was not allowed to run as administrator. Try again; if it keeps failing, repair SteamVR.", e);
         }
 
-        // All held until every one is checked, as at a Start.
         using var holder = new Holder();
         foreach (var dll in dlls)
         {
@@ -287,24 +239,15 @@ public static class SteamVrDriverCheck
         return files;
     }
 
-    /// <summary>Valve's signing certificate names this organisation in both its CN and its O (checked 2026-11-07 on
-    /// <c>driver_lighthouse.dll</c>: <c>CN=Valve Corp., O=Valve Corp., L=Bellevue, S=Washington, C=US</c>).</summary>
     internal const string ValveName = "Valve Corp.";
 
-    /// <summary>Whether a signer subject is Valve's (<see cref="SignerName.Is"/> with <see cref="ValveName"/>).</summary>
     internal static bool IsValve(string? subject) => SignerName.Is(subject, ValveName);
 
-    /// <summary>Every <c>*.dll</c> in the folder, in a fixed order.</summary>
     private static string[] Dlls(string win64) =>
         [.. Directory.GetFiles(win64, "*.dll").OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>
-    /// Read access, read sharing only: another program can read it too, but none may write to, delete or rename it, or
-    /// rename its folder, while the handle is open.
-    /// </summary>
     private static FileStream Open(string dll) => new(dll, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-    /// <summary>The SHA-256 of the held file's bytes, read through its handle (not the path again), as lower-case hex.</summary>
     private static string Sha256(FileStream held)
     {
         held.Position = 0;
@@ -313,11 +256,6 @@ public static class SteamVrDriverCheck
         return Convert.ToHexStringLower(hash);
     }
 
-    /// <summary>
-    /// The names, comma-separated, cut short (with how many more) past <see cref="NamesShown"/> characters. The first is
-    /// always shown (a file name is at most 255 characters), so the line stays well inside the reply's 4 KB however
-    /// the names escape in JSON.
-    /// </summary>
     private static string Names(List<string> names)
     {
         var shown = new List<string>();
@@ -341,7 +279,6 @@ public static class SteamVrDriverCheck
 
     private static string Trim(string message) => message.Trim().TrimEnd('.');
 
-    /// <summary>Holds the open driver-file handles; disposing releases them.</summary>
     private sealed class Holder : IDisposable
     {
         private readonly List<FileStream> handles = [];
@@ -366,11 +303,6 @@ public static class SteamVrDriverCheck
     }
 }
 
-/// <summary>
-/// What <see cref="SteamVrDriverCheck.Verify"/> found: the held driver files (release by disposing), why the elevated Start
-/// is refused (null when it may go on), and the real SteamVR folder to give Monado as <c>STEAMVR_PATH</c> (null on a
-/// refusal), read from the held files rather than taken from the path they were found by.
-/// </summary>
 public sealed record SteamVrDriverHold(IDisposable Hold, HelperReply? Refusal, string? SteamVrPath)
 {
     public void Deconstruct(out IDisposable hold, out HelperReply? refusal)
@@ -380,18 +312,11 @@ public sealed record SteamVrDriverHold(IDisposable Hold, HelperReply? Refusal, s
     }
 }
 
-/// <summary>The organisation an Authenticode signer subject (<see cref="WinTrustSigner.SubjectOf"/>) names.</summary>
 public static class SignerName
 {
     private const string CommonNameOid = "2.5.4.3";
     private const string OrganizationOid = "2.5.4.10";
 
-    /// <summary>
-    /// Whether <paramref name="subject"/> is <paramref name="organisation"/>'s: parsed as a distinguished name (not
-    /// compared as text, so <c>CN=Valve Corp.evil</c> or a quoted <c>CN="Valve Corp., O=Valve Corp."</c> don't pass), it
-    /// must have exactly one CN and exactly one O, each equal to <paramref name="organisation"/>, wherever they sit in
-    /// the name. A name Windows can't parse, or one with a multi-valued RDN, is refused.
-    /// </summary>
     public static bool Is(string? subject, string organisation)
     {
         if (string.IsNullOrWhiteSpace(subject))

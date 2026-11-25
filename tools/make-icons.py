@@ -12,19 +12,15 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
 ASSETS = Path(__file__).resolve().parent.parent / "src" / "Mirador.App" / "Assets"
-PNG = ASSETS / "Mirador.png"  # 256: the title bar decodes it at its own size, the README shows it at 128
+PNG = ASSETS / "Mirador.png"
 
-# The design is laid out on a 256 grid, drawn at 1024 and scaled down to each icon size.
 BIG = 1024
 UNIT = BIG / 256
 
-# The panes: four squares in 20..236, 11.21 apart.
 PANE_AT = (20, 133.61)
 PANE = 102.39
 PANES_BOX = (20, 20, 236, 236)
 
-# Monado's logo, in its own 144 grid, centred on the icon at twice its size. The see-through ring along the hexagon's
-# edge is as wide as the gaps between the panes.
 HEXAGON = (
     "M104.67,46.75 L74.16,37.56c-1.41,-0.42 -2.91,-0.42 -4.32,0l-30.51,9.19c-2.14,0.64 -3.6,2.62 -3.6,4.85v40.95"
     "c0,2.24 1.48,4.22 3.63,4.86l30.53,9.03c1.38,0.41 2.85,0.41 4.23,0l30.53,-9.03c2.15,-0.64 3.63,-2.61 3.63,-4.86"
@@ -40,7 +36,6 @@ LOGO_CENTRE = (72, 72.2)
 LOGO_SCALE = 2
 RING = 11.21
 
-# Colours, top-left to bottom-right.
 BLUE = ((0x34, 0xA6, 0xF8), (0x00, 0x46, 0x8C))
 PURPLE = ((0xB4, 0x61, 0xD8), (0x46, 0x11, 0x56))
 RED = ((0xF4, 0x5B, 0x66), (0x8C, 0x1A, 0x26))
@@ -112,7 +107,7 @@ def gradient(colours, box):
     t = ImageChops.add(across, down, scale=2.0)
     (r0, g0, b0), (r1, g1, b1) = colours
     rgb = Image.merge("RGB", [t.point(lambda v, a=a, b=b: round(a + (b - a) * v / 255)) for a, b in ((r0, r1), (g0, g1), (b0, b1))])
-    layer = Image.new("RGB", (BIG, BIG), colours[1])  # outside the box is masked off by the caller
+    layer = Image.new("RGB", (BIG, BIG), colours[1])
     layer.paste(rgb, (x0, y0))
     return layer
 

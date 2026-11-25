@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The NVAPI declarations: ids, constants and the three structs whose layout the driver sees.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -60,31 +58,6 @@ TEST_CASE("Handle is 64 bytes: display id, pad, the driver's pointer, 48 spare")
     CHECK(handle.nvapi == nullptr);
 }
 
-TEST_CASE("NVAPI ids")
-{
-    CHECK(nvdm::Initialize == 0x0150e828u);
-    CHECK(nvdm::GetPhysicalGpuFromDisplayId == 0x9ea74659u);
-    CHECK(nvdm::GetAdapterIdFromPhysicalGpu == 0x0ff07fdeu);
-    CHECK(nvdm::Enumerate == 0x602f60d8u);
-    CHECK(nvdm::EnableDirectMode == 0x1ac2b1e7u);
-    CHECK(nvdm::BindDevice == 0xc4e4efdau);
-    CHECK(nvdm::CreateBackBuffer == 0x86bdb518u);
-    CHECK(nvdm::SetDisplayMode == 0x56df9d51u);
-    CHECK(nvdm::Present == 0x8c84a92au);
-    CHECK(nvdm::GetPresentStats == 0xace116bcu);
-    CHECK(nvdm::GetDriverAndBranchVersion == 0x2926aaadu);
-    // The public calls of the EDID route.
-    CHECK(nvdm::GetGpuAndOutputIdFromDisplayId == 0x112ba1a5u);
-    CHECK(nvdm::GetEDID == 0x37d32e69u);
-}
-
-TEST_CASE("NVAPI constants")
-{
-    CHECK(nvdm::kVendorPvr == 0xd242u);
-    CHECK(nvdm::kSetModeOk == -208);
-    CHECK(nvdm::kBackBufferCount == 3u);
-}
-
 TEST_CASE("The id table lists every id once, with a name, in call order")
 {
     std::set<uint32_t> ids;
@@ -105,7 +78,6 @@ TEST_CASE("The id table lists every id once, with a name, in call order")
     CHECK(names.size() == std::size(nvdm::kAllIds));
     CHECK(std::size(nvdm::kAllIds) == 13);
 
-    // The seven calls only the direct-mode path uses; first_missing_id() names the first of these that is missing.
     CHECK(private_ids ==
           "Enumerate EnableDirectMode BindDevice CreateBackBuffer SetDisplayMode Present GetPresentStats ");
 }

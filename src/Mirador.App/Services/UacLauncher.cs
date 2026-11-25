@@ -5,10 +5,6 @@ using Mirador.Core.Build;
 
 namespace Mirador.App.Services;
 
-/// <summary>
-/// Runs a program through Windows' administrator prompt and waits for it: Visual Studio's installer for the build tools
-///. Mirador itself stays unelevated.
-/// </summary>
 public sealed class UacLauncher : IElevatedLauncher
 {
     public async Task<int> RunAsync(CommandSpec spec, CancellationToken ct)

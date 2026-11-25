@@ -6,13 +6,8 @@ using Mirador.Ipc;
 
 namespace Mirador.Pimax;
 
-/// <summary>
-/// A Dream Air session while Monado runs: the fixed environment, the status lines (the eye geometry upload, and Monado's
-/// missing driver), and a watch for programs that would take the headset or the receiver back.
-/// </summary>
 public sealed class DreamAirSession : ModuleSession, IDisposable
 {
-    /// <summary>How often the session looks for Pimax's software and SteamVR.</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
     internal const string PimaxStarted =
@@ -31,10 +26,6 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
     private bool ended;
     private bool stopRequested;
 
-    /// <param name="ctx">The module's context: the helper, the process list and the clock.</param>
-    /// <param name="environment">The variables Monado gets for the Dream Air.</param>
-    /// <param name="upload">How the eye geometry upload went, which the eye tracker's line shows; null when there was none (no eye line).</param>
-    /// <param name="warnings">Warnings from getting ready, raised at the first look (Mirador listens only once it has the session).</param>
     public DreamAirSession(
         ModuleContext ctx, IReadOnlyList<EnvVar> environment, GeometryResult? upload,
         IReadOnlyList<SessionWarning>? warnings = null, string headset = "Pimax Dream Air", bool headsetThere = true)
@@ -59,11 +50,9 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
             RaiseStatusChanged();
         }
 
-        // Monado found no driver for the headset: it idles, so it stops now.
         StopIfFailed();
     }
 
-    /// <summary>Stops watching for Pimax's software and SteamVR.</summary>
     public override Task EndAsync(CancellationToken ct)
     {
         StopWatching();
@@ -82,7 +71,6 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         timer.Dispose();
     }
 
-    /// <summary>One look at the running programs; warns once each time Pimax's software or SteamVR appears.</summary>
     private void Poll()
     {
         IReadOnlyList<ProcInfo> running;
@@ -135,7 +123,6 @@ public sealed class DreamAirSession : ModuleSession, IDisposable
         }
     }
 
-    /// <summary>Asks Mirador once to stop Monado when the parser says it can't work.</summary>
     private void StopIfFailed()
     {
         if (parser.Failed is { } failed)

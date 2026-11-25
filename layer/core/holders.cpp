@@ -12,7 +12,6 @@
 namespace nvdm {
 namespace {
 
-// Design 4, "Holder checks". The start script carries its own copy of these lists (PowerShell cannot call this code).
 const char* const kDisplay[] = {"pi_server.exe", "vrcompositor.exe"};
 const char* const kBoard[] = {"pi_server.exe",   "PimaxClient.exe",   "PiPlayService.exe",
                               "PiPlatformService_64.exe", "pi_overlay.exe", "vrss_gaze_provider.exe"};
@@ -49,7 +48,6 @@ std::vector<std::string> match(const char* const (&names)[N], const std::vector<
     return running;
 }
 
-// UTF-16 to UTF-8, for the process list. Process names are ASCII in practice; anything else is kept as it is.
 std::string to_utf8(const wchar_t* wide)
 {
     const int size = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
@@ -58,11 +56,11 @@ std::string to_utf8(const wchar_t* wide)
     }
     std::string text(static_cast<size_t>(size), '\0');
     WideCharToMultiByte(CP_UTF8, 0, wide, -1, &text[0], size, nullptr, nullptr);
-    text.resize(static_cast<size_t>(size) - 1); // Without the terminator the call wrote.
+    text.resize(static_cast<size_t>(size) - 1);
     return text;
 }
 
-} // namespace
+}
 
 std::vector<std::string> list_processes()
 {
@@ -91,4 +89,4 @@ std::vector<std::string> running_holders(Held held, const std::vector<std::strin
     return {};
 }
 
-} // namespace nvdm
+}

@@ -7,19 +7,8 @@ using Mirador.Ipc;
 
 namespace Mirador.Pimax;
 
-/// <summary>How the eye geometry upload went.</summary>
-/// <param name="Ok">Whether the tracker took the geometry.</param>
-/// <param name="TrackerSerial">The eye tracker's serial, when the runtime said it; also on a failed upload.</param>
-/// <param name="Message">For the Eye tracker status line: "Geometry uploaded", or what went wrong in plain words.</param>
-/// <param name="LogPath">The runtime's output, written at every upload that ran.</param>
 public sealed record GeometryResult(bool Ok, string? TrackerSerial, string Message, string LogPath);
 
-/// <summary>
-/// Uploads the eye geometry to the Dream Air's eye tracker, which forgets it at power-off; without it gaze is about
-/// 10° off. It runs the owner's own copy of Tobii's runtime from Pimax Play, unmodified, with
-/// the variant's geometry file: the runtime opens the tracker, passes its licence check, sends the geometry and stops
-/// at ENTER. A port of <c>DreamAirWin\tools\upload_geometry.ps1</c>.
-/// </summary>
 public sealed partial class GeometryUploader(
     Func<ProcessSpec, IConsoleProcess> start, IUsbDevices usb, IProcessList processes, AppPaths paths, TimeProvider time)
 {
@@ -29,32 +18,16 @@ public sealed partial class GeometryUploader(
 
     private const string NotUploaded = "The eye geometry wasn't uploaded, so gaze will be about 10° off";
 
-    /// <summary>How long the runtime gets to reach its licence check, which comes after it opened the tracker.</summary>
     internal static readonly TimeSpan LicenceWait = TimeSpan.FromSeconds(30);
 
-    /// <summary>How long it then gets to send the geometry, before ENTER stops it.</summary>
     internal static readonly TimeSpan SendWait = TimeSpan.FromSeconds(2);
 
-    /// <summary>How long it gets to end after ENTER before it is killed.</summary>
     internal static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(15);
 
-    /// <summary>How long a killed runtime gets to be gone, so that it lets go of the tracker and its copied files.</summary>
     internal static readonly TimeSpan KillWait = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// Pimax's programs that hold the eye tracker; the runtime can't open it while one runs. A <c>monado-service</c>
-    /// isn't among them: the session refuses a real Monado before a Start gets here, and Mirador's own stand-in, which
-    /// has that name too, runs while a game's Start uploads.
-    /// </summary>
     private static readonly string[] Holders = ["pi_server", "vrss_gaze_provider", PimaxNames.EyeRuntimeProcess];
 
-    /// <summary>
-    /// Uploads the geometry of <paramref name="variant"/> from <paramref name="pimax"/>. Pimax's software and Monado must
-    /// not run. Pimax Play's folder is only read: the runtime and the geometry file are copied to
-    /// <c>&lt;GeometryDir&gt;\runtime\</c> and run there.
-    /// </summary>
-    /// <returns>Never a thrown failure: a failed upload is a result, since Monado can start without the geometry.</returns>
-    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the runtime was ended first.</exception>
     public async Task<GeometryResult> UploadAsync(PimaxInstall pimax, string variant, CancellationToken ct)
     {
         var logPath = Path.Combine(paths.GeometryDir, "runtime.log");
@@ -110,11 +83,6 @@ public sealed partial class GeometryUploader(
             : new GeometryResult(false, serial, $"{NotUploaded}. Details: {logPath}", logPath);
     }
 
-    /// <summary>
-    /// Reads the runtime's output: whether it opened the tracker (<c>Opened device '…'</c>, which names its serial) and
-    /// whether it created its session with the tracker (<c>tobii_xr_create successful</c>), after which the geometry
-    /// is on it.
-    /// </summary>
     public static (bool Connected, bool Created, string? Serial) Evaluate(IReadOnlyList<string> lines)
     {
         string? serial = null;
@@ -144,7 +112,6 @@ public sealed partial class GeometryUploader(
         File.Copy(pimax.TobiiRuntimeExe, exe, overwrite: true);
         File.Copy(pimax.BlobPath(variant), Path.Combine(runtimeDir, blob), overwrite: true);
 
-        // The output folder relative to the runtime's own: a user name outside the ANSI code page can't break it.
         var outputArg = Path.Combine("..", "log");
         using var process = start(new ProcessSpec(exe, $"-x {blob} \"{outputArg}\"", runtimeDir, ConsoleProcess.CurrentEnvironment()));
         var licence = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -163,8 +130,6 @@ public sealed partial class GeometryUploader(
 
         try
         {
-            // Its stdout holds back the line saying the session was created until it ends, so wait for the licence
-            // check instead, then give it a moment to send the geometry.
             if (await WaitAsync(licence.Task, process.Exited, LicenceWait, ct).ConfigureAwait(false))
             {
                 await WaitAsync(process.Exited, null, SendWait, ct).ConfigureAwait(false);
@@ -189,7 +154,6 @@ public sealed partial class GeometryUploader(
         }
     }
 
-    /// <summary>Ends the runtime and waits a moment for it to be gone, so that Monado finds the tracker free.</summary>
     private async Task KillAsync(IConsoleProcess process)
     {
         process.Kill();
@@ -198,7 +162,6 @@ public sealed partial class GeometryUploader(
         await stop.CancelAsync().ConfigureAwait(false);
     }
 
-    /// <summary>Whether <paramref name="task"/> completed within <paramref name="limit"/>; <paramref name="orElse"/> ending first counts as no.</summary>
     private async Task<bool> WaitAsync(Task task, Task? orElse, TimeSpan limit, CancellationToken ct)
     {
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -224,7 +187,6 @@ public sealed partial class GeometryUploader(
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // The log is for details only; the result says what happened.
         }
     }
 

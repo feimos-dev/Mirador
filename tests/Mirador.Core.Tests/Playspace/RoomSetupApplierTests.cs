@@ -17,7 +17,6 @@ public sealed class RoomSetupApplierTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
-    /// <summary>A libmonado connection that records the offsets set.</summary>
     private sealed class OriginsClient(params string[] origins) : IMonadoClient
     {
         public bool OffersOriginOffsets { get; init; } = true;
@@ -68,7 +67,6 @@ public sealed class RoomSetupApplierTests : IDisposable
     {
         store.Set(new RoomSetup("simulated", "1500000001", Simulated, Taken));
 
-        // Another universe's setup and one for an origin this Monado hasn't got.
         store.Set(new RoomSetup("steamvr_lh", "30", Lighthouse, Taken));
         store.Set(new RoomSetup("survive", "1500000001", Lighthouse, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
@@ -88,7 +86,6 @@ public sealed class RoomSetupApplierTests : IDisposable
         store.Set(new RoomSetup("simulated", "1500000001", Simulated, Taken));
         var client = new OriginsClient("steamvr_lh", "simulated");
 
-        // The universe's own setup wins; without one, the setup taken without a space is used.
         Assert.Equal(2, RoomSetupApplier.Apply(client, store, "1500000001"));
         Assert.Equal([(0u, noSpace), (1u, Simulated)], client.Set);
     }
@@ -129,7 +126,6 @@ public sealed class RoomSetupApplierTests : IDisposable
         Assert.Equal(1, RoomSetupApplier.ApplyWithSteamVr(client, store, steam.Path, [new("AA:BB:CC:DD:EE:01", "LHB-DEADBEEF")]));
         Assert.Equal([(0u, Lighthouse)], client.Set);
 
-        // Without Steam: no universe, so the setup taken without one.
         client.Set.Clear();
         Assert.Equal(1, RoomSetupApplier.ApplyWithSteamVr(client, store, null, []));
         Assert.Equal([(0u, Simulated)], client.Set);
@@ -138,7 +134,6 @@ public sealed class RoomSetupApplierTests : IDisposable
     [Fact]
     public void Steams_files_that_cant_be_read_apply_nothing()
     {
-        // Not only the setup taken without a universe: which universe is in use isn't known.
         using var steam = new TempDir();
         Directory.CreateDirectory(Path.GetDirectoryName(Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path))!);
         File.WriteAllText(Mirador.Core.Lighthouse.SteamVrRoom.LighthousedbPath(steam.Path), "{ \"known_universes\" : [");

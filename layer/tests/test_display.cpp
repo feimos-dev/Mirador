@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The display, its mode and its plane: the answers alone, then the display, plane and mode queries
-// through the layer's chain to a fake driver, with the display session on a fake NVAPI.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstring>
@@ -38,7 +35,6 @@ std::vector<VkDisplayPropertiesKHR> displays(ChainRig& rig, size_t gpu)
     return list;
 }
 
-// Our display and its mode, as an application finds them.
 struct Ours {
     VkDisplayKHR display = VK_NULL_HANDLE;
     VkDisplayModeKHR mode = VK_NULL_HANDLE;
@@ -68,7 +64,7 @@ bool lines_contain(const std::vector<std::string>& lines, const char* text)
     return false;
 }
 
-} // namespace
+}
 
 TEST_CASE("display_properties_values")
 {
@@ -91,7 +87,6 @@ TEST_CASE("display_properties_values")
     CHECK_FALSE(dvl::is_product_mode(nvdm::kDreamAir, VkDisplayModeParametersKHR{{7104, 3840}, 60000}));
     CHECK_FALSE(dvl::is_product_mode(nvdm::kDreamAir, VkDisplayModeParametersKHR{{3552, 3840}, 90000}));
 
-    // The name outlives the Product it came from (Monado keeps the pointer after freeing the array).
     auto name = std::make_unique<std::string>("Some Headset");
     nvdm::Product other = nvdm::kDreamAir;
     other.name = name->c_str();
@@ -99,16 +94,13 @@ TEST_CASE("display_properties_values")
     dvl::fill_display_properties(other, q);
     name.reset();
     CHECK(std::string(q.displayName) == "Some Headset");
-    // The same name gives the same string each time.
     VkDisplayPropertiesKHR again{};
     dvl::fill_display_properties(nvdm::kDreamAir, again);
     CHECK(again.displayName == p.displayName);
 
-    // Our plane shows our display, at stack index 0.
     const VkDisplayPlanePropertiesKHR plane = dvl::our_plane_properties();
     CHECK(plane.currentDisplay == dvl::our_display());
     CHECK(plane.currentStackIndex == 0);
-    // Our objects are told from others by their handle alone.
     CHECK(dvl::is_our_display(dvl::our_display()));
     CHECK(dvl::is_our_mode(dvl::our_mode()));
     CHECK_FALSE(dvl::is_our_display(VK_NULL_HANDLE));
@@ -121,7 +113,6 @@ TEST_CASE("plane_alpha_opaque_and_global")
 {
     const VkDisplayPlaneCapabilitiesKHR caps = dvl::plane_capabilities(nvdm::kDreamAir);
     CHECK(caps.supportedAlpha == (VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR | VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR));
-    // Source and destination are the whole mode, at 0,0.
     for (const VkExtent2D& e : {caps.minSrcExtent, caps.maxSrcExtent, caps.minDstExtent, caps.maxDstExtent}) {
         CHECK(e.width == 7104);
         CHECK(e.height == 3840);
@@ -135,10 +126,10 @@ TEST_CASE("plane_alpha_opaque_and_global")
 TEST_CASE("plane_shift")
 {
     const dvl::PlaneMap map{2};
-    CHECK_FALSE(map.to_driver(0).has_value()); // ours
+    CHECK_FALSE(map.to_driver(0).has_value());
     CHECK(map.to_driver(1) == 0u);
     CHECK(map.to_driver(2) == 1u);
-    CHECK_FALSE(map.to_driver(3).has_value()); // past the last plane
+    CHECK_FALSE(map.to_driver(3).has_value());
     CHECK(map.count() == 3);
     const dvl::PlaneMap none{0};
     CHECK(none.count() == 1);
@@ -147,25 +138,21 @@ TEST_CASE("plane_shift")
 
 TEST_CASE("display_listed_only_for_matching_luid")
 {
-    // A laptop with two GPUs (review focus 2): the display is on gpu 0's adapter. Gpu 1 (another NVIDIA adapter) is
-    // asked first, as an application that enumerates in order would.
     ChainRig rig;
     REQUIRE(rig.ready());
-    CHECK(display_count(rig, 1) == 0); // driver displays only (none)
+    CHECK(display_count(rig, 1) == 0);
     CHECK_FALSE(rig.session->is_open());
     CHECK(lines_contain(rig.session_log, "Luid:"));
     CHECK(display_count(rig, 0) == 1);
     CHECK(rig.session->is_open());
-    CHECK(display_count(rig, 1) == 0); // still not, now that the session is open
+    CHECK(display_count(rig, 1) == 0);
 
-    // An Intel iGPU: not NVIDIA, so the session is not even asked.
     const size_t calls = rig.api.calls().size();
     const size_t lines = rig.session_log.size();
     CHECK(display_count(rig, 2) == 0);
     CHECK(rig.api.calls().size() == calls);
     CHECK(rig.session_log.size() == lines);
 
-    // The other GPU's queries all went down; the matching one's count query went down for the driver's displays.
     CHECK(g_driver.count("vkGetPhysicalDeviceDisplayPropertiesKHR") == 4);
 }
 
@@ -183,7 +170,6 @@ TEST_CASE("our_display_first")
     CHECK(list[1].display == dvl_test::driver_display(0, 0));
     CHECK(std::string(list[1].displayName) == "driver display");
 
-    // Room for one: ours, and VK_INCOMPLETE.
     const auto query = rig.fn<PFN_vkGetPhysicalDeviceDisplayPropertiesKHR>("vkGetPhysicalDeviceDisplayPropertiesKHR");
     uint32_t n = 1;
     VkDisplayPropertiesKHR one{};
@@ -191,7 +177,6 @@ TEST_CASE("our_display_first")
     CHECK(n == 1);
     CHECK(one.display == list[0].display);
 
-    // The ...2KHR variant: the same order, sType and pNext kept.
     const auto query2 =
         rig.fn<PFN_vkGetPhysicalDeviceDisplayProperties2KHR>("vkGetPhysicalDeviceDisplayProperties2KHR");
     n = 0;
@@ -207,8 +192,6 @@ TEST_CASE("our_display_first")
 
 TEST_CASE("display_not_listed_while_pimax_holds_it")
 {
-    // The holder check comes first: no NVAPI call at all, one line from the session, and the answer is
-    // kept for the instance (the plane query does not try again).
     ChainRig rig;
     REQUIRE(rig.ready());
     rig.running = {"pi_server.exe", "explorer.exe"};
@@ -221,7 +204,7 @@ TEST_CASE("display_not_listed_while_pimax_holds_it")
         rig.fn<PFN_vkGetPhysicalDeviceDisplayPlanePropertiesKHR>("vkGetPhysicalDeviceDisplayPlanePropertiesKHR");
     uint32_t n = 0;
     CHECK(planes(ChainRig::gpu(0), &n, nullptr) == VK_SUCCESS);
-    CHECK(n == 0); // the driver's planes only
+    CHECK(n == 0);
     CHECK(rig.session_log.size() == 1);
     CHECK(g_driver.count("vkGetPhysicalDeviceDisplayPlanePropertiesKHR") == 1);
 }
@@ -266,7 +249,6 @@ TEST_CASE("mode_properties_of_our_display")
     CHECK(mode.displayModeProperties.parameters.refreshRate == 90000);
     CHECK(stereo.hdmi3DSupported == VK_FALSE);
 
-    // Plane 0 shows our display; it is the one display our plane supports.
     const auto supported =
         rig.fn<PFN_vkGetDisplayPlaneSupportedDisplaysKHR>("vkGetDisplayPlaneSupportedDisplaysKHR");
     VkDisplayKHR display = VK_NULL_HANDLE;
@@ -281,11 +263,9 @@ TEST_CASE("mode_properties_of_our_display")
     REQUIRE(planes2(ChainRig::gpu(0), &n, &plane) == VK_SUCCESS);
     CHECK(plane.displayPlaneProperties.currentDisplay == ours.display);
     CHECK(plane.displayPlaneProperties.currentStackIndex == 0);
-    // The plane list is ours and the driver's: that one asks the driver for its count (none).
     CHECK(g_driver.count("vkGetPhysicalDeviceDisplayPlaneProperties2KHR") == 1);
     g_driver.clear_calls();
 
-    // Our mode on our plane, both entry points.
     const auto caps = rig.fn<PFN_vkGetDisplayPlaneCapabilitiesKHR>("vkGetDisplayPlaneCapabilitiesKHR");
     VkDisplayPlaneCapabilitiesKHR c{};
     REQUIRE(caps(ChainRig::gpu(0), ours.mode, 0, &c) == VK_SUCCESS);
@@ -298,7 +278,6 @@ TEST_CASE("mode_properties_of_our_display")
     CHECK(c2.sType == VK_STRUCTURE_TYPE_DISPLAY_PLANE_CAPABILITIES_2_KHR);
     CHECK(c2.capabilities.supportedAlpha == c.supportedAlpha);
 
-    // None of the rest reached the driver.
     CHECK(g_driver.calls().empty());
 }
 
@@ -318,13 +297,11 @@ TEST_CASE("create_display_mode_other_than_ours_fails")
     CHECK(create(ChainRig::gpu(0), ours.display, &ci, nullptr, &mode) == VK_ERROR_INITIALIZATION_FAILED);
     ci.parameters = {{1920, 1080}, 90000};
     CHECK(create(ChainRig::gpu(0), ours.display, &ci, nullptr, &mode) == VK_ERROR_INITIALIZATION_FAILED);
-    // The one mode it has is the one it gives.
     ci.parameters = {{7104, 3840}, 90000};
     REQUIRE(create(ChainRig::gpu(0), ours.display, &ci, nullptr, &mode) == VK_SUCCESS);
     CHECK(mode == ours.mode);
     CHECK(g_driver.calls().empty());
 
-    // The driver's display: its own business.
     ci.parameters = {{1920, 1080}, 60000};
     REQUIRE(create(ChainRig::gpu(0), dvl_test::driver_display(0, 0), &ci, nullptr, &mode) == VK_SUCCESS);
     CHECK(mode == dvl_test::driver_mode(0, 1));
@@ -333,7 +310,6 @@ TEST_CASE("create_display_mode_other_than_ours_fails")
 
 TEST_CASE("plane_pairs_without_valid_call_down_answered_by_layer")
 {
-    // The driver has a display and a plane: index 1 to the application.
     std::vector<dvl_test::FakeGpu> gpus = dvl_test::default_gpus();
     gpus[0].displays = 1;
     gpus[0].planes = 1;
@@ -347,7 +323,6 @@ TEST_CASE("plane_pairs_without_valid_call_down_answered_by_layer")
     const auto caps2 = rig.fn<PFN_vkGetDisplayPlaneCapabilities2KHR>("vkGetDisplayPlaneCapabilities2KHR");
     VkDisplayPlaneCapabilitiesKHR c{};
     c.supportedAlpha = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
-    // Our mode with the driver's plane, and the driver's mode with our plane: the plane cannot show the mode.
     REQUIRE(caps(ChainRig::gpu(0), ours.mode, 1, &c) == VK_SUCCESS);
     CHECK(c.supportedAlpha == 0);
     c.supportedAlpha = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
@@ -361,7 +336,6 @@ TEST_CASE("plane_pairs_without_valid_call_down_answered_by_layer")
     REQUIRE(caps2(ChainRig::gpu(0), &info, &c2) == VK_SUCCESS);
     CHECK(c2.capabilities.supportedAlpha == 0);
 
-    // A surface for either pair is refused.
     const auto create_surface = rig.fn<PFN_vkCreateDisplayPlaneSurfaceKHR>("vkCreateDisplayPlaneSurfaceKHR");
     VkDisplaySurfaceCreateInfoKHR sci{VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR};
     sci.displayMode = ours.mode;
@@ -375,10 +349,8 @@ TEST_CASE("plane_pairs_without_valid_call_down_answered_by_layer")
     CHECK(create_surface(rig.instance, &sci, nullptr, &surface) < 0);
     CHECK(surface == VK_NULL_HANDLE);
 
-    // None of these went down.
     CHECK(g_driver.calls().empty());
 
-    // The driver's mode on the driver's plane goes down, with the driver's own index.
     c.supportedAlpha = 0;
     REQUIRE(caps(ChainRig::gpu(0), driver_mode, 1, &c) == VK_SUCCESS);
     CHECK(c.supportedAlpha == VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR);
@@ -387,12 +359,11 @@ TEST_CASE("plane_pairs_without_valid_call_down_answered_by_layer")
     info = {VK_STRUCTURE_TYPE_DISPLAY_PLANE_INFO_2_KHR, nullptr, driver_mode, 1};
     REQUIRE(caps2(ChainRig::gpu(0), &info, &c2) == VK_SUCCESS);
     CHECK(g_driver.last("vkGetDisplayPlaneCapabilities2KHR").index == 0);
-    CHECK(info.planeIndex == 1); // the application's struct is not changed
+    CHECK(info.planeIndex == 1);
     sci.planeIndex = 1;
     REQUIRE(create_surface(rig.instance, &sci, nullptr, &surface) == VK_SUCCESS);
     CHECK(g_driver.last("vkCreateDisplayPlaneSurfaceKHR").index == 0);
     CHECK(sci.planeIndex == 1);
-    // A plane past the last: no such plane, answered by the layer.
     c.supportedAlpha = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
     g_driver.clear_calls();
     REQUIRE(caps(ChainRig::gpu(0), driver_mode, 2, &c) == VK_SUCCESS);
@@ -428,7 +399,6 @@ TEST_CASE("driver_planes_follow_ours")
     REQUIRE(supported(ChainRig::gpu(0), 2, &n, nullptr) == VK_SUCCESS);
     CHECK(n == 1);
     CHECK(g_driver.last("vkGetDisplayPlaneSupportedDisplaysKHR").index == 1);
-    // Past the last plane: no displays, and no call with an index the driver does not have.
     g_driver.clear_calls();
     n = 5;
     REQUIRE(supported(ChainRig::gpu(0), 3, &n, nullptr) == VK_SUCCESS);
@@ -443,7 +413,7 @@ TEST_CASE("foreign_display_calls_go_down_unchanged")
     gpus[1].planes = 1;
     ChainRig rig(gpus);
     REQUIRE(rig.ready());
-    const VkPhysicalDevice other = ChainRig::gpu(1); // no display of ours: nothing is shifted
+    const VkPhysicalDevice other = ChainRig::gpu(1);
     const VkDisplayKHR display = dvl_test::driver_display(1, 0);
 
     CHECK(display_count(rig, 1) == 1);

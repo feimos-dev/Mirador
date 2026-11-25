@@ -44,7 +44,6 @@ public sealed class SteamVrNowTests : IDisposable
 
         var now = SteamVrNow.Read(steam.Path, Stations);
 
-        // The space in use is 1500000001; steamvr_lh applies 30's room setup.
         Assert.Equal(new UniversePick("1500000001", true), now.Pick);
         Assert.Equal(new HashSet<string> { "30" }, now.RoomSetups);
         Assert.Equal(new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1), now.Base);

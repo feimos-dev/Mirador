@@ -143,7 +143,6 @@ public class XrLinkTests
         var program = XrLinkConnection.Connect(name, XrLink.HomeRole, Limit);
         Assert.NotNull(program);
         program.Start();
-        // Gone once Mirador has its end: before that, there would be no end to close.
         await connected.Task.WaitAsync(Limit);
         program.Dispose();
 
