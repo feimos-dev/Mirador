@@ -186,7 +186,7 @@ public class DreamAirChecksTests
     public void An_unknown_geometry_variant_is_an_error_not_a_throw(string variant)
     {
         Assert.Equal(
-            new CheckResult("Eye geometry", StatusLevel.Error, $"Mirador doesn't know the eye geometry variant {variant}.", "Pick your headset's variant in Eye tracking."),
+            new CheckResult("Eye geometry", StatusLevel.Error, $"Mirador doesn't know the eye geometry variant {variant}.", "Pick your headset's variant in Profiles."),
             Check("Eye geometry", variant));
     }
 

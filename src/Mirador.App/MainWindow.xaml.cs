@@ -13,6 +13,9 @@ namespace Mirador.App;
 
 public sealed partial class MainWindow : Window
 {
+    /// <summary>Whether the pane shows the Eye tracking page, empty until calibration exists.</summary>
+    private static readonly bool ShowsEyeTracking = false;
+
     private static readonly Dictionary<string, Type> PagesByTag = new()
     {
         ["Home"] = typeof(HomePage),
@@ -57,6 +60,11 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnClosing;
         AppWindow.Changed += OnWindowChanged;
         Activated += OnActivated;
+        if (!ShowsEyeTracking)
+        {
+            NavView.MenuItems.Remove(EyeTrackingItem);
+        }
+
         NavView.SelectedItem = NavView.MenuItems[0];
         NavView.LayoutUpdated += FitPaneOnce;
         if (App.Current.Host.FirstRun)
@@ -308,7 +316,7 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    /// <summary>Shows the page with <paramref name="tag"/> (Home, EyeTracking, …).</summary>
+    /// <summary>Shows the page with <paramref name="tag"/> (Home, Profiles, …).</summary>
     public void Navigate(string tag)
     {
         NavView.SelectedItem = PaneItems.FirstOrDefault(i => (string)i.Tag == tag);
