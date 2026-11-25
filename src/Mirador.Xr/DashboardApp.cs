@@ -384,6 +384,7 @@ internal sealed class DashboardApp
         // Grabbed in a box larger than the pill: a laser wobbles more than the pill is high.
         if (UI.Handle("grab", ref handle, new Bounds(GrabSize + new Vec3(0.04f, 0.05f, 0.03f)), false, UIMove.PosOnly, UIGesture.Pinch))
         {
+            handle.position = DashboardMaths.WithinReach(Input.Head.position, handle.position);
             // As AheadOfHead places it: its -Z towards the head along the floor.
             var towards = Input.Head.position - handle.position;
             towards.y = 0;
