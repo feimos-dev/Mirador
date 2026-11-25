@@ -20,8 +20,19 @@ internal sealed class DashboardApp
 
     private static readonly Color LowTint = new(3.2f, 0.5f, 0.4f);
 
+    private static readonly Color Navy = Color.Hex(0x0B1430FF);
+
+    private static readonly Color Blue = Color.Hex(0x1C5FB0FF);
+
+    private static readonly Color BrightBlue = Color.Hex(0x34A6F8FF);
+
+    private static readonly Color Purple = Color.Hex(0xB461D8FF);
+
+    private static readonly Color GrabIdle = Color.Hex(0x2B4A80FF);
+
     private readonly Link link;
     private readonly SystemButton button = new();
+    private readonly Sprite logo = Sprite.FromFile("logo.png");
     private readonly Sprite power = Sprite.FromFile("power.png");
     private readonly Sprite recentre = Sprite.FromFile("recentre.png");
     private readonly Sprite confirm = Sprite.FromFile("confirm.png");
@@ -101,7 +112,12 @@ internal sealed class DashboardApp
         ui.backplateDepth *= Scale;
         ui.backplateBorder *= Scale;
         UI.Settings = ui;
-        UI.ColorScheme = Color.HSV(0.6f, 0.3f, 0.45f);
+        UI.SetThemeColor(UIColor.Background, Navy);
+        UI.SetThemeColor(UIColor.Primary, Blue);
+        UI.SetThemeColor(UIColor.Common, Blue);
+        UI.SetThemeColor(UIColor.Common, UIColorState.Active, Purple);
+        UI.SetThemeColor(UIColor.Complement, Purple);
+        UI.SetThemeColor(UIColor.Text, Color.White);
         Renderer.SkyboxVisible = false;
         Show(false);
     }
@@ -209,6 +225,8 @@ internal sealed class DashboardApp
         var pose = bar;
         UI.WindowBegin("bar", ref pose, UIWin.Body, UIMove.None);
 
+        UI.Image(logo, new Vec2(UI.LineHeight, UI.LineHeight));
+        UI.SameLine();
         UI.Label(DateTime.Now.ToString("t", CultureInfo.CurrentCulture));
         UI.SameLine();
         UI.HSpace(UI.Settings.gutter);
@@ -392,7 +410,7 @@ internal sealed class DashboardApp
         }
 
         var lit = grabbing is not null || focus.IsActive();
-        grab.Draw(Default.MaterialUI, new Pose(centre, bar.orientation).ToMatrix(), lit ? new Color(0.9f, 0.9f, 0.9f) : new Color(0.45f, 0.45f, 0.45f));
+        grab.Draw(Default.MaterialUI, new Pose(centre, bar.orientation).ToMatrix(), (lit ? BrightBlue : GrabIdle).ToLinear());
     }
 
     private void TickOnHover()

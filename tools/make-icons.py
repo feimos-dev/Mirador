@@ -1,5 +1,6 @@
-"""Draws Mirador's icons (src/Mirador.App/Assets: the .ico files, and Mirador.png for the title bar and the README):
-Monado's hexagon set into the Windows logo's four panes. Needs Pillow: pip install pillow.
+"""Draws Mirador's icons (src/Mirador.App/Assets: the .ico files, and Mirador.png for the title bar and the README;
+src/Mirador.Xr/Assets/logo.png for the dashboard): Monado's hexagon set into the Windows logo's four panes. Needs
+Pillow: pip install pillow.
 
 The hexagon and its M are the Monado logo from Monado's Android launcher icon
 (src/xrt/targets/openxr_android/src/main/res/drawable/ic_logo_launcher.xml), Copyright 2023, Collabora, Ltd.,
@@ -13,6 +14,7 @@ from PIL import Image, ImageChops, ImageDraw
 
 ASSETS = Path(__file__).resolve().parent.parent / "src" / "Mirador.App" / "Assets"
 PNG = ASSETS / "Mirador.png"
+XR_LOGO = ASSETS.parent.parent / "Mirador.Xr" / "Assets" / "logo.png"
 
 BIG = 1024
 UNIT = BIG / 256
@@ -130,15 +132,29 @@ def stroke(d, points, width):
         d.ellipse((x0 - r, y0 - r, x0 + r, y0 + r), fill=255)
 
 
-def icon(panes, hexagon, centre):
-    """The 1024 image: the panes, the hexagon over them with a see-through ring, and the white M or "!" on top."""
+def shapes():
     hexagon_points = placed(HEXAGON)[0]
-    xs, ys = [p[0] for p in hexagon_points], [p[1] for p in hexagon_points]
-
     pane_mask = mask(lambda d: [d.rectangle((x * UNIT, y * UNIT, (x + PANE) * UNIT - 1, (y + PANE) * UNIT - 1), fill=255)
                                 for x in PANE_AT for y in PANE_AT])
     hexagon_mask = mask(lambda d: d.polygon(hexagon_points, fill=255))
     ring_mask = mask(lambda d: stroke(d, hexagon_points, RING * UNIT))
+    return hexagon_points, pane_mask, hexagon_mask, ring_mask
+
+
+def white_logo():
+    """The logo in white alone, for the dashboard: the ring and the M are see-through."""
+    _, pane_mask, hexagon_mask, ring_mask = shapes()
+    letter_mask = mask(lambda d: [d.polygon(outline, fill=255) for outline in placed(LETTER_M)])
+    cut = ImageChops.lighter(ring_mask, letter_mask)
+    img = Image.new("RGBA", (BIG, BIG), WHITE)
+    img.putalpha(ImageChops.multiply(ImageChops.lighter(pane_mask, hexagon_mask), ImageChops.invert(cut)))
+    return img.crop([round(v * UNIT) for v in PANES_BOX])
+
+
+def icon(panes, hexagon, centre):
+    """The 1024 image: the panes, the hexagon over them with a see-through ring, and the white M or "!" on top."""
+    hexagon_points, pane_mask, hexagon_mask, ring_mask = shapes()
+    xs, ys = [p[0] for p in hexagon_points], [p[1] for p in hexagon_points]
 
     img = gradient(panes, [v * UNIT for v in PANES_BOX]).convert("RGBA")
     img.paste(gradient(hexagon, (min(xs), min(ys), max(xs), max(ys))), (0, 0), hexagon_mask)
@@ -171,6 +187,7 @@ def main():
         sizes = APP_SIZES if name == "Mirador.ico" else TRAY_SIZES
         icon(*look).save(ASSETS / name, format="ICO", sizes=[(s, s) for s in sizes])
     icon(*ICONS["Mirador.ico"]).resize((256, 256), Image.Resampling.LANCZOS).save(PNG, optimize=True)
+    white_logo().resize((256, 256), Image.Resampling.LANCZOS).save(XR_LOGO, optimize=True)
 
 
 if __name__ == "__main__":
