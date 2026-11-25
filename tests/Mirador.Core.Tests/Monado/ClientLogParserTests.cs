@@ -173,13 +173,15 @@ public class ClientLogParserTests
     }
 
     [Fact]
-    public void Miradors_home_and_dashboard_are_not_apps()
+    public void Miradors_home_dashboard_and_desktop_are_not_apps()
     {
         var p = new ClientLogParser();
         p.Feed(Connected(1));
         Assert.False(p.Feed(Named("Mirador Home")));
         p.Feed(Connected(2));
         Assert.False(p.Feed(Named("Mirador Dashboard")));
+        p.Feed(Connected(4));
+        Assert.False(p.Feed(Named("Mirador Desktop")));
         p.Feed(Connected(3));
         p.Feed(Named("HelloXR"));
 

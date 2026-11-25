@@ -52,6 +52,7 @@ internal sealed class DashboardApp
     private IReadOnlyList<XrDevice> devices = [];
 
     // The desktop: the monitors as they were when the bar opened, and the one shown above the bar, if any.
+    private readonly DesktopLayer desktopLayer = new();
     private IReadOnlyList<DesktopMonitor> monitors = [];
     private DesktopPanel? panel;
     private int shown = -1;
@@ -91,6 +92,7 @@ internal sealed class DashboardApp
         link.Send(XrLink.Running);
         SK.Run(app.Step);
         app.ShowDesktop(-1); // lets go of a held mouse button
+        app.desktopLayer.Dispose();
         return 0;
     }
 
@@ -137,6 +139,14 @@ internal sealed class DashboardApp
         {
             bar = ToPose(DashboardMaths.AheadOfHead(FromPose(Input.Head)));
             unplaced = false;
+        }
+
+        if (desktopLayer.Failed && !desktopFailed)
+        {
+            // Its log says why: the desktop buttons go.
+            ShowDesktop(-1);
+            desktopFailed = true;
+            monitors = [];
         }
 
         if (open && !unplaced)
@@ -263,27 +273,16 @@ internal sealed class DashboardApp
         UI.PopTextStyle();
     }
 
-    /// <summary>Shows monitor <paramref name="index"/> above the bar, or (-1) none. A monitor Windows won't capture takes the desktop buttons away.</summary>
+    /// <summary>Shows monitor <paramref name="index"/> above the bar, or (-1) none.</summary>
     private void ShowDesktop(int index)
     {
         panel?.Dispose();
         panel = null;
         shown = -1;
-        if (index < 0 || index >= monitors.Count)
+        if (index >= 0 && index < monitors.Count)
         {
-            return;
-        }
-
-        try
-        {
-            panel = new DesktopPanel(monitors[index]);
+            panel = new DesktopPanel(monitors[index], desktopLayer);
             shown = index;
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"The desktop can't be shown: {e.Message}");
-            desktopFailed = true;
-            monitors = [];
         }
     }
 

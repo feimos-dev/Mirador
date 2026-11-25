@@ -40,6 +40,11 @@ try {
         & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo 'tools\build-cmake.ps1') -Source (Join-Path $repo 'tools\xr-check') `
             -BuildDir (Join-Path $repo 'artifacts\xr-check-build') -Configure -Build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        # The OpenXR loader as a DLL (tools\openxr-loader), which the desktop program's project copies in.
+        & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $repo 'tools\build-cmake.ps1') -Source (Join-Path $repo 'tools\openxr-loader') `
+            -BuildDir (Join-Path $repo 'artifacts\openxr-loader-build') -Triplet x64-windows-dll-static-crt -Configure -Build
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     elseif ($env:CI) {
         throw "The layer can't be built on CI: Visual Studio's C++ x64 tools are missing."
