@@ -22,7 +22,8 @@ public enum InstallOutcome
 /// </summary>
 /// <param name="folder">The installer's folder.</param>
 /// <param name="runner">Runs the installer; null: <see cref="CommandRunner"/>.</param>
-public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? runner = null)
+/// <param name="releaseKey">The key a release's checksums must be signed with: <see cref="SignedSums.PublicKey"/>.</param>
+public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? runner = null, string releaseKey = SignedSums.PublicKey)
 {
     private readonly ICommandRunner runner = runner ?? new CommandRunner();
 
@@ -120,10 +121,11 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
     private string DllPath => Path.Combine(folder, "bin", Dll);
 
     /// <summary>
-    /// Downloads <paramref name="release"/>'s installer into <paramref name="downloadDir"/>, checks it against GitHub's
-    /// SHA-256, runs it silently (<c>/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS</c>: it never closes a
-    /// game, nor switches OpenVR games by itself) and checks that the release it names is installed. While a game holds
-    /// OpenLamina nothing is downloaded or run.
+    /// Downloads <paramref name="release"/>'s installer into <paramref name="downloadDir"/>, checks it against the SHA-256
+    /// its signed checksums list (<see cref="SignedSums"/>) and GitHub's digest agrees with, runs it silently
+    /// (<c>/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS</c>: it never closes a game, nor switches OpenVR
+    /// games by itself) and checks that the release it names is installed. While a game holds OpenLamina nothing is
+    /// downloaded or run.
     /// </summary>
     /// <exception cref="MiradorException">
     /// The release can't be trusted, fetched or installed, or another install is running; the message says why.
@@ -152,10 +154,7 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
             throw new MiradorException($"OpenLamina {Plain(release.Tag)} has no installer that Mirador can check.");
         }
 
-        // The requested address, not wherever GitHub redirects to: GitHub serves its release files from its own file host.
-        if (!Uri.TryCreate(release.InstallerUrl, UriKind.Absolute, out var url)
-            || url.Scheme != Uri.UriSchemeHttps
-            || !string.Equals(url.Host, Host, StringComparison.OrdinalIgnoreCase))
+        if (OnGitHub(release.InstallerUrl) is not { } url)
         {
             throw new MiradorException("OpenLamina's installer isn't on GitHub, so Mirador won't fetch it.");
         }
@@ -164,6 +163,11 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         if (!SafeName().IsMatch(version))
         {
             throw new MiradorException($"OpenLamina's release name \"{release.Tag}\" isn't a version Mirador understands.");
+        }
+
+        if (OnGitHub(release.SumsUrl) is not { } sumsUrl || OnGitHub(release.SignatureUrl) is not { } signatureUrl)
+        {
+            throw new MiradorException($"OpenLamina {version} was refused: the release has no signed checksums.");
         }
 
         if (InUse)
@@ -176,7 +180,9 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         var part = setup + ".tmp";
         try
         {
-            await CheckedDownload.ToFileAsync(http, url, part, MaxSetupBytes, release.InstallerSha256, "OpenLamina's installer", m => new MiradorException(m), ct)
+            var sha256 = await SignedSha256Async(http, release, sumsUrl, signatureUrl, downloadDir, ct).ConfigureAwait(false);
+            await CheckedDownload.ToFileAsync(
+                    http, url, part, MaxSetupBytes, sha256, "OpenLamina's installer", m => new MiradorException(m), ct, hashFrom: "its signed checksums list")
                 .ConfigureAwait(false);
             File.Move(part, setup, overwrite: true);
 
@@ -219,6 +225,47 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
             Cleanup.TryDelete(setup);
         }
     }
+
+    /// <summary>The installer's SHA-256 from the release's checksums, once their signature is checked.</summary>
+    /// <exception cref="MiradorException">The checksums can't be fetched, or the release is refused: the message says why.</exception>
+    private async Task<string> SignedSha256Async(HttpClient http, Release release, Uri sumsUrl, Uri signatureUrl, string downloadDir, CancellationToken ct)
+    {
+        var sums = await SmallFileAsync(http, sumsUrl, Path.Combine(downloadDir, SignedSums.SumsName + ".tmp"), SignedSums.SumsName, ct).ConfigureAwait(false);
+        var signature = await SmallFileAsync(http, signatureUrl, Path.Combine(downloadDir, SignedSums.SignatureName + ".tmp"), SignedSums.SignatureName, ct)
+            .ConfigureAwait(false);
+        try
+        {
+            return SignedSums.Expected(release.Tag, sums, signature, UpdateCheck.Installer, release.InstallerSha256, releaseKey);
+        }
+        catch (InvalidDataException e)
+        {
+            throw new MiradorException(e.Message);
+        }
+    }
+
+    private static async Task<byte[]> SmallFileAsync(HttpClient http, Uri url, string file, string what, CancellationToken ct)
+    {
+        try
+        {
+            await CheckedDownload.ToFileAsync(http, url, file, SignedSums.MaxBytes, null, what, m => new MiradorException(m), ct).ConfigureAwait(false);
+            return await File.ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Cleanup.TryDelete(file);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="address"/> when it is on github.com over https; null otherwise. The requested address, not wherever
+    /// GitHub redirects to: GitHub serves its release files from its own file host.
+    /// </summary>
+    private static Uri? OnGitHub(string? address) =>
+        Uri.TryCreate(address, UriKind.Absolute, out var url)
+        && url.Scheme == Uri.UriSchemeHttps
+        && string.Equals(url.Host, Host, StringComparison.OrdinalIgnoreCase)
+            ? url
+            : null;
 
     private static string Plain(string tag) => tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
 

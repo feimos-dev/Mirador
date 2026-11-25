@@ -62,6 +62,35 @@ public class UpdateCheckTests
     }
 
     [Fact]
+    public void Parses_the_signed_checksums()
+    {
+        var json = WithAsset.Replace("""
+            "assets": [
+            """, """
+            "assets": [
+              {
+                "name": "SHA256SUMS.txt",
+                "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SHA256SUMS.txt",
+                "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              {
+                "name": "SHA256SUMS.txt.sig",
+                "browser_download_url": "https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SHA256SUMS.txt.sig"
+              },
+            """);
+
+        var release = UpdateCheck.ParseLatest(json);
+
+        Assert.Equal("https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SHA256SUMS.txt", release?.SumsUrl);
+        Assert.Equal("https://github.com/feimos-dev/OpenLamina/releases/download/v2026.11.20/SHA256SUMS.txt.sig", release?.SignatureUrl);
+        Assert.Equal("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", release?.InstallerSha256);
+
+        // A release from before signed checksums has neither.
+        Assert.Null(UpdateCheck.ParseLatest(WithAsset)?.SumsUrl);
+        Assert.Null(UpdateCheck.ParseLatest(WithAsset)?.SignatureUrl);
+    }
+
+    [Fact]
     public void No_digest_no_sha()
     {
         var json = WithAsset.Replace("\"digest\": \"sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789\"", "\"digest\": null");

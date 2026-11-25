@@ -85,8 +85,8 @@ public sealed class Updates(AppHost host)
     public bool CanUpdateOpenComposite => true;
 
     /// <summary>
-    /// The "Update" buttons and "Get OpenLamina": downloads <paramref name="release"/>'s installer, checks it against
-    /// <see cref="Release.InstallerSha256"/> and runs it silently, then asks GitHub again.
+    /// The "Update" buttons and "Get OpenLamina": downloads <paramref name="release"/>'s installer, checks it against its signed checksums
+    /// (<see cref="Mirador.Core.OpenVr.SignedSums"/>) and runs it silently, then asks GitHub again.
     /// </summary>
     /// <returns>What happened, in words for the user.</returns>
     /// <exception cref="MiradorException">Why nothing changed.</exception>
