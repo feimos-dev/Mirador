@@ -4,15 +4,37 @@ namespace Mirador.Core.Tests.Xr;
 
 public class RayGrabTests
 {
+    private const float Frame = 1 / 90f;
+
     [Fact]
     public void The_distance_follows_the_hands_reach()
     {
         var grab = new RayGrab();
         grab.Start(1.5f, 0.3f);
 
-        Assert.Equal(1.5f, grab.Update(0.3f), 4);
-        Assert.Equal(3f, grab.Update(0.6f), 4);
-        Assert.Equal(0.75f, grab.Update(0.15f), 4);
+        Assert.Equal(1.5f, grab.Update(0.3f, 0, Frame), 4);
+        Assert.Equal(3f, grab.Update(0.6f, 0, Frame), 4);
+        Assert.Equal(0.75f, grab.Update(0.15f, 0, Frame), 4);
+    }
+
+    [Fact]
+    public void The_thumbstick_pushes_away_and_pulls_in()
+    {
+        var grab = new RayGrab();
+        grab.Start(1.5f, 0.3f);
+
+        var pushed = 0f;
+        for (var i = 0; i < 45; i++) // half a second, all the way forward
+        {
+            pushed = grab.Update(0.3f, 1, Frame);
+        }
+
+        Assert.InRange(pushed, 2.8f, 3.2f);
+        Assert.True(grab.Update(0.3f, -1, Frame) < pushed);
+
+        // A stick barely off centre pushes nothing.
+        var still = grab.Update(0.3f, 0, Frame);
+        Assert.Equal(still, grab.Update(0.3f, RayGrab.StickDeadZone / 2, Frame), 5);
     }
 
     [Fact]
@@ -21,9 +43,32 @@ public class RayGrabTests
         var grab = new RayGrab();
         grab.Start(2, 0.3f);
 
-        Assert.Equal(RayGrab.FarthestM, grab.Update(0.9f), 4); // 6 m asked for
-        Assert.Equal(RayGrab.FarthestM, grab.Update(1.2f), 4); // still pushing
-        Assert.True(grab.Update(1.1f) < RayGrab.FarthestM);     // the first pull back already comes closer
+        for (var i = 0; i < 300; i++) // the stick held forward far longer than 5 m needs
+        {
+            Assert.True(grab.Update(0.3f, 1, Frame) <= RayGrab.FarthestM);
+        }
+
+        Assert.Equal(RayGrab.FarthestM, grab.Update(0.3f, 1, Frame), 4);
+        Assert.True(grab.Update(0.3f, -1, Frame) < RayGrab.FarthestM); // the first pull already comes closer
+
+        // The same for the reach.
+        Assert.Equal(RayGrab.FarthestM, grab.Update(0.9f, 0, Frame), 4);
+        Assert.True(grab.Update(0.85f, 0, Frame) < RayGrab.FarthestM);
+    }
+
+    [Fact]
+    public void Pulled_in_it_stops_short_of_the_hand_and_pushing_out_works_at_once()
+    {
+        var grab = new RayGrab();
+        grab.Start(0.5f, 0.3f);
+
+        for (var i = 0; i < 300; i++)
+        {
+            grab.Update(0.3f, -1, Frame);
+        }
+
+        Assert.Equal(RayGrab.NearestM, grab.Update(0.3f, -1, Frame), 4);
+        Assert.True(grab.Update(0.3f, 1, Frame) > RayGrab.NearestM);
     }
 
     [Fact]
@@ -32,7 +77,6 @@ public class RayGrabTests
         var grab = new RayGrab();
         grab.Start(1, 0);
 
-        Assert.True(float.IsFinite(grab.Update(0)));
-        Assert.True(grab.Update(0) > 0);
+        Assert.True(float.IsFinite(grab.Update(0, 0, Frame)));
     }
 }

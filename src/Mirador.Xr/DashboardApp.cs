@@ -385,7 +385,7 @@ internal sealed class DashboardApp
     /// <summary>
     /// The grab bar <see cref="GrabGapM"/> under the bar's bottom (<paramref name="bottom"/>, in the bar's own space).
     /// A trigger pulled with its laser on it holds it until let go: the bar rides on that laser, upright and turned to
-    /// the head, pushed and pulled with the hand's reach (<see cref="RayGrab"/>).
+    /// the head, pushed and pulled with that hand's thumbstick and reach (<see cref="RayGrab"/>).
     /// </summary>
     private void DrawGrab(float bottom)
     {
@@ -425,7 +425,8 @@ internal sealed class DashboardApp
         if (grabbing is { } held && Lasers.Of(held) is { } holding && (holding.End - holding.Start).LengthSq > 1e-8f)
         {
             var direction = (holding.End - holding.Start).Normalized;
-            var hit = holding.Start + (direction * rayGrab.Update(Vec3.Distance(Input.Head.position, holding.Start)));
+            var along = rayGrab.Update(Vec3.Distance(Input.Head.position, holding.Start), Input.Controller(held).stick.y, Time.Stepf);
+            var hit = holding.Start + (direction * along);
 
             // As AheadOfHead places it: its -Z towards the head along the floor, from the pill's middle.
             var towards = Input.Head.position - (hit + (bar.orientation * grabOffset));

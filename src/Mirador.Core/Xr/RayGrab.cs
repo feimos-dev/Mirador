@@ -1,13 +1,21 @@
 namespace Mirador.Core.Xr;
 
 /// <summary>
-/// How far along a laser a grabbed thing is: in proportion to the hand's reach from the head, as StereoKit's own
-/// grabbing does, so pushing the hand out pushes it away; never beyond <see cref="FarthestM"/>. Pushed past that, it
-/// stays there and the grab starts over from it, so pulling back brings it closer at once.
+/// How far along a laser a grabbed thing is. The thumbstick pushes it away and pulls it in, faster the farther it is;
+/// and as StereoKit's own grabbing does, the distance also follows the hand's reach from the head. It stays between
+/// <see cref="NearestM"/> and <see cref="FarthestM"/>: at either end the grab starts over from there, so moving back
+/// the other way works at once.
 /// </summary>
 public sealed class RayGrab
 {
+    public const float NearestM = 0.1f;
     public const float FarthestM = 5;
+
+    /// <summary>The thumbstick pushed all the way multiplies the distance by e^PushRate a second (about twice in half a second).</summary>
+    public const float PushRate = 1.4f;
+
+    /// <summary>A thumbstick pushed less than this pushes nothing.</summary>
+    public const float StickDeadZone = 0.15f;
 
     /// <summary>A hand nearer the head than this counts as this near, so the distance stays finite.</summary>
     private const float NearestReachM = 0.05f;
@@ -16,19 +24,29 @@ public sealed class RayGrab
     private float reach;
 
     /// <summary>The grab begins <paramref name="distanceM"/> along the laser, with the hand <paramref name="reachM"/> from the head.</summary>
-    public void Start(float distanceM, float reachM) => (distance, reach) = (distanceM, Math.Max(NearestReachM, reachM));
+    public void Start(float distanceM, float reachM) =>
+        (distance, reach) = (Math.Clamp(distanceM, NearestM, FarthestM), Math.Max(NearestReachM, reachM));
 
-    /// <summary>The distance along the laser with the hand now <paramref name="reachM"/> from the head.</summary>
-    public float Update(float reachM)
+    /// <summary>
+    /// The distance along the laser now, the hand <paramref name="reachM"/> from the head and the thumbstick at
+    /// <paramref name="stick"/> (-1 to 1, forward pushes away) for the <paramref name="seconds"/> since the last call.
+    /// </summary>
+    public float Update(float reachM, float stick, float seconds)
     {
         reachM = Math.Max(NearestReachM, reachM);
+        if (Math.Abs(stick) >= StickDeadZone)
+        {
+            distance *= MathF.Exp(stick * PushRate * seconds);
+        }
+
         var along = distance * reachM / reach;
-        if (along <= FarthestM)
+        if (along is >= NearestM and <= FarthestM)
         {
             return along;
         }
 
-        (distance, reach) = (FarthestM, reachM);
-        return FarthestM;
+        along = Math.Clamp(along, NearestM, FarthestM);
+        (distance, reach) = (along, reachM);
+        return along;
     }
 }
