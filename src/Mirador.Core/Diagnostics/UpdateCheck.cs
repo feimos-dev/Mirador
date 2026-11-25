@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Mirador.Core.OpenVr;
 
 namespace Mirador.Core.Diagnostics;
 
@@ -8,7 +9,9 @@ namespace Mirador.Core.Diagnostics;
 /// <param name="Url">The release's page.</param>
 /// <param name="InstallerUrl">The download of the asset <c>OpenLamina-Windows-Installer.exe</c>; null when the release has none or no digest.</param>
 /// <param name="InstallerSha256">That asset's SHA-256 from GitHub's <c>digest</c>, lower case without <c>sha256:</c>; null likewise.</param>
-public sealed record Release(string Tag, string Url, string? InstallerUrl, string? InstallerSha256);
+/// <param name="SumsUrl">The download of the asset <c>SHA256SUMS.txt</c>; null when the release has none.</param>
+/// <param name="SignatureUrl">The download of the asset <c>SHA256SUMS.txt.sig</c>; null when the release has none.</param>
+public sealed record Release(string Tag, string Url, string? InstallerUrl, string? InstallerSha256, string? SumsUrl = null, string? SignatureUrl = null);
 
 /// <summary>Asks GitHub for the latest release of Mirador and of OpenLamina, to say so on Home. It never installs anything.</summary>
 public static class UpdateCheck
@@ -17,7 +20,7 @@ public static class UpdateCheck
 
     public const string OpenCompositeRepository = "feimos-dev/OpenLamina";
 
-    private const string Installer = "OpenLamina-Windows-Installer.exe";
+    internal const string Installer = "OpenLamina-Windows-Installer.exe";
 
     private const string DigestPrefix = "sha256:";
 
@@ -35,7 +38,9 @@ public static class UpdateCheck
                 && !(root.TryGetProperty("prerelease", out var pre) && pre.ValueKind == JsonValueKind.True))
             {
                 var (installer, sha) = FindInstaller(root);
-                return new Release(tag.GetString()!, url.GetString()!, installer, sha);
+                return new Release(
+                    tag.GetString()!, url.GetString()!, installer, sha,
+                    FindAsset(root, SignedSums.SumsName), FindAsset(root, SignedSums.SignatureName));
             }
         }
         catch (JsonException)
@@ -99,6 +104,25 @@ public static class UpdateCheck
         }
 
         return (null, null);
+    }
+
+    /// <summary>The download of the release's asset <paramref name="name"/>; null when it has none.</summary>
+    private static string? FindAsset(JsonElement release, string name)
+    {
+        if (release.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var asset in assets.EnumerateArray())
+            {
+                if (asset.ValueKind == JsonValueKind.Object
+                    && Text(asset, "name") == name
+                    && Text(asset, "browser_download_url") is { Length: > 0 } url)
+                {
+                    return url;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static string? Text(JsonElement element, string name) =>
