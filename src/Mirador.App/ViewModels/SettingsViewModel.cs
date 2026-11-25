@@ -72,8 +72,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public bool HasProblem => Problem is not null;
 
-    public string Version => $"Mirador {AppInfo.Version}";
-
     [ObservableProperty]
     public partial string UpdatesText { get; set; } = "Not checked yet.";
 
@@ -90,15 +88,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(CheckNowCommand))]
     public partial bool Checking { get; set; }
 
-    public string BundledMonadoVersion =>
-        MiradorMonado.Read(host.Locator.MiradorRoot).Current is { } current ? $"Bundled Monado: {current}" : "Bundled Monado: not installed yet";
-
-    public string OpenCompositeDescription =>
-        host.OpenComposite.Source is { } source
-            ? source.Describe()
-            : host.OpenComposite.IsInstalled ? "Version unknown"
-            : "Not installed";
-
     internal static string DescribeLastCheck(DateTime last, DateTime now)
     {
         var time = last.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
@@ -109,11 +98,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             1 => $"yesterday at {time}",
             _ => $"on {last.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)} at {time}",
         };
-    }
-
-    private void OpenCompositeChanged()
-    {
-        OnPropertyChanged(nameof(OpenCompositeDescription));
     }
 
     public void Dispose() => App.Current.Updates.Changed -= OnUpdatesChanged;
@@ -215,8 +199,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             AppLog.Write("Updating OpenLamina failed", e);
             Problem = $"Updating OpenLamina failed: {e.Message.Trim()}";
         }
-
-        OpenCompositeChanged();
     }
 
     partial void OnCloseToTrayChanged(bool value) => Save(s => s with { CloseToTray = value });

@@ -55,7 +55,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock
                     VerticalAlignment="Center"
-                    Text="Select which base stations Mirador should control"
+                    Text="Select which base stations Mirador controls"
                     TextWrapping="Wrap" />
                 <StackPanel
                     Grid.Column="1"
@@ -174,7 +174,7 @@
                 Message="{x:Bind ViewModel.RoomSetupMessage, Mode=OneWay}"
                 Severity="{x:Bind ViewModel.RoomSetupSeverity, Mode=OneWay}"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-            <toolkit:SettingsCard Description="Lay all connected controllers on the floor first." Header="Floor">
+            <toolkit:SettingsCard Description="Lay all connected controllers on the floor." Header="Floor">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <ProgressRing
                         Width="20"
@@ -183,7 +183,7 @@
                     <Button Command="{x:Bind ViewModel.MeasureFloorCommand}" Content="Measure floor" />
                 </StackPanel>
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="Look straight ahead where forward should be." Header="Forward">
+            <toolkit:SettingsCard Description="Look straight ahead." Header="Forward">
                 <Button Command="{x:Bind ViewModel.SetForwardCommand}" Content="Set forward" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Header="Export to SteamVR">
@@ -200,16 +200,13 @@
                 Message="{x:Bind ViewModel.SettingsProblem, Mode=OneWay}"
                 Severity="Error"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-            <toolkit:SettingsCard Header="Power on when Monado starts">
-                <ToggleSwitch IsOn="{x:Bind ViewModel.PowerOnAtMonadoStart, Mode=TwoWay}" />
-            </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Power off when Monado stops">
+            <toolkit:SettingsCard Header="Power base stations off when Monado stops">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.PowerOffAtMonadoStop, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Power on when Mirador starts">
+            <toolkit:SettingsCard Header="Power base stations on when Mirador starts">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.PowerOnAtMiradorStart, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Power off when Mirador quits">
+            <toolkit:SettingsCard Header="Power base stations off when Mirador quits">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.PowerOffAtMiradorQuit, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Header="Turn off controllers and trackers when Monado stops">
@@ -217,7 +214,7 @@
             </toolkit:SettingsCard>
             <toolkit:SettingsCard
                 Description="{x:Bind ViewModel.SteamVrButtonStartDescription}"
-                Header="Stop SteamVR starting when a controller turns on"
+                Header="Block SteamVR from auto-starting when a controller turns on"
                 IsEnabled="{x:Bind ViewModel.CanStopSteamVrButtonStart}">
                 <ToggleSwitch x:Name="SteamVrButtonStartSwitch" IsOn="{x:Bind ViewModel.SteamVrButtonStartStopped, Mode=OneWay}" Toggled="OnSteamVrButtonStartToggled" />
             </toolkit:SettingsCard>
@@ -227,7 +224,7 @@
                 Message="{x:Bind ViewModel.SteamVrButtonStartProblem, Mode=OneWay}"
                 Severity="Error"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-            <toolkit:SettingsCard Description="When Relevant: only while Mirador uses them." Header="Station state tracking rate">
+            <toolkit:SettingsCard Description="When Relevant: only while Mirador uses them. (Recommended)" Header="Station state tracking rate">
                 <ComboBox MinWidth="200" SelectedIndex="{x:Bind ViewModel.StationState, Mode=TwoWay}">
                     <ComboBoxItem Content="Constant" />
                     <ComboBoxItem Content="When Relevant" />

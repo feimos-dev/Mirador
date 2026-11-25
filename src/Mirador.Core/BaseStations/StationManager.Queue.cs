@@ -108,25 +108,16 @@ public sealed partial class StationManager
                 return;
             }
 
-            var on = _settings().BaseStationsOnAtStart;
             List<Work> dropped;
-            bool delayed, start = false;
+            bool delayed;
             lock (_lock)
             {
                 dropped = TakeQueuedLocked(w => w.IsSessionOff && !w.AtQuit);
                 dropped.AddRange(CancelWakesLocked());
                 delayed = CancelDelayedOffLocked();
-                if (on)
-                {
-                    start = EnqueueLocked(new Work(WorkKind.Switch, StationCommand.On, null, CancellationToken.None, fromSession: true));
-                }
             }
 
             Dropped(dropped, delayed, "Monado started again");
-            if (start)
-            {
-                StartWorker();
-            }
         }
         catch (Exception e)
         {

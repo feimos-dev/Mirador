@@ -133,8 +133,7 @@ public class StationManagerTests
 
         await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         await h.Manager.SwitchSelectedAsync(h.Manager.OffCommand(), CancellationToken.None).WaitAsync(Limit);
-        h.Manager.Started(StationHarness.Profile(true), null);
-        await h.QueueDrained();
+        await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         Assert.Equal(3, h.Radio.WritesTo(Left).Length);
         h.Manager.Ended(StationHarness.Profile(true), null);
         await h.Time.Set(StationManager.OffDelay).WaitAsync(Limit);
@@ -243,7 +242,7 @@ public class StationManagerTests
     {
         using var h = new StationHarness();
         Assert.Equal(StationCommand.Sleep, h.Manager.OffCommand());
-        File.WriteAllText(h.Dir.File("settings.json"), """{"baseStationsOff": "Standby", "baseStationsOnAtStart": true, "baseStationsOffAtStop": true, "baseStationsOffAtMiradorQuit": true}""");
+        File.WriteAllText(h.Dir.File("settings.json"), """{"baseStationsOff": "Standby", "baseStationsOffAtStop": true, "baseStationsOffAtMiradorQuit": true}""");
         h.Settings = new AppSettingsStore(h.Dir.File("settings.json")).Load() with { BaseStationsState = StationStateMode.Live };
         Assert.Equal(StationCommand.Sleep, h.Manager.OffCommand());
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
@@ -259,13 +258,13 @@ public class StationManagerTests
         await h.QueueDrained();
 
         h.Manager.Started(StationHarness.Profile(true), null);
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 2).WaitAsync(Limit);
+        await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         h.Manager.EndingNow(StationHarness.Profile(true), null);
         await h.Radio.Until(r => r.WritesTo(Left).Length == 3).WaitAsync(Limit);
         await h.QueueDrained();
 
         h.Manager.Started(StationHarness.Profile(true), null);
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 4).WaitAsync(Limit);
+        await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         await h.QueueDrained();
         await h.Manager.FlushAsync(TimeSpan.FromSeconds(15)).WaitAsync(Limit);
 
@@ -562,65 +561,6 @@ public class StationManagerTests
     }
 
     [Fact]
-    public async Task Started_switches_on_only_with_the_setting_and_the_profile()
-    {
-        using var h = new StationHarness();
-        h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
-        using (h.Manager.Listen())
-        {
-            h.Hear(Left, LeftName);
-        }
-
-        var dreamAir = new FakeModule(new Steps()) { UsesSteamVrLighthouse = true };
-        var other = new FakeModule(new Steps()) { UsesSteamVrLighthouse = false };
-
-        h.Manager.Started(StationHarness.Profile(null), null);
-        h.Manager.Started(StationHarness.Profile(null), other);
-        h.Manager.Started(StationHarness.Profile(false), dreamAir);
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
-        h.Manager.Started(StationHarness.Profile(true), dreamAir);
-        await h.QueueDrained();
-
-        Assert.Empty(h.Radio.Connections);
-
-        h.Settings = StationHarness.Live;
-        h.Manager.Started(StationHarness.Profile(null), dreamAir);
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 1).WaitAsync(Limit);
-        h.Manager.Started(StationHarness.Profile(true), null);
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 2).WaitAsync(Limit);
-
-        Assert.Equal(["01", "01"], h.Radio.WritesTo(Left));
-    }
-
-    [Fact]
-    public async Task Started_skips_nothing_else_returns_at_once()
-    {
-        using var h = new StationHarness();
-        h.Radio.NeverAnswers = true;
-        h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
-        ISessionHook hook = h.Manager;
-
-        await Task.Run(() =>
-        {
-            hook.Started(StationHarness.Profile(true), null);
-            hook.Ended(StationHarness.Profile(true), null);
-            hook.Started(StationHarness.Profile(true), null);
-            hook.Ended(StationHarness.Profile(true), null);
-        }).WaitAsync(Limit);
-
-        await h.Time.Set(StationManager.FindTime, 3).WaitAsync(Limit);
-        h.Clock.Advance(StationManager.FindTime);
-        await h.Radio.Until(r => r.Connections.Length == 1).WaitAsync(Limit);
-        Assert.Equal(StationCommand.On, h.Manager.Running);
-
-        await Task.Run(() =>
-        {
-            hook.Started(StationHarness.Profile(true), null);
-            hook.Ended(StationHarness.Profile(true), null);
-        }).WaitAsync(Limit);
-    }
-
-    [Fact]
     public async Task Ended_waits_five_seconds()
     {
         using var h = new StationHarness();
@@ -680,17 +620,7 @@ public class StationManagerTests
         h.Clock.Advance(TimeSpan.FromSeconds(2));
         await h.QueueDrained();
 
-        Assert.Equal(["01"], h.Radio.WritesTo(Left));
-
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
-        h.Manager.Ended(StationHarness.Profile(true), null);
-        await h.Time.Set(StationManager.OffDelay, 2).WaitAsync(Limit);
-        h.Clock.Advance(TimeSpan.FromSeconds(4));
-        h.Manager.Started(StationHarness.Profile(true), null);
-        h.Clock.Advance(TimeSpan.FromSeconds(2));
-        await h.QueueDrained();
-
-        Assert.Equal(["01"], h.Radio.WritesTo(Left));
+        Assert.Empty(h.Radio.WritesTo(Left));
     }
 
     [Fact]
@@ -727,7 +657,7 @@ public class StationManagerTests
     public async Task Queued_off_is_cancelled_too()
     {
         using var h = new StationHarness();
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
+        h.Settings = StationHarness.Live;
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName));
         using (h.Manager.Listen())
         {
@@ -759,18 +689,6 @@ public class StationManagerTests
         await Task.WhenAll(right, on).WaitAsync(Limit);
 
         Assert.Equal(["01"], h.Radio.WritesTo(Left));
-
-        hold = h.Radio.Hold(Left);
-        h.Settings = StationHarness.Live;
-        h.Manager.Ended(StationHarness.Profile(true), null);
-        await h.Time.Set(StationManager.OffDelay, 2).WaitAsync(Limit);
-        h.Clock.Advance(StationManager.OffDelay);
-        await h.Radio.Until(r => r.ConnectionsTo(Left).Length == 2).WaitAsync(Limit);
-        h.Manager.Started(StationHarness.Profile(true), null);
-        hold.SetResult();
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 3).WaitAsync(Limit);
-
-        Assert.Equal(["01", "00", "01"], h.Radio.WritesTo(Left));
     }
 
     [Fact]
@@ -825,7 +743,7 @@ public class StationManagerTests
     public async Task Off_pending_while_the_session_off_waits_is_queued_or_sends()
     {
         using var h = new StationHarness();
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
+        h.Settings = StationHarness.Live;
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true));
         using (h.Manager.Listen())
         {
@@ -881,7 +799,7 @@ public class StationManagerTests
         }
 
         h.Radio.Hang(Left);
-        h.Manager.Started(StationHarness.Profile(true), null);
+        var on = h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None);
         await h.Time.Set(StationManager.TryLimit).WaitAsync(Limit);
         h.Manager.Ended(StationHarness.Profile(true), null);
         var flush = h.Manager.FlushAsync(TimeSpan.FromSeconds(15));
@@ -1778,7 +1696,7 @@ public class StationManagerTests
     public async Task A_later_command_and_a_start_cancel_a_pending_resend()
     {
         using var h = new StationHarness();
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
+        h.Settings = StationHarness.Live;
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName));
         using var listen = h.Manager.Listen();
         h.Hear(Left, LeftName, 0x00);
@@ -1893,7 +1811,7 @@ public class StationManagerTests
     public async Task A_queued_session_off_is_dropped_by_a_later_command_for_one_station()
     {
         using var h = new StationHarness();
-        h.Settings = StationHarness.Live with { BaseStationsOnAtStart = false };
+        h.Settings = StationHarness.Live;
         h.Known(new KnownStation(LeftAddress, LeftName, Selected: true), new KnownStation(RightAddress, RightName));
         using (h.Manager.Listen())
         {
@@ -1945,7 +1863,7 @@ public class StationManagerTests
         Assert.Contains("Base stations: the off after Monado stopped went out already (Windows is ending the session)", h.Logged);
 
         h.Manager.Started(StationHarness.Profile(true), null);
-        await h.Radio.Until(r => r.WritesTo(Left).Length == 2).WaitAsync(Limit);
+        await h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None).WaitAsync(Limit);
         h.Manager.Ended(StationHarness.Profile(true), null);
         Assert.True(h.Manager.OffPending);
         await h.Manager.FlushAsync(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
@@ -1964,7 +1882,7 @@ public class StationManagerTests
         }
 
         var hold = h.Radio.Hold(Left);
-        h.Manager.Started(StationHarness.Profile(true), null);
+        var on = h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None);
         await h.Time.Set(StationManager.TryLimit).WaitAsync(Limit);
         h.Manager.EndingNow(StationHarness.Profile(true), null);
         await h.Manager.FlushAsync(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
@@ -1992,7 +1910,7 @@ public class StationManagerTests
         }
 
         var hold = h.Radio.Hold(Left);
-        h.Manager.Started(StationHarness.Profile(true), null);
+        var on = h.Manager.SwitchSelectedAsync(StationCommand.On, CancellationToken.None);
         await h.Radio.Until(r => r.Connections.Length == 1).WaitAsync(Limit);
         await h.Time.Set(StationManager.TryLimit).WaitAsync(Limit);
         h.Manager.EndingNow(StationHarness.Profile(true), null);
@@ -2320,7 +2238,6 @@ public class StationManagerTests
 
         using (var h = QuitHarness())
         {
-            h.Settings = h.Settings with { BaseStationsOnAtStart = false };
             var hold = h.Radio.Hold(Right);
             var right = h.Manager.SwitchAsync(RightAddress, StationCommand.Sleep, CancellationToken.None);
             await h.Radio.Until(r => r.ConnectionsTo(Right).Length == 1).WaitAsync(Limit);
@@ -2442,7 +2359,6 @@ public class StationManagerTests
 
         using (var h = QuitHarness())
         {
-            h.Settings = h.Settings with { BaseStationsOnAtStart = false };
             h.Manager.Started(StationHarness.Profile(true), null);
             h.Manager.QuittingNow();
             await h.Radio.Until(r => r.WritesTo(Left).Length == 1).WaitAsync(Limit);
@@ -2467,7 +2383,6 @@ public class StationManagerTests
 
         using (var h = QuitHarness())
         {
-            h.Settings = h.Settings with { BaseStationsOnAtStart = false };
             h.Manager.Started(StationHarness.Profile(true), null);
             h.Manager.QuittingNow();
             h.Manager.EndingNow(StationHarness.Profile(true), null);
@@ -2485,7 +2400,6 @@ public class StationManagerTests
     public async Task The_session_off_the_quit_relies_on_is_not_dropped()
     {
         using var h = QuitHarness();
-        h.Settings = h.Settings with { BaseStationsOnAtStart = false };
 
         var hold = h.Radio.Hold(Right);
         var right = h.Manager.SwitchAsync(RightAddress, StationCommand.Sleep, CancellationToken.None);
@@ -2578,7 +2492,7 @@ internal sealed class StationHarness : IDisposable
 {
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
-    public static readonly AppSettings Base = new(BaseStationsOnAtStart: true, BaseStationsOffAtStop: true);
+    public static readonly AppSettings Base = new(BaseStationsOffAtStop: true);
 
     public static readonly AppSettings Live = Base with { BaseStationsState = StationStateMode.Live };
 

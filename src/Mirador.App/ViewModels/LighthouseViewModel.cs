@@ -147,7 +147,6 @@ public sealed partial class LighthouseViewModel : ObservableObject
         loading = true;
         var settings = SettingsViewModel.Read(host, out var problem);
         SettingsProblem = problem;
-        PowerOnAtMonadoStart = settings.BaseStationsOnAtStart;
         PowerOffAtMonadoStop = settings.BaseStationsOffAtStop;
         PowerOnAtMiradorStart = settings.BaseStationsOnAtMiradorStart;
         PowerOffAtMiradorQuit = settings.BaseStationsOffAtMiradorQuit;
@@ -246,9 +245,6 @@ public sealed partial class LighthouseViewModel : ObservableObject
     }
 
     public ObservableCollection<StationItem> Stations { get; } = [];
-
-    [ObservableProperty]
-    public partial bool PowerOnAtMonadoStart { get; set; }
 
     [ObservableProperty]
     public partial bool PowerOffAtMonadoStop { get; set; }
@@ -473,7 +469,7 @@ public sealed partial class LighthouseViewModel : ObservableObject
             { } => Libmonado.NotOffered,
             null when running && session.MonadoClientProblem is { } problem => problem,
             null when running => "Waiting for Monado's libmonado connection.",
-            null => "Start Monado first.",
+            null => "Monado must be running.",
         };
     }
 
@@ -579,8 +575,6 @@ public sealed partial class LighthouseViewModel : ObservableObject
     private void SwitchOff() => _ = stations.SwitchSelectedAsync(stations.OffCommand(), CancellationToken.None);
 
     private bool CanSwitchSelected() => BluetoothReady && AnySelected && !IsRunning;
-
-    partial void OnPowerOnAtMonadoStartChanged(bool value) => SaveSetting(s => s with { BaseStationsOnAtStart = value });
 
     partial void OnPowerOffAtMonadoStopChanged(bool value) => SaveSetting(s => s with { BaseStationsOffAtStop = value });
 

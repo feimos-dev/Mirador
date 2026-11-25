@@ -31,7 +31,7 @@
                     </toolkit:SettingsCard>
                 </toolkit:SettingsExpander.Items>
             </toolkit:SettingsExpander>
-            <toolkit:SettingsCard Description="For a bug report." Header="Diagnostics file">
+            <toolkit:SettingsCard Header="Diagnostics file">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Command="{x:Bind ViewModel.OpenLogFolderCommand}" Content="Open log folder" />
                     <Button
@@ -41,7 +41,7 @@
                 </StackPanel>
             </toolkit:SettingsCard>
             <toolkit:SettingsCard
-                Description="Checks direct mode. About 20 s, with Monado stopped."
+                Description="Confirm direct mode is working. About 20 s, with Monado stopped."
                 Header="Display check"
                 Visibility="{x:Bind ViewModel.UsesDirectMode, Mode=OneWay}">
                 <StackPanel Orientation="Horizontal" Spacing="12">

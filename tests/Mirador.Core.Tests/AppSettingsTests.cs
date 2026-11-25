@@ -77,7 +77,6 @@ public class AppSettingsTests
     {
         var settings = new AppSettings();
 
-        Assert.False(settings.BaseStationsOnAtStart);
         Assert.False(settings.BaseStationsOffAtStop);
         Assert.False(settings.BaseStationsOnAtMiradorStart);
         Assert.False(settings.BaseStationsOffAtMiradorQuit);

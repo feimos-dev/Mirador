@@ -192,7 +192,7 @@ public sealed partial class VerifyViewModel(AppHost host, Microsoft.UI.Dispatchi
 
         if (result is null || result.Key != key)
         {
-            Status = "Not verified yet for this build.";
+            Status = "";
             return;
         }
 

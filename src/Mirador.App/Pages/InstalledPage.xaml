@@ -19,8 +19,10 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:InstalledItem">
-                        <toolkit:SettingsCard Description="{x:Bind Detail}" Header="{x:Bind Name}" />
+                    <DataTemplate x:DataType="vm:InstalledPart">
+                        <toolkit:SettingsCard Description="{x:Bind Detail}" Header="{x:Bind Name}">
+                            <HyperlinkButton Content="{x:Bind LinkText}" NavigateUri="{x:Bind Link}" />
+                        </toolkit:SettingsCard>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -28,7 +30,7 @@
             <TextBlock Style="{StaticResource SectionHeader}" Text="Build tools" />
             <TextBlock
                 Margin="0,0,0,4"
-                Text="A branch build installs what it needs first, at the versions every build uses."
+                Text="Used to build Monado locally"
                 TextWrapping="Wrap" />
             <InfoBar
                 IsClosable="False"

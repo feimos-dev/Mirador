@@ -202,7 +202,7 @@ public sealed partial class ProfilesViewModel : ObservableObject
 
             var text = MonadoSource == MiradorSource
                 ? "Gives Monado realtime GPU priority."
-                : "Only for a branch you trust: it gets full control of your PC.";
+                : "Only for a branch you trust.";
             return CanRunAsAdministrator ? text : $"{text} Needs an administrator account.";
         }
     }

@@ -19,19 +19,19 @@
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
 
             <TextBlock Style="{StaticResource FirstSectionHeader}" Text="General" />
-            <toolkit:SettingsCard Header="Start Mirador when you sign in">
+            <toolkit:SettingsCard Header="Start Mirador with Windows">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartAtSignIn, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Start Mirador when a game needs Monado">
-                <ToggleSwitch IsOn="{x:Bind ViewModel.StartMiradorForGames, Mode=TwoWay}" />
-            </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Start minimized" IsEnabled="{x:Bind ViewModel.StartAtSignIn, Mode=OneWay}">
+            <toolkit:SettingsCard Header="Start to tray with Windows" IsEnabled="{x:Bind ViewModel.StartAtSignIn, Mode=OneWay}">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Close to the tray">
+            <toolkit:SettingsCard Header="Start Mirador automatically when games start">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.StartMiradorForGames, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Close to tray">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.CloseToTray, Mode=TwoWay}" />
             </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="Minimize to the tray">
+            <toolkit:SettingsCard Header="Minimize to tray">
                 <ToggleSwitch IsOn="{x:Bind ViewModel.MinimizeToTray, Mode=TwoWay}" />
             </toolkit:SettingsCard>
             <toolkit:SettingsCard Header="Automatically Check for Updates">
@@ -90,17 +90,6 @@
                 Message="{x:Bind Folder.Message, Mode=OneWay}"
                 Severity="{x:Bind Folder.Severity, Mode=OneWay}"
                 Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}" />
-
-            <TextBlock Style="{StaticResource SectionHeader}" Text="About" />
-            <toolkit:SettingsCard Description="Boost Software License 1.0" Header="{x:Bind ViewModel.Version}">
-                <HyperlinkButton Content="github.com/feimos-dev/Mirador" NavigateUri="https://github.com/feimos-dev/Mirador" />
-            </toolkit:SettingsCard>
-            <toolkit:SettingsCard Header="{x:Bind ViewModel.BundledMonadoVersion}">
-                <HyperlinkButton Content="gitlab.freedesktop.org/monado/monado" NavigateUri="https://gitlab.freedesktop.org/monado/monado" />
-            </toolkit:SettingsCard>
-            <toolkit:SettingsCard Description="{x:Bind ViewModel.OpenCompositeDescription, Mode=OneWay}" Header="OpenLamina">
-                <HyperlinkButton Content="github.com/feimos-dev/OpenLamina" NavigateUri="https://github.com/feimos-dev/OpenLamina" />
-            </toolkit:SettingsCard>
         </StackPanel>
         </c:PageColumn>
     </ScrollViewer>

@@ -6,7 +6,6 @@ public sealed record AppSettings(
     bool CloseToTray = true,
     bool CheckForUpdates = true,
     DateTimeOffset? LastUpdateCheck = null,
-    bool BaseStationsOnAtStart = false,
     bool BaseStationsOffAtStop = false,
     bool BaseStationsOnAtMiradorStart = false,
     bool BaseStationsOffAtMiradorQuit = false,

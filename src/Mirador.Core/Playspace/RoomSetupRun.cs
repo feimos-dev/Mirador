@@ -41,7 +41,7 @@ public sealed class RoomSetupRun(RoomMeasuring measuring, RoomSetupStore store, 
     {
         if (session.MonadoClient is not { } client)
         {
-            return new RoomStepOutcome("Start Monado first.", RoomStepLevel.Error);
+            return new RoomStepOutcome("Monado must be running.", RoomStepLevel.Error);
         }
 
         var stops = RoomMeasuring.StopsMonado(session.MonadoEnvironment);

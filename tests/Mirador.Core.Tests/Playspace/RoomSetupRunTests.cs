@@ -325,7 +325,7 @@ public sealed class RoomSetupRunTests : IDisposable
     [Fact]
     public async Task Without_monado_nothing_is_measured()
     {
-        Assert.Equal(new RoomStepOutcome("Start Monado first.", RoomStepLevel.Error), await Step(RoomStep.Forward));
+        Assert.Equal(new RoomStepOutcome("Monado must be running.", RoomStepLevel.Error), await Step(RoomStep.Forward));
         Assert.Empty(runner.Commands);
     }
 

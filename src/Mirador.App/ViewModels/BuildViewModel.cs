@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mirador.App.Services;
@@ -123,12 +124,21 @@ public sealed partial class BuildViewModel : ObservableObject
 
         var built = info is null
             ? "Not built yet."
-            : $"Built {info.ShortCommit} on {info.BuiltAt} with {info.Compiler}. {BuildCheckResult.Load(installDir)?.Summary()}";
+            : BuiltLine(info, BuildCheckResult.Load(installDir));
         Status = run switch
         {
             { Cancelled: true } => $"Cancelled. {built}",
             { Outcome: { Ok: false } failed } => $"{failed.Message} {built}",
             _ => built,
         };
+    }
+
+    private static string BuiltLine(BuildInfo info, BuildCheckResult? checks)
+    {
+        var date = DateTimeOffset.TryParse(info.BuiltAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at)
+            ? at.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
+        var built = date is null ? $"Built {info.ShortCommit}." : $"Built {info.ShortCommit} on {date}.";
+        return checks is { AllPassed: false } ? $"{built} {checks.Summary()}" : built;
     }
 }
