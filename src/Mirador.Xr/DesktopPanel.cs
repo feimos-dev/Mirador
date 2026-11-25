@@ -8,8 +8,8 @@ namespace Mirador.Xr;
 /// <summary>
 /// A monitor shown as a flat panel above the dashboard's bar. The desktop program draws it, as a quad layer of its own
 /// (<see cref="DesktopLayer"/>); here it is where the lasers meet it. A laser on it is the mouse: the pointer follows
-/// where it meets the panel (held still through a click, <see cref="LaserClick"/>), the trigger is the left button, and
-/// the thumbstick scrolls.
+/// where it meets the panel (held still through a click, <see cref="LaserClick"/>), the trigger is the left button
+/// (<see cref="LaserButton"/>), and the thumbstick scrolls.
 /// </summary>
 internal sealed class DesktopPanel : IDisposable
 {
@@ -27,7 +27,9 @@ internal sealed class DesktopPanel : IDisposable
     private readonly DesktopLayer layer;
     private readonly float aspect;
     private readonly LaserClick click = new();
-    private bool pressed;
+    private readonly LaserButton[] buttons = [new(), new()]; // each hand's trigger, by Handed
+    private Handed? holding; // the hand whose trigger holds the left button
+    private Handed? pointing; // the hand whose laser moves the pointer
     private double nextScroll;
 
     /// <summary>A panel for <paramref name="monitor"/>, drawn by <paramref name="layer"/>, with the mouse on it.</summary>
@@ -52,52 +54,81 @@ internal sealed class DesktopPanel : IDisposable
         layer.Show(new DesktopPlacement(
             monitor.Handle, [facing.X, facing.Y, facing.Z, facing.W, centre.x, centre.y, centre.z], size.x, size.y));
 
-        // The panel takes the lasers' focus as a button would, which is what draws their beams up to it. In the
-        // surface's own space +X is the viewer's left, so its upper left corner is at half the width.
+        // The panel takes the lasers' focus as a button would, which is what draws their beams up to it; the button
+        // itself is the triggers', as a StereoKit button lets go of a press whose ray moves on. In the surface's own
+        // space +X is the viewer's left, so its upper left corner is at half the width.
         UI.PushSurface(new Pose(centre, bar.orientation), Vec3.Zero, size);
-        UI.ButtonBehavior(new Vec3(size.x / 2, size.y / 2, 0), size, "desktop", out _, out var button, out var focus, out var interactor);
+        UI.ButtonBehavior(new Vec3(size.x / 2, size.y / 2, 0), size, "desktop", out _, out _, out var focus, out var interactor);
         UI.PopSurface();
 
-        if (focus.IsActive() && interactor != Interactor.None
-            && DesktopMaths.PanelPoint(interactor.Start, interactor.End, centre, right, up, size.x, size.y) is { } at)
+        // Where each controller's laser meets the panel, if it does.
+        var hits = new (float U, float V)?[2];
+        foreach (var laser in Interactor.All)
         {
-            var hand = HandOf(interactor.Source);
-            var trigger = hand is { } h ? Input.Controller(h).trigger : 0;
-            var pointer = click.Pointer(at, trigger, pressed || button.IsActive(), size.x, size.y);
-            DesktopMouse.MoveTo(monitor, pointer.U, pointer.V);
-            if (button.IsJustActive())
+            if (laser.Type == InteractorType.Line && laser.Tracked.IsActive() && HandOf(laser.Source) is { } laserHand)
             {
-                Press(true);
+                hits[(int)laserHand] ??= DesktopMaths.PanelPoint(laser.Start, laser.End, centre, right, up, size.x, size.y);
+            }
+        }
+
+        // Each trigger, every frame: the first one pulled with its laser on the panel holds the left button until it is
+        // let go, wherever its laser is by then, so a drag that leaves the panel still ends.
+        var held = holding;
+        bool? press = null;
+        foreach (var each in new[] { Handed.Left, Handed.Right })
+        {
+            var button = buttons[(int)each];
+            if (!button.Update(Input.Controller(each).trigger, hits[(int)each] is not null))
+            {
+                continue;
             }
 
-            Scroll(hand);
-        }
-        else
-        {
-            click.Left();
+            if (button.Down && holding is null)
+            {
+                (holding, press) = (each, true);
+            }
+            else if (!button.Down && holding == each)
+            {
+                (holding, press) = (null, false);
+            }
         }
 
-        // Let go wherever the laser is by then: a drag that leaves the panel must still end.
-        if (pressed && !button.IsActive())
+        // The pointer follows the hand that held the button as the frame began (a release lands where it was), else one
+        // on the panel whose trigger is moving, else the laser StereoKit focuses, else either on the panel.
+        var focused = focus.IsActive() && interactor != Interactor.None ? HandOf(interactor.Source) : null;
+        Handed? Pulling(Handed each) => hits[(int)each] is not null && Input.Controller(each).trigger > LaserClick.RestTrigger ? each : null;
+        var hand = held ?? holding ?? Pulling(Handed.Left) ?? Pulling(Handed.Right)
+            ?? (focused is { } f && hits[(int)f] is not null ? f
+            : hits[(int)Handed.Left] is not null ? Handed.Left
+            : hits[(int)Handed.Right] is not null ? Handed.Right
+            : null);
+        if (hand != pointing)
         {
-            Press(false);
+            click.Left();
+            pointing = hand;
+        }
+
+        if (hand is { } h && hits[(int)h] is { } at)
+        {
+            var pointer = click.Pointer(at, Input.Controller(h).trigger, held is not null || holding is not null, size.x, size.y);
+            DesktopMouse.MoveTo(monitor, pointer.U, pointer.V);
+            Scroll(h);
+        }
+
+        if (press is { } down)
+        {
+            DesktopMouse.Left(down);
         }
     }
 
     public void Dispose()
     {
-        if (pressed)
+        if (holding is not null)
         {
-            Press(false);
+            DesktopMouse.Left(false);
         }
 
         layer.Hide();
-    }
-
-    private void Press(bool down)
-    {
-        pressed = down;
-        DesktopMouse.Left(down);
     }
 
     private static Handed? HandOf(InteractorSource source) =>
