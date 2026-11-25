@@ -58,8 +58,16 @@ internal sealed class DashboardApp
     private int shown = -1;
     private bool desktopFailed;
 
-    // A recentre asked for and not yet answered.
-    private bool recentring;
+    // A recentre asked for and not yet answered: the head it was asked from. Then, once answered, where the head will be
+    // in the moved stage: the bar goes ahead of it when StereoKit's head gets there, or at the latest at the time given.
+    private MonadoPose? recentring;
+    private MonadoPose? recentredHead;
+    private double placeBy;
+
+    // The grab bar under the bar, which moves it.
+    private static readonly Vec3 GrabSize = new(0.22f, 0.022f, 0.012f);
+    private const float GrabGapM = 0.02f;
+    private readonly Mesh grab = Mesh.GenerateRoundedCube(GrabSize, 0.0105f, 2);
     private double confirmUntil;
 
     public static int Run(Link link)
@@ -141,6 +149,14 @@ internal sealed class DashboardApp
             unplaced = false;
         }
 
+        // StereoKit takes the moved stage when Monado's event comes, which can be a frame or two either side of
+        // Mirador's answer: the bar moves once its head is near where the recentre put it.
+        if (recentredHead is { } after && (Arrived(after) || Time.Total >= placeBy))
+        {
+            bar = ToPose(DashboardMaths.AheadOfHead(after));
+            recentredHead = null;
+        }
+
         if (desktopLayer.Failed && !desktopFailed)
         {
             // Its log says why: the desktop buttons go.
@@ -151,7 +167,7 @@ internal sealed class DashboardApp
 
         if (open && !unplaced)
         {
-            DrawBar();
+            DrawGrab(DrawBar());
             try
             {
                 panel?.Draw(bar);
@@ -201,6 +217,7 @@ internal sealed class DashboardApp
         else if (!on)
         {
             ShowDesktop(-1);
+            recentredHead = null;
         }
 
         open = on;
@@ -209,7 +226,8 @@ internal sealed class DashboardApp
         Interaction.DefaultDraw = on;
     }
 
-    private void DrawBar()
+    /// <summary>Draws the bar; its bottom edge in its own space.</summary>
+    private float DrawBar()
     {
         UI.PushTextStyle(text);
         var pose = bar;
@@ -271,6 +289,10 @@ internal sealed class DashboardApp
 
         UI.WindowEnd();
         UI.PopTextStyle();
+
+        // After WindowEnd, the last layout is the whole window's.
+        var window = UI.LayoutLast;
+        return window.center.y - (window.dimensions.y / 2);
     }
 
     /// <summary>Shows monitor <paramref name="index"/> above the bar, or (-1) none.</summary>
@@ -320,26 +342,58 @@ internal sealed class DashboardApp
     /// <summary>Asks Mirador to put the origin under the head, turned the way it faces.</summary>
     private void AskRecentre()
     {
-        if (recentring || World.OriginMode != OriginMode.Stage || !HeadPose.Known())
+        if (recentring is not null || World.OriginMode != OriginMode.Stage || !HeadPose.Known())
         {
             return;
         }
 
         var head = FromPose(Input.Head);
-        recentring = !link.IsAlone;
+        recentring = link.IsAlone ? null : head;
         link.Send(XrLink.FormatRecentre([head.Qx, head.Qy, head.Qz, head.Qw, head.X, head.Y, head.Z]));
     }
 
-    /// <summary>Mirador moved the stage, or couldn't: the open bar moves with the stage, as the rest of the world does, and both controllers tick.</summary>
+    /// <summary>Mirador moved the stage, or couldn't: the open bar goes ahead of where the head looks in the moved stage, and both controllers tick.</summary>
     private void Recentred(bool moved)
     {
-        if (recentring && moved)
+        if (recentring is { } head && moved)
         {
+            recentredHead = DashboardMaths.HeadAfterRecentre(head);
+            placeBy = Time.Total + 0.5;
             Input.HapticPulse(InputHaptic.LController, 0, 0.6f, 0.1f);
             Input.HapticPulse(InputHaptic.RController, 0, 0.6f, 0.1f);
         }
 
-        recentring = false;
+        recentring = null;
+    }
+
+    /// <summary>Whether StereoKit's head is where <paramref name="head"/> is: within 10 cm, facing the same way to 15° or so.</summary>
+    private static bool Arrived(MonadoPose head)
+    {
+        var forward = Flat(Input.Head.orientation * Vec3.Forward);
+        var expected = Flat(new Quat(head.Qx, head.Qy, head.Qz, head.Qw) * Vec3.Forward);
+        return Vec3.Distance(Input.Head.position, new Vec3(head.X, head.Y, head.Z)) < 0.1f && Vec3.Dot(forward, expected) > 0.96f;
+
+        static Vec3 Flat(Vec3 v) => new Vec3(v.x, 0, v.z).Normalized;
+    }
+
+    /// <summary>The grab bar <see cref="GrabGapM"/> under the bar's bottom (<paramref name="bottom"/>, in the bar's own space): holding it moves the bar, upright and turned to face the user.</summary>
+    private void DrawGrab(float bottom)
+    {
+        var offset = new Vec3(0, bottom - GrabGapM - (GrabSize.y / 2), 0);
+        var handle = new Pose(bar.position + (bar.orientation * offset), bar.orientation);
+        // Grabbed in a box larger than the pill: a laser wobbles more than the pill is high.
+        if (UI.Handle("grab", ref handle, new Bounds(GrabSize + new Vec3(0.04f, 0.05f, 0.03f)), false, UIMove.PosOnly, UIGesture.Pinch))
+        {
+            // As AheadOfHead places it: its -Z towards the head along the floor.
+            var towards = Input.Head.position - handle.position;
+            towards.y = 0;
+            var turn = towards.LengthSq > 1e-6f ? Quat.LookDir(towards.Normalized) : bar.orientation;
+            bar = new Pose(handle.position - (turn * offset), turn);
+            handle.orientation = turn;
+        }
+
+        var lit = UI.LastElementFocused.IsActive() || UI.LastElementActive.IsActive();
+        grab.Draw(Default.MaterialUI, handle.ToMatrix(), lit ? new Color(0.9f, 0.9f, 0.9f) : new Color(0.45f, 0.45f, 0.45f));
     }
 
     /// <summary>A short tick on a controller as its laser comes onto a button.</summary>

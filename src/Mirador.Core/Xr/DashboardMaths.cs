@@ -51,6 +51,9 @@ public static class DashboardMaths
         return Pose(Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector3(headInStage.X, 0, headInStage.Z));
     }
 
+    /// <summary>Where the head is in the stage once a recentre from <paramref name="headInStage"/> has moved it.</summary>
+    public static MonadoPose HeadAfterRecentre(MonadoPose headInStage) => Compose(Inverse(RecentredOrigin(headInStage)), headInStage);
+
     /// <summary><paramref name="child"/>, given in <paramref name="parent"/>'s space, in the space <paramref name="parent"/> is given in.</summary>
     public static MonadoPose Compose(MonadoPose parent, MonadoPose child)
     {
