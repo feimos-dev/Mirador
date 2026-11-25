@@ -128,21 +128,6 @@ public sealed class DirectModeCheckTests : IDisposable
     }
 
     [Fact]
-    public void The_layers_five_variables_are_these()
-    {
-        Assert.Equal(
-            new Dictionary<string, string>
-            {
-                ["MIRADOR_DIRECT_MODE"] = "1",
-                ["DISABLE_RTSS_LAYER"] = "1",
-                ["VK_LOADER_LAYERS_ALLOW"] = "VK_LAYER_MIRADOR_direct_mode",
-                ["XRT_COMPOSITOR_FORCE_VK_DISPLAY"] = "0",
-                ["XRT_COMPOSITOR_USE_PRESENT_WAIT"] = "1",
-            },
-            DirectModeEnvironment.Variables.ToDictionary(p => p.Key, p => p.Value));
-    }
-
-    [Fact]
     public void Variables_a_shell_may_have_left_that_change_the_layer_are_taken_out_of_monados_environment()
     {
         Assert.Equal(

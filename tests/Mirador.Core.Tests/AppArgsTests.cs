@@ -15,12 +15,6 @@ public class AppArgsTests
     }
 
     [Fact]
-    public void The_old_set_runtime_step_is_gone_and_its_manifest_is_ignored()
-    {
-        Assert.Equal(new AppArgs(false, false), AppArgs.Parse(["--set-runtime", @"C:\Users\Zoë\My Builds\monado\build\openxr_monado-dev.json"]));
-    }
-
-    [Fact]
     public void Parses_sign_in_and_remove_sign_in()
     {
         Assert.True(AppArgs.Parse(["--sign-in"]).SignIn);

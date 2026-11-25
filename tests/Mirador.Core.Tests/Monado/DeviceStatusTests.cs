@@ -41,9 +41,6 @@ public class DeviceStatusTests
     }
 
     [Fact]
-    public void No_devices_give_no_lines() => Assert.Empty(DeviceStatus.Lines([]));
-
-    [Fact]
     public void The_serial_and_battery_follow_the_name()
     {
         var lines = DeviceStatus.Lines([

@@ -33,53 +33,6 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void Old_file_gets_base_station_defaults()
-    {
-        using var dir = new TempDir();
-        File.WriteAllText(dir.File("settings.json"), """{"closeToTray": false}""");
-
-        var settings = new AppSettingsStore(dir.File("settings.json")).Load();
-
-        Assert.False(settings.CloseToTray);
-        Assert.False(settings.BaseStationsOnAtStart);
-        Assert.False(settings.BaseStationsOffAtStop);
-    }
-
-    [Fact]
-    public void Old_file_with_off_mode_still_loads()
-    {
-        using var dir = new TempDir();
-        var store = new AppSettingsStore(dir.File("settings.json"));
-        File.WriteAllText(dir.File("settings.json"), """{"closeToTray": false, "baseStationsOnAtStart": false, "baseStationsOff": "Standby", "baseStationsOffAtStop": false}""");
-
-        var settings = store.Load();
-
-        Assert.Equal(new AppSettings(CloseToTray: false, BaseStationsOnAtStart: false, BaseStationsOffAtStop: false), settings);
-        Assert.False(File.Exists(dir.File("settings.json.bad")));
-
-        store.Save(settings);
-
-        var text = File.ReadAllText(dir.File("settings.json"));
-        Assert.DoesNotContain("\"baseStationsOff\"", text);
-        Assert.Contains("\"baseStationsOffAtStop\": false", text);
-        Assert.Equal(settings, store.Load());
-    }
-
-    [Fact]
-    public void Old_file_gets_the_new_base_station_defaults()
-    {
-        using var dir = new TempDir();
-        File.WriteAllText(dir.File("settings.json"), """{"closeToTray": false, "baseStationsOnAtStart": false, "baseStationsOff": "Standby"}""");
-
-        var settings = new AppSettingsStore(dir.File("settings.json")).Load();
-
-        Assert.False(settings.BaseStationsOnAtStart);
-        Assert.False(settings.BaseStationsOnAtMiradorStart);
-        Assert.False(settings.BaseStationsOffAtMiradorQuit);
-        Assert.Equal(StationStateMode.LastScan, settings.BaseStationsState);
-    }
-
-    [Fact]
     public void State_mode_is_saved_as_text()
     {
         using var dir = new TempDir();

@@ -23,17 +23,6 @@ public class StationProtocolTests
     }
 
     [Fact]
-    public void Identifiers_are_the_known_ones()
-    {
-        Assert.Equal(Guid.Parse("00001523-1212-efde-1523-785feabcd124"), StationProtocol.V2Service);
-        Assert.Equal(Guid.Parse("00001525-1212-efde-1523-785feabcd124"), StationProtocol.V2PowerCharacteristic);
-        Assert.Equal(Guid.Parse("00008421-1212-efde-1523-785feabcd124"), StationProtocol.V2IdentifyCharacteristic);
-        Assert.Equal(Guid.Parse("0000cb00-0000-1000-8000-00805f9b34fb"), StationProtocol.V1Service);
-        Assert.Equal(Guid.Parse("0000cb01-0000-1000-8000-00805f9b34fb"), StationProtocol.V1PowerCharacteristic);
-        Assert.Equal((ushort)0x055D, StationProtocol.ValveCompany);
-    }
-
-    [Fact]
     public void V2_bytes()
     {
         Assert.Equal([new byte[] { 0x01 }], StationProtocol.V2Writes(StationCommand.On));

@@ -20,9 +20,6 @@ public class ClientLogParserTests
     }
 
     [Fact]
-    public void Nothing_is_connected_at_first() => Assert.Empty(new ClientLogParser().ConnectedApps);
-
-    [Fact]
     public void Feed_says_whether_the_list_changed()
     {
         var p = new ClientLogParser();

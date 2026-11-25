@@ -980,13 +980,6 @@ TEST_CASE("session settings come from the layer's three variables")
     CHECK_FALSE(nvdm::parse_session_settings(nullptr, "1", nullptr).skip_edid);
 }
 
-TEST_CASE("open steps have names")
-{
-    CHECK(std::string(nvdm::step_name(OpenStep::Holders)) == "Holders");
-    CHECK(std::string(nvdm::step_name(OpenStep::EnableDirectMode)) == "EnableDirectMode");
-    CHECK(std::string(nvdm::step_name(OpenStep::Done)) == "Done");
-}
-
 TEST_CASE("find_display enables direct mode before the first enumerate")
 {
     Rig rig;

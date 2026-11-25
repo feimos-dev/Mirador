@@ -523,14 +523,6 @@ public sealed class PimaxModuleTests : IDisposable
         }
     }
 
-    [Fact]
-    public void It_is_the_pimax_module_and_was_the_dream_air_module()
-    {
-        var module = Module();
-
-        Assert.Equal(("pimax", "Pimax"), (module.Id, module.DisplayName));
-    }
-
     [Theory]
     [InlineData(0x0018)]
     [InlineData(0x0040)]

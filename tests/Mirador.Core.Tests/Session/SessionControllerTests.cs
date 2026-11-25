@@ -1074,6 +1074,8 @@ public class SessionControllerTests
         await Task.Delay(100);
         await h.Timers.Set(TimeSpan.FromSeconds(10)).WaitAsync(Limit);
         h.Time.Advance(TimeSpan.FromSeconds(10));
+        await h.Timers.Set(TimeSpan.FromSeconds(10), 2).WaitAsync(Limit);
+        h.Time.Advance(TimeSpan.FromSeconds(10));
         var outcome = await start.WaitAsync(Limit);
         h.Libmonado.Gate.SetResult();
 

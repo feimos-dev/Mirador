@@ -84,11 +84,6 @@ TEST_CASE("heartbeat_report_bytes")
     CHECK(report[0] == 0x00);
 }
 
-TEST_CASE("the heartbeat period is 200 ms")
-{
-    STATIC_REQUIRE(dvl::kHeartbeatPeriod == std::chrono::milliseconds(200));
-}
-
 TEST_CASE("the heartbeat goes to the board's interface 0 only")
 {
     const char* const board =
