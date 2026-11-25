@@ -4,11 +4,15 @@
     Builds Mirador's installer (artifacts\Mirador-<version>-setup.exe) from the bundle with Inno Setup 6.
 .DESCRIPTION
     Run tools\build-bundle.ps1 first. The version is the bundled Mirador.exe's product version. Inno Setup:
-    winget install JRSoftware.InnoSetup
+    winget install JRSoftware.InnoSetup (the workflow: tools\get-inno-setup.ps1)
+
+    -Sign, for a release: Inno Setup signs the uninstaller, Setup's temporary copies and the installer itself with
+    tools\sign.ps1, which says what it needs. The bundle's own files are signed before (tools\sign-bundle.ps1).
 #>
 [CmdletBinding()]
 param(
-    [string]$Bundle = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts\bundle')
+    [string]$Bundle = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts\bundle'),
+    [switch]$Sign
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,7 +47,14 @@ if (-not $iscc) {
     throw 'Inno Setup 6 is missing: winget install JRSoftware.InnoSetup'
 }
 
-& $iscc "/DAppVersion=$version" (Join-Path $repo 'installer\Mirador.iss')
+$options = @("/DAppVersion=$version")
+if ($Sign) {
+    # Inno Setup's sign tool "mirador": this PowerShell running tools\sign.ps1 on the file ($q is a quote, $f the file).
+    $options += '/DSignTool=mirador'
+    $options += '/Smirador=$q' + (Get-Process -Id $PID).Path + '$q -NoProfile -File $q' + (Join-Path $PSScriptRoot 'sign.ps1') + '$q $f'
+}
+
+& $iscc @options (Join-Path $repo 'installer\Mirador.iss')
 if ($LASTEXITCODE -ne 0) {
     throw "ISCC failed (exit code $LASTEXITCODE)."
 }

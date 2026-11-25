@@ -1,9 +1,14 @@
 name: Installer
 
-# Builds Mirador's installer on every push, so a broken installer shows before a release; a v* tag also makes a draft
-# release with it. The tests run in build.yml, for tags too. The installer has
-# no Monado and no OpenLamina: each profile gets its Monado from Mirador, and Home offers
-# "Get OpenLamina". Unsigned until code signing is settled.
+# Builds Mirador's installer on every push, so a broken installer shows before a release. The tests run in build.yml,
+# for tags too. The installer has no Monado and no OpenLamina: each profile gets its Monado from Mirador, and Home
+# offers "Get OpenLamina".
+#
+# A v* tag also signs (Azure Artifact Signing) and makes a draft release: Mirador's own programs and DLLs, the
+# uninstaller and the installer. Only the sign job can sign: it runs in the "release" environment, which takes v* tags
+# only and waits for an approval, and Azure takes a token from no other job. It builds none of Mirador's code and
+# restores none of its packages: it signs the bundle the installer job built, with the pinned signing library and
+# Inno Setup.
 
 on:
   push:
@@ -20,6 +25,7 @@ concurrency:
 
 jobs:
   installer:
+    name: Windows installer
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -31,17 +37,112 @@ jobs:
 
       - name: Inno Setup
         shell: pwsh
-        run: |
-          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
-              choco install innosetup -y --no-progress
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+        run: tools\get-inno-setup.ps1
 
+      # Unsigned, for a tag too: an installer that doesn't build shows here, before anyone is asked to approve.
       - name: The bundle and the installer
         shell: pwsh
         run: |
           tools\build-bundle.ps1
           tools\build-installer.ps1
+
+      # Before anything is signed for it: the tag must name the version the app was built with, and a release that
+      # exists already can't take the installer.
+      - name: The tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if (-not (Test-Path -LiteralPath "artifacts\Mirador-$($env:GITHUB_REF_NAME.Substring(1))-setup.exe")) {
+            "::error::The tag $env:GITHUB_REF_NAME doesn't match the version built ($((Get-Item artifacts\Mirador-*-setup.exe).Name)): set <Version> in Directory.Build.props."
+            exit 1
+          }
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "::error::A release for $env:GITHUB_REF_NAME exists already: the installer can't be added to it. Push a new tag instead."
+            exit 1
+          }
+          exit 0
+
+      - name: Upload the installer
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer
+          if-no-files-found: error
+          path: artifacts/Mirador-*-setup.exe
+
+      - name: Upload the bundle, to sign
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bundle
+          if-no-files-found: error
+          path: artifacts/bundle
+
+  # The only job that can sign.
+  sign:
+    name: Sign
+    needs: installer
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2025
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bundle
+          path: artifacts/bundle
+
+      # The signing library runs on it.
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Inno Setup
+        shell: pwsh
+        run: tools\get-inno-setup.ps1
+
+      - name: The signing library
+        shell: pwsh
+        env:
+          ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+          CERTIFICATE_PROFILE: ${{ vars.SIGNING_PROFILE }}
+        run: >-
+          tools\get-signing-library.ps1 -Out (Join-Path $env:RUNNER_TEMP 'signing')
+          -Endpoint $env:ENDPOINT -Account $env:ACCOUNT -CertificateProfile $env:CERTIFICATE_PROFILE
+
+      # No secret: Azure takes GitHub's token for this job, in this environment, of this repository.
+      - name: Azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign the programs, then build and sign the installer
+        shell: pwsh
+        run: |
+          # GitHub's token behind the login lasts minutes, and without it the Azure CLI can't get a token for another
+          # service. So the signing service's token is taken now: the installer, signed last, gets the cached one.
+          az account get-access-token --resource https://codesigning.azure.net --query expiresOn --output tsv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tools\sign-bundle.ps1
+          tools\build-installer.ps1 -Sign
+          tools\check-signatures.ps1 (Get-Item artifacts\Mirador-*-setup.exe).FullName
+
+      - name: Azure, signed out
+        if: always()
+        shell: pwsh
+        run: az account clear
 
       - name: Upload the installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -50,9 +151,33 @@ jobs:
           if-no-files-found: error
           path: artifacts/Mirador-*-setup.exe
 
+  # The signature again, on a machine that never had the signing tools.
+  signed-check:
+    name: Signed installer
+    needs: sign
+    runs-on: windows-2025
+    timeout-minutes: 10
+    outputs:
+      signer: ${{ steps.signature.outputs.signer }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          sparse-checkout: tools
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer
+          path: artifacts
+
+      - name: The installer's signature
+        id: signature
+        shell: pwsh
+        run: tools\check-signatures.ps1 (Get-Item artifacts\Mirador-*-setup.exe).FullName
+
   # Only a v* tag gets write access, and only here.
   release:
-    needs: installer
+    name: Release files
+    needs: signed-check
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
@@ -67,6 +192,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          SIGNER: ${{ needs.signed-check.outputs.signer }}
         run: |
           # The tag must name the version the app was built with (<Version> in Directory.Build.props), so the
           # installer's name and the release agree.
@@ -78,4 +204,4 @@ jobs:
           fi
           hash=$(sha256sum "$installer" | cut -d' ' -f1)
           gh release create "$TAG" "$installer" --draft --verify-tag --title "Mirador $version" \
-            --notes "Unsigned. SHA-256 of the installer: $hash"
+            --notes "Signed by $SIGNER. SHA-256 of the installer: $hash"

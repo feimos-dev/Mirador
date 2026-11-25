@@ -1,5 +1,6 @@
 ; Mirador's installer (Inno Setup 6). Built by tools\build-installer.ps1 from artifacts\bundle (tools\build-bundle.ps1):
 ;   ISCC /DAppVersion=<version> installer\Mirador.iss
+; A release adds /DSignTool=<name> /S<name>=<command>, and Inno Setup signs the uninstaller and the installer with it.
 ;
 ; {app} is Program Files\Mirador, admin-only: the helper service runs from it as LocalSystem and makes its Monado the
 ; OpenXR runtime of every app, so there is no folder choice. If one ever comes back, {app} needs
@@ -40,6 +41,11 @@ WizardStyle=modern
 Compression=lzma2/ultra64
 SolidCompression=yes
 MinVersion=10.0.19041
+#ifdef SignTool
+SignTool={#SignTool}
+; The sign tool tries again by itself.
+SignToolRetryCount=0
+#endif
 
 [InstallDelete]
 ; What an older version left there goes, so no stale file is loaded.
