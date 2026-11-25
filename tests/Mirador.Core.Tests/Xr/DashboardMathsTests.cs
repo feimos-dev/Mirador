@@ -89,16 +89,6 @@ public class DashboardMathsTests
     }
 
     [Fact]
-    public void The_dashboard_stays_within_reach_along_the_floor_and_keeps_its_height()
-    {
-        var head = new Vector3(1, 1.7f, 1);
-
-        Near(new Vector3(1, 1.2f, 1 - DashboardMaths.FarthestM), DashboardMaths.WithinReach(head, new Vector3(1, 1.2f, -9)));
-        Near(new Vector3(1 + DashboardMaths.NearestM, 0.5f, 1), DashboardMaths.WithinReach(head, new Vector3(1.1f, 0.5f, 1)));
-        Near(new Vector3(2, 1.3f, 1), DashboardMaths.WithinReach(head, new Vector3(2, 1.3f, 1)));
-    }
-
-    [Fact]
     public void Inverse_undoes_a_pose()
     {
         var pose = Head(40, 15, 1, 2, 3);

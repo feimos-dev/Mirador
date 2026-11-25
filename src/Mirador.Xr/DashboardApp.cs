@@ -64,10 +64,16 @@ internal sealed class DashboardApp
     private MonadoPose? recentredHead;
     private double placeBy;
 
-    // The grab bar under the bar, which moves it.
+    // The grab bar under the bar, which moves it: held by a hand's trigger, the bar riding on that hand's laser. Grabbed
+    // in a box larger than the pill, as a laser wobbles more than the pill is high.
     private static readonly Vec3 GrabSize = new(0.22f, 0.022f, 0.012f);
+    private static readonly Vec2 GrabHitSize = new(GrabSize.x + 0.04f, GrabSize.y + 0.05f);
     private const float GrabGapM = 0.02f;
     private readonly Mesh grab = Mesh.GenerateRoundedCube(GrabSize, 0.0105f, 2);
+    private readonly LaserButton[] grabButtons = [new(), new()]; // by Handed
+    private readonly RayGrab rayGrab = new();
+    private Handed? grabbing;
+    private Vec3 grabOffset; // from where the laser met the grab bar to its middle, in the bar's own space
     private double confirmUntil;
 
     public static int Run(Link link)
@@ -376,25 +382,61 @@ internal sealed class DashboardApp
         static Vec3 Flat(Vec3 v) => new Vec3(v.x, 0, v.z).Normalized;
     }
 
-    /// <summary>The grab bar <see cref="GrabGapM"/> under the bar's bottom (<paramref name="bottom"/>, in the bar's own space): holding it moves the bar, upright and turned to face the user.</summary>
+    /// <summary>
+    /// The grab bar <see cref="GrabGapM"/> under the bar's bottom (<paramref name="bottom"/>, in the bar's own space).
+    /// A trigger pulled with its laser on it holds it until let go: the bar rides on that laser, upright and turned to
+    /// the head, pushed and pulled with the hand's reach (<see cref="RayGrab"/>).
+    /// </summary>
     private void DrawGrab(float bottom)
     {
         var offset = new Vec3(0, bottom - GrabGapM - (GrabSize.y / 2), 0);
-        var handle = new Pose(bar.position + (bar.orientation * offset), bar.orientation);
-        // Grabbed in a box larger than the pill: a laser wobbles more than the pill is high.
-        if (UI.Handle("grab", ref handle, new Bounds(GrabSize + new Vec3(0.04f, 0.05f, 0.03f)), false, UIMove.PosOnly, UIGesture.Pinch))
+        var centre = bar.position + (bar.orientation * offset);
+
+        // StereoKit's focus draws the lasers' beams to it; the grab itself is the triggers'.
+        UI.PushSurface(new Pose(centre, bar.orientation), Vec3.Zero, GrabHitSize);
+        UI.ButtonBehavior(new Vec3(GrabHitSize.x / 2, GrabHitSize.y / 2, 0), GrabHitSize, "grab", out _, out _, out var focus, out _);
+        UI.PopSurface();
+
+        var up = bar.orientation * Vec3.Up;
+        var right = Vec3.Cross(up, bar.orientation * Vec3.Forward);
+        foreach (var hand in new[] { Handed.Left, Handed.Right })
         {
-            handle.position = DashboardMaths.WithinReach(Input.Head.position, handle.position);
-            // As AheadOfHead places it: its -Z towards the head along the floor.
-            var towards = Input.Head.position - handle.position;
-            towards.y = 0;
-            var turn = towards.LengthSq > 1e-6f ? Quat.LookDir(towards.Normalized) : bar.orientation;
-            bar = new Pose(handle.position - (turn * offset), turn);
-            handle.orientation = turn;
+            var laser = Lasers.Of(hand);
+            var on = laser is { } l && DesktopMaths.PanelPoint(l.Start, l.End, centre, right, up, GrabHitSize.x, GrabHitSize.y) is not null;
+            if (!grabButtons[(int)hand].Update(Input.Controller(hand).trigger, on))
+            {
+                continue;
+            }
+
+            if (grabButtons[(int)hand].Down && grabbing is null && laser is { } ray)
+            {
+                var direction = (ray.End - ray.Start).Normalized;
+                var along = Vec3.Dot(centre - ray.Start, direction);
+                grabOffset = bar.orientation.Inverse * (centre - (ray.Start + (direction * along)));
+                rayGrab.Start(along, Vec3.Distance(Input.Head.position, ray.Start));
+                grabbing = hand;
+            }
+            else if (!grabButtons[(int)hand].Down && grabbing == hand)
+            {
+                grabbing = null;
+            }
         }
 
-        var lit = UI.LastElementFocused.IsActive() || UI.LastElementActive.IsActive();
-        grab.Draw(Default.MaterialUI, handle.ToMatrix(), lit ? new Color(0.9f, 0.9f, 0.9f) : new Color(0.45f, 0.45f, 0.45f));
+        if (grabbing is { } held && Lasers.Of(held) is { } holding && (holding.End - holding.Start).LengthSq > 1e-8f)
+        {
+            var direction = (holding.End - holding.Start).Normalized;
+            var hit = holding.Start + (direction * rayGrab.Update(Vec3.Distance(Input.Head.position, holding.Start)));
+
+            // As AheadOfHead places it: its -Z towards the head along the floor, from the pill's middle.
+            var towards = Input.Head.position - (hit + (bar.orientation * grabOffset));
+            towards.y = 0;
+            var turn = towards.LengthSq > 1e-6f ? Quat.LookDir(towards.Normalized) : bar.orientation;
+            centre = hit + (turn * grabOffset);
+            bar = new Pose(centre - (turn * offset), turn);
+        }
+
+        var lit = grabbing is not null || focus.IsActive();
+        grab.Draw(Default.MaterialUI, new Pose(centre, bar.orientation).ToMatrix(), lit ? new Color(0.9f, 0.9f, 0.9f) : new Color(0.45f, 0.45f, 0.45f));
     }
 
     /// <summary>A short tick on a controller as its laser comes onto a button.</summary>

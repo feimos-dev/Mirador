@@ -14,10 +14,6 @@ public static class DashboardMaths
     /// <summary>How far below the head the dashboard's bar is: low enough for the desktop panel above it to sit at eye height.</summary>
     public const float BelowM = 0.35f;
 
-    /// <summary>How near and how far, along the floor, the dashboard can be moved from the head.</summary>
-    public const float NearestM = 0.5f;
-    public const float FarthestM = 2.5f;
-
     /// <summary>
     /// A pose <paramref name="ahead"/> metres in front of the head along the floor and <paramref name="below"/> metres
     /// under it, upright, with its −Z axis pointing back at the head. Without a way the head faces (it looks straight up
@@ -53,24 +49,6 @@ public static class DashboardMaths
 
         var yaw = forward.Length() < 1e-3f ? 0f : MathF.Atan2(-forward.X, -forward.Z);
         return Pose(Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector3(headInStage.X, 0, headInStage.Z));
-    }
-
-    /// <summary>
-    /// <paramref name="at"/>, moved along the floor towards or away from <paramref name="head"/> to between
-    /// <see cref="NearestM"/> and <see cref="FarthestM"/> of it; its height stays. Right over the head, it goes nowhere.
-    /// </summary>
-    public static Vector3 WithinReach(Vector3 head, Vector3 at)
-    {
-        var along = new Vector2(at.X - head.X, at.Z - head.Z);
-        var distance = along.Length();
-        if (distance < 1e-4f)
-        {
-            return at;
-        }
-
-        var reach = Math.Clamp(distance, NearestM, FarthestM);
-        along *= reach / distance;
-        return new Vector3(head.X + along.X, at.Y, head.Z + along.Y);
     }
 
     /// <summary>Where the head is in the stage once a recentre from <paramref name="headInStage"/> has moved it.</summary>

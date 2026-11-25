@@ -65,7 +65,7 @@ internal sealed class DesktopPanel : IDisposable
         var hits = new (float U, float V)?[2];
         foreach (var laser in Interactor.All)
         {
-            if (laser.Type == InteractorType.Line && laser.Tracked.IsActive() && HandOf(laser.Source) is { } laserHand)
+            if (laser.Type == InteractorType.Line && laser.Tracked.IsActive() && Lasers.HandOf(laser.Source) is { } laserHand)
             {
                 hits[(int)laserHand] ??= DesktopMaths.PanelPoint(laser.Start, laser.End, centre, right, up, size.x, size.y);
             }
@@ -95,7 +95,7 @@ internal sealed class DesktopPanel : IDisposable
 
         // The pointer follows the hand that held the button as the frame began (a release lands where it was), else one
         // on the panel whose trigger is moving, else the laser StereoKit focuses, else either on the panel.
-        var focused = focus.IsActive() && interactor != Interactor.None ? HandOf(interactor.Source) : null;
+        var focused = focus.IsActive() && interactor != Interactor.None ? Lasers.HandOf(interactor.Source) : null;
         Handed? Pulling(Handed each) => hits[(int)each] is not null && Input.Controller(each).trigger > LaserClick.RestTrigger ? each : null;
         var hand = held ?? holding ?? Pulling(Handed.Left) ?? Pulling(Handed.Right)
             ?? (focused is { } f && hits[(int)f] is not null ? f
@@ -131,11 +131,6 @@ internal sealed class DesktopPanel : IDisposable
 
         layer.Hide();
     }
-
-    private static Handed? HandOf(InteractorSource source) =>
-        (source & InteractorSource.ControllerLeft) != 0 ? Handed.Left
-        : (source & InteractorSource.ControllerRight) != 0 ? Handed.Right
-        : null;
 
     /// <summary>The thumbstick of the hand whose laser is on the panel turns the wheel, a notch at a time.</summary>
     private void Scroll(Handed? hand)
