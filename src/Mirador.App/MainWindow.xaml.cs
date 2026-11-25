@@ -13,10 +13,7 @@ namespace Mirador.App;
 
 public sealed partial class MainWindow : Window
 {
-    /// <summary>
-    /// Whether the pane shows the Eye tracking page. Off until calibration exists: the page is empty. The eye tracker
-    /// variant is a profile setting and doesn't depend on it.
-    /// </summary>
+    /// <summary>Whether the pane shows the Eye tracking page, empty until calibration exists.</summary>
     private static readonly bool ShowsEyeTracking = false;
 
     private static readonly Dictionary<string, Type> PagesByTag = new()
