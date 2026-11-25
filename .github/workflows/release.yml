@@ -4,8 +4,10 @@ name: Installer
 # for tags too. The installer has no Monado and no OpenLamina: each profile gets its Monado from Mirador, and Home
 # offers "Get OpenLamina".
 #
-# A v* tag also signs (Azure Artifact Signing) and makes a draft release: Mirador's own programs and DLLs, the
-# uninstaller and the installer. Only the sign job can sign: it runs in the "release" environment, which takes v* tags
+# A v* tag also signs (Azure Artifact Signing: Mirador's own programs and DLLs, the uninstaller and the installer) and
+# puts the installer on its release: a pushed tag gets a new draft release, to check and publish by hand; a tag made by
+# publishing a release on GitHub's release page, or one with a draft saved there, gets the installer added to that
+# release. Only the sign job can sign: it runs in the "release" environment, which takes v* tags
 # only and waits for an approval, and Azure takes a token from no other job. It builds none of Mirador's code and
 # restores none of its packages: it signs the bundle the installer job built, with the pinned signing library and
 # Inno Setup.
@@ -46,25 +48,15 @@ jobs:
           tools\build-bundle.ps1
           tools\build-installer.ps1
 
-      # Before anything is signed for it: the tag must name the version the app was built with, and a release that
-      # exists already can't take the installer.
+      # Before anything is signed for it: the tag must name the version the app was built with.
       - name: The tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
           if (-not (Test-Path -LiteralPath "artifacts\Mirador-$($env:GITHUB_REF_NAME.Substring(1))-setup.exe")) {
             "::error::The tag $env:GITHUB_REF_NAME doesn't match the version built ($((Get-Item artifacts\Mirador-*-setup.exe).Name)): set <Version> in Directory.Build.props."
             exit 1
           }
-          gh release view $env:GITHUB_REF_NAME *> $null
-          if ($LASTEXITCODE -eq 0) {
-            "::error::A release for $env:GITHUB_REF_NAME exists already: the installer can't be added to it. Push a new tag instead."
-            exit 1
-          }
-          exit 0
 
       - name: Upload the installer
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -187,7 +179,7 @@ jobs:
         with:
           name: installer
 
-      - name: The draft release
+      - name: The release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -202,6 +194,11 @@ jobs:
             echo "The tag $TAG doesn't match the version built ($(ls Mirador-*-setup.exe)): set <Version> in Directory.Build.props." >&2
             exit 1
           fi
-          hash=$(sha256sum "$installer" | cut -d' ' -f1)
-          gh release create "$TAG" "$installer" --draft --verify-tag --title "Mirador $version" \
-            --notes "Signed by $SIGNER. SHA-256 of the installer: $hash"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # Made on GitHub's release page: add the installer, and keep its title and notes.
+            gh release upload "$TAG" "$installer" --clobber
+          else
+            hash=$(sha256sum "$installer" | cut -d' ' -f1)
+            gh release create "$TAG" "$installer" --draft --verify-tag --title "Mirador $version" \
+              --notes "Signed by $SIGNER. SHA-256 of the installer: $hash"
+          fi
