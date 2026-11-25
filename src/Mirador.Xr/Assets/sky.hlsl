@@ -1,7 +1,5 @@
 #include <stereokit.hlsli>
-
-float4 horizon_color = { 0.065, 0.075, 0.095, 1 };
-float4 zenith_color  = { 0.008, 0.009, 0.013, 1 };
+#include "home.hlsli"
 
 struct vsIn {
 	float4 pos : SV_Position;
@@ -20,6 +18,5 @@ psIn vs(vsIn input, sk_ids_t ids) {
 }
 
 float4 ps(psIn input) : SV_TARGET {
-	float up = saturate(normalize(input.dir).y);
-	return float4(lerp(horizon_color.rgb, zenith_color.rgb, pow(up, 0.55)), 1);
+	return float4(dither(sky_color(normalize(input.dir).y), input.pos.xy), 1);
 }
