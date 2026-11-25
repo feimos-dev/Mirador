@@ -44,13 +44,15 @@ or OpenLamina: Mirador downloads Monado, and installs OpenLamina with OpenLamina
 CI (`.github/workflows/`):
 - `build.yml` builds and tests every push and pull request on a Windows runner, leaving out tests marked
   `Category=Hardware` (`tools\build.ps1 -Test -SkipHardware`).
-- `release.yml` builds the installer on every push (an artifact of the run); only a `v*` tag makes a draft release with
-  it, after checking the tag against `<Version>`.
+- `release.yml` builds the installer on every push (an artifact of the run); only a `v*` tag signs it and makes a
+  draft release with it, after checking the tag against `<Version>`.
 - `monado-weekly.yml` builds the bundled Monado: upstream Monado's `main` with `tools\build-monado.ps1`, checked by
   `tools\check-monado-build.ps1` and then started headless with an OpenXR app connecting
-  (`tools\check-monado-session.ps1`). On Mondays (and when started by hand) it publishes the build as a prerelease
-  `monado-<date>-<commit>`, which Mirador's helper downloads; it keeps the last two. A push that changes the recipe,
-  the checks or the workflow builds and checks without publishing. Scheduled runs only start from `main`.
+  (`tools\check-monado-session.ps1`). On Mondays (and when started by hand) it signs the build and publishes it as a
+  prerelease `monado-<date>-<commit>`, which Mirador's helper downloads; it keeps the last two. A push that changes the
+  recipe, the checks or the workflow builds and checks without publishing. Scheduled runs only start from `main`.
+
+Signing waits for the maintainer's approval; every other build is unsigned.
 
 ## Layout
 
