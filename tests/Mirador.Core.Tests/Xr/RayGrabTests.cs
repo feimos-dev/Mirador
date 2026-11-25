@@ -18,7 +18,7 @@ public class RayGrabTests
     }
 
     [Fact]
-    public void The_thumbstick_pushes_away_and_pulls_in()
+    public void The_thumbstick_pushes_away_and_pulls_in_at_a_steady_speed()
     {
         var grab = new RayGrab();
         grab.Start(1.5f, 0.3f);
@@ -29,8 +29,16 @@ public class RayGrabTests
             pushed = grab.Update(0.3f, 1, Frame);
         }
 
-        Assert.InRange(pushed, 2.8f, 3.2f);
-        Assert.True(grab.Update(0.3f, -1, Frame) < pushed);
+        Assert.Equal(1.5f + (RayGrab.PushSpeed / 2), pushed, 3);
+
+        // As fast near as far: half a second back takes off as much.
+        var pulled = pushed;
+        for (var i = 0; i < 45; i++)
+        {
+            pulled = grab.Update(0.3f, -1, Frame);
+        }
+
+        Assert.Equal(1.5f, pulled, 3);
 
         // A stick barely off centre pushes nothing.
         var still = grab.Update(0.3f, 0, Frame);

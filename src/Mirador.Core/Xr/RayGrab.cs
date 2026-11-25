@@ -1,8 +1,8 @@
 namespace Mirador.Core.Xr;
 
 /// <summary>
-/// How far along a laser a grabbed thing is. The thumbstick pushes it away and pulls it in, faster the farther it is;
-/// and as StereoKit's own grabbing does, the distance also follows the hand's reach from the head. It stays between
+/// How far along a laser a grabbed thing is. The thumbstick pushes it away and pulls it in at a steady speed; and as
+/// StereoKit's own grabbing does, the distance also follows the hand's reach from the head. It stays between
 /// <see cref="NearestM"/> and <see cref="FarthestM"/>: at either end the grab starts over from there, so moving back
 /// the other way works at once.
 /// </summary>
@@ -11,8 +11,8 @@ public sealed class RayGrab
     public const float NearestM = 0.1f;
     public const float FarthestM = 5;
 
-    /// <summary>The thumbstick pushed all the way multiplies the distance by e^PushRate a second (about twice in half a second).</summary>
-    public const float PushRate = 1.4f;
+    /// <summary>How fast the thumbstick pushed all the way moves it, in metres a second.</summary>
+    public const float PushSpeed = 2;
 
     /// <summary>A thumbstick pushed less than this pushes nothing.</summary>
     public const float StickDeadZone = 0.15f;
@@ -36,7 +36,7 @@ public sealed class RayGrab
         reachM = Math.Max(NearestReachM, reachM);
         if (Math.Abs(stick) >= StickDeadZone)
         {
-            distance *= MathF.Exp(stick * PushRate * seconds);
+            distance += stick * PushSpeed * seconds * reach / reachM; // the same speed however far the hand reaches
         }
 
         var along = distance * reachM / reach;
