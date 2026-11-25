@@ -69,9 +69,8 @@ public class DashboardMathsTests
     public void After_a_recentre_the_head_is_over_the_new_origin_facing_minus_z()
     {
         var head = Head(135, 10, 0.4f, 1.7f, 0.9f);
-        var origin = DashboardMaths.RecentredOrigin(head);
 
-        var after = DashboardMaths.Compose(DashboardMaths.Inverse(origin), head);
+        var after = DashboardMaths.HeadAfterRecentre(head);
 
         Near(new Vector3(0, 1.7f, 0), new Vector3(after.X, after.Y, after.Z));
         var forward = Rotate(after, -Vector3.UnitZ);

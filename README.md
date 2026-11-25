@@ -62,7 +62,8 @@ CI (`.github/workflows/`):
 | `src\Mirador.Pimax` | The Pimax module: the P3C headsets (Crystal Light, Crystal Super, Dream Air SE, Dream Air), each with its own steps |
 | `layer\` | The direct-mode Vulkan layer (C++), registered by the helper while a profile uses it |
 | `tools\xr-check\` | Verify's OpenXR test client (C++) |
-| `src\Mirador.Xr` | The home and the dashboard in the headset (`Mirador.Xr.exe`, on StereoKit), started beside Monado |
+| `src\Mirador.Xr` | The home and the dashboard in the headset (`Mirador.Xr.exe`, on StereoKit), started beside Monado, and the desktop program the dashboard starts |
+| `tools\openxr-loader\` | The Khronos OpenXR loader as a DLL for the desktop program (vcpkg) |
 | `src\Mirador.Ipc` | Messages between the app and the helper service, and between the app and the home and dashboard |
 | `src\Mirador.Helper` | The helper Windows service, which does the steps that need admin rights |
 | `standin\` | The stand-in (C): sits where Monado's runtime DLL looks for the service (as `mirador-standin.exe`, and as `monado-service.exe` for builds configured as upstream does) and asks Mirador to start Monado |
@@ -93,9 +94,12 @@ StereoKit.
   uses them as they are, with no `SettingsRow` of its own and no `Shell_NotifyIconW` code.
 - `CommunityToolkit.Mvvm` 8.4.2 for the pages' view models.
 - [StereoKit](https://stereokit.net/) `0.4.0-preview.3902` for the home and the dashboard: a preview, because the
-  stable 0.3 line has no laser pointing at buttons and no haptics. `Vortice.Direct3D11` 3.8.3 reads the desktop's
-  picture back from Windows.Graphics.Capture. The icons (`src\Mirador.Xr\Assets`) are drawn by
+  stable 0.3 line has no laser pointing at buttons and no haptics. The icons (`src\Mirador.Xr\Assets`) are drawn by
   `tools\make-xr-icons.py` (Python with Pillow).
+- The desktop program (`Mirador.Xr.exe --desktop`, which the dashboard starts) shows a monitor as an OpenXR quad layer
+  from a D3D11 overlay session of its own: `Silk.NET.OpenXR` 2.23.0 for OpenXR, `Vortice.Direct3D11` 3.8.3 for D3D11
+  and Windows.Graphics.Capture, and the Khronos OpenXR loader as a DLL, which `tools\openxr-loader` builds through
+  vcpkg.
 - The icons in `src\Mirador.App\Assets` (also the picture at the top of this README) are drawn by
   `tools\make-icons.py` (Python with Pillow).
 
@@ -103,7 +107,9 @@ StereoKit.
 
 [Boost Software License 1.0](LICENSE).
 
-The home and the dashboard are built on StereoKit, Vortice.Windows and SharpGen.Runtime, all under the MIT license:
+The home and the dashboard are built on StereoKit, Vortice.Windows, SharpGen.Runtime and Silk.NET, and draw the
+controllers with the WebXR Input Profiles' models, all under the MIT license, and the desktop program loads OpenXR
+through the Khronos OpenXR loader (Apache-2.0, MIT and BSL-1.0):
 [their notices](src/Mirador.Xr/Assets/THIRD-PARTY-NOTICES.txt).
 
 The icons contain Monado's logo, from Monado's Android launcher icon, Copyright 2023, Collabora, Ltd.,

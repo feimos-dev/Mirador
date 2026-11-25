@@ -1,9 +1,10 @@
 # Copyright 2026, Finn Zeruhn
 # SPDX-License-Identifier: BSL-1.0
 #
-# Configure, build and test one of Mirador's C++ projects (the direct-mode layer, xr-check) in a Visual Studio
-# developer shell, with vcpkg's x64-windows-static triplet (the static CRT: nothing needs the Visual C++
-# Redistributable), Ninja and RelWithDebInfo.
+# Configure, build and test one of Mirador's C++ projects (the direct-mode layer, xr-check, the OpenXR loader) in a
+# Visual Studio developer shell, with vcpkg's x64-windows-static triplet (the static CRT: nothing needs the Visual C++
+# Redistributable) unless -Triplet names another, Ninja and RelWithDebInfo. A project's own triplets\ folder is
+# vcpkg's overlay of triplets.
 #   pwsh -NoProfile -File tools\build-cmake.ps1 -Source layer -BuildDir artifacts\layer-build -Configure -Build -Test
 # Visual Studio (or its Build Tools) with the C++ x64 tools is found with vswhere, as for the stand-in and Monado's
 # recipe; -VsPath names one instead. vcpkg: VCPKG_ROOT, else Mirador's pinned copy (%LOCALAPPDATA%\Mirador\tools\vcpkg),
@@ -16,6 +17,7 @@ param(
     [switch]$Build,
     [switch]$Test,
     [string]$VsPath,
+    [string]$Triplet = 'x64-windows-static',
     [string[]]$Extra = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -62,8 +64,10 @@ if ($Configure) {
         "-DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO /OPT:REF /OPT:NOICF",
         "-DCMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO /OPT:REF /OPT:NOICF",
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
-        "-DVCPKG_TARGET_TRIPLET=x64-windows-static"
-    ) + $Extra
+        "-DVCPKG_TARGET_TRIPLET=$Triplet"
+    ) + $(if (Test-Path -LiteralPath (Join-Path $source 'triplets') -PathType Container) {
+        @("-DVCPKG_OVERLAY_TRIPLETS=$(Join-Path $source 'triplets')")
+    } else { @() }) + $Extra
     cmake @cmakeArgs
     if ($LASTEXITCODE) { throw "configure failed ($LASTEXITCODE)" }
 }

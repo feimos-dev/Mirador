@@ -4,9 +4,10 @@ using StereoKit;
 namespace Mirador.Xr;
 
 /// <summary>
-/// Mirador's two programs in the headset, one executable started twice: <c>--home</c> is the floor grid shown whenever
-/// no game is, <c>--dashboard</c> the bar drawn above every app. Mirador starts both beside Monado and they talk to it
-/// over <see cref="XrLink"/>; <c>--alone</c> runs one without Mirador, to look at it.
+/// Mirador's programs in the headset, one executable: <c>--home</c> is the floor grid shown whenever no game is,
+/// <c>--dashboard</c> the bar drawn above every app. Mirador starts both beside Monado and they talk to it over
+/// <see cref="XrLink"/>; <c>--alone</c> runs one without Mirador, to look at it. The dashboard starts the third,
+/// <c>--desktop</c>, which shows a monitor under it.
 /// </summary>
 internal static class Program
 {
@@ -16,6 +17,12 @@ internal static class Program
     /// <summary>Exit codes: 0 asked to quit, 1 no OpenXR session, 2 a bad command line, 3 no Mirador, 4 no overlay sessions in this runtime.</summary>
     private static int Main(string[] args)
     {
+        if (args.Contains("--desktop"))
+        {
+            // Started by the dashboard, which it talks to on its standard input and output: no StereoKit, no Mirador.
+            return DesktopLayerApp.Run(Console.In);
+        }
+
         var role = args.Contains("--home") ? XrLink.HomeRole : args.Contains("--dashboard") ? XrLink.DashboardRole : null;
         if (role is null)
         {

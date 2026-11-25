@@ -81,12 +81,4 @@ public class DesktopMathsTests
 
         Assert.Equal((65535, 0), DesktopMaths.Absolute(1.4f, -0.2f, monitor, monitor));
     }
-
-    [Fact]
-    public void A_wide_frame_is_read_back_at_half_size()
-    {
-        Assert.Equal((1920, 1080, false), DesktopMaths.Readback(1920, 1080));
-        Assert.Equal((2560, 1440, false), DesktopMaths.Readback(2560, 1440));
-        Assert.Equal((1920, 1080, true), DesktopMaths.Readback(3840, 2160));
-    }
 }

@@ -1,16 +1,20 @@
+using System.Numerics;
 using Mirador.Core.Xr;
+using Mirador.Ipc;
 using StereoKit;
 
 namespace Mirador.Xr;
 
 /// <summary>
-/// A monitor shown as a flat panel above the dashboard's bar. A laser on it is the mouse: the pointer follows where it
-/// meets the panel, the trigger is the left button, and the thumbstick scrolls.
+/// A monitor shown as a flat panel above the dashboard's bar. The desktop program draws it, as a quad layer of its own
+/// (<see cref="DesktopLayer"/>); here it is where the lasers meet it. A laser on it is the mouse: the pointer follows
+/// where it meets the panel (held still through a click, <see cref="LaserClick"/>), the trigger is the left button
+/// (<see cref="LaserButton"/>), and the thumbstick scrolls.
 /// </summary>
 internal sealed class DesktopPanel : IDisposable
 {
     /// <summary>The panel's width; its height follows the monitor's shape.</summary>
-    public const float WidthM = 1.4f;
+    public const float WidthM = 2.0f;
 
     /// <summary>The space between the bar's top edge and the panel.</summary>
     private const float GapM = 0.04f;
@@ -19,107 +23,118 @@ internal sealed class DesktopPanel : IDisposable
     private const float ScrollPush = 0.5f;
     private const double ScrollEverySeconds = 0.12;
 
-    private readonly IDesktopFrames frames;
-    private readonly Action<float, float>? moveTo;
-    private readonly Action<bool>? left;
-    private readonly Action<int>? scroll;
-    private readonly Mesh quad = Mesh.GeneratePlane(Vec2.One, Vec3.Forward, Vec3.Up);
-    private readonly Material material = Default.MaterialUnlit.Copy();
-    private readonly Tex picture = new(TexType.ImageNomips | TexType.Dynamic, TexFormat.Bgra32Srgb);
-    private byte[] pixels = [];
-    private float aspect;
-    private bool pressed;
+    private readonly DesktopMonitor monitor;
+    private readonly DesktopLayer layer;
+    private readonly float aspect;
+    private readonly LaserClick click = new();
+    private readonly LaserButton[] buttons = [new(), new()]; // each hand's trigger, by Handed
+    private Handed? holding; // the hand whose trigger holds the left button
+    private Handed? pointing; // the hand whose laser moves the pointer
     private double nextScroll;
 
-    /// <summary>A panel for <paramref name="monitor"/>, with the mouse on it.</summary>
-    /// <exception cref="Exception">Windows can't capture the monitor.</exception>
-    public DesktopPanel(DesktopMonitor monitor)
-        : this(new DesktopCapture(monitor), (float)monitor.Bounds.Width / monitor.Bounds.Height, (u, v) => DesktopMouse.MoveTo(monitor, u, v), DesktopMouse.Left, DesktopMouse.Scroll)
+    /// <summary>A panel for <paramref name="monitor"/>, drawn by <paramref name="layer"/>, with the mouse on it.</summary>
+    public DesktopPanel(DesktopMonitor monitor, DesktopLayer layer)
     {
+        this.monitor = monitor;
+        this.layer = layer;
+        aspect = (float)monitor.Bounds.Width / monitor.Bounds.Height;
     }
 
-    /// <summary>A panel that shows <paramref name="frames"/>, <paramref name="aspect"/> times as wide as high; without a mouse when the three actions are null.</summary>
-    internal DesktopPanel(IDesktopFrames frames, float aspect, Action<float, float>? moveTo = null, Action<bool>? left = null, Action<int>? scroll = null)
-    {
-        this.frames = frames;
-        this.aspect = aspect;
-        this.moveTo = moveTo;
-        this.left = left;
-        this.scroll = scroll;
-        material[MatParamName.DiffuseTex] = picture;
-    }
-
-    /// <summary>Draws the panel above a bar whose top middle is at <paramref name="bar"/>, and moves the mouse with the laser on it.</summary>
+    /// <summary>Places the panel above a bar whose top middle is at <paramref name="bar"/>, and moves the mouse with the laser on it.</summary>
     public void Draw(Pose bar)
     {
-        if (frames.TryRead(ref pixels, out var width, out var height))
-        {
-            unsafe
-            {
-                fixed (byte* data = pixels)
-                {
-                    // Copied and uploaded off the frame loop; the panel shows the last picture until it is there.
-                    picture.SetColors(width, height, (IntPtr)data, TexFormat.Bgra32Srgb, TexData.CompressNone | TexData.Opaque);
-                }
-            }
-
-            aspect = (float)width / height;
-        }
-
         var size = new Vec2(WidthM, WidthM / aspect);
         var up = bar.orientation * Vec3.Up;
         var normal = bar.orientation * Vec3.Forward; // towards the viewer
         var right = Vec3.Cross(up, normal); // the viewer's right
         var centre = bar.position + (up * (GapM + (size.y / 2)));
-        quad.Draw(material, Matrix.TRS(centre, bar.orientation, new Vec3(size.x, size.y, 1)));
 
-        // The panel takes the lasers' focus as a button would, which is what draws their beams up to it. In the
-        // surface's own space +X is the viewer's left, so its upper left corner is at half the width.
+        // A quad layer shows its picture towards its +Z, with +X to the right: the bar's turned half about its own up.
+        var facing = Quaternion.Multiply(bar.orientation, Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI));
+        layer.Show(new DesktopPlacement(
+            monitor.Handle, [facing.X, facing.Y, facing.Z, facing.W, centre.x, centre.y, centre.z], size.x, size.y));
+
+        // The panel takes the lasers' focus as a button would, which is what draws their beams up to it; the button
+        // itself is the triggers', as a StereoKit button lets go of a press whose ray moves on. In the surface's own
+        // space +X is the viewer's left, so its upper left corner is at half the width.
         UI.PushSurface(new Pose(centre, bar.orientation), Vec3.Zero, size);
-        UI.ButtonBehavior(new Vec3(size.x / 2, size.y / 2, 0), size, "desktop", out _, out var button, out var focus, out var interactor);
+        UI.ButtonBehavior(new Vec3(size.x / 2, size.y / 2, 0), size, "desktop", out _, out _, out var focus, out var interactor);
         UI.PopSurface();
 
-        if (focus.IsActive() && interactor != Interactor.None
-            && DesktopMaths.PanelPoint(interactor.Start, interactor.End, centre, right, up, size.x, size.y) is { } at)
+        // Where each controller's laser meets the panel, if it does.
+        var hits = new (float U, float V)?[2];
+        foreach (var laser in Interactor.All)
         {
-            moveTo?.Invoke(at.U, at.V);
-            if (button.IsJustActive())
+            if (laser.Type == InteractorType.Line && laser.Tracked.IsActive() && Lasers.HandOf(laser.Source) is { } laserHand)
             {
-                Press(true);
+                hits[(int)laserHand] ??= DesktopMaths.PanelPoint(laser.Start, laser.End, centre, right, up, size.x, size.y);
             }
-
-            Scroll(interactor.Source);
         }
 
-        // Let go wherever the laser is by then: a drag that leaves the panel must still end.
-        if (pressed && !button.IsActive())
+        // Each trigger, every frame: the first one pulled with its laser on the panel holds the left button until it is
+        // let go, wherever its laser is by then, so a drag that leaves the panel still ends.
+        var held = holding;
+        bool? press = null;
+        foreach (var each in new[] { Handed.Left, Handed.Right })
         {
-            Press(false);
+            var button = buttons[(int)each];
+            if (!button.Update(Input.Controller(each).trigger, hits[(int)each] is not null))
+            {
+                continue;
+            }
+
+            if (button.Down && holding is null)
+            {
+                (holding, press) = (each, true);
+            }
+            else if (!button.Down && holding == each)
+            {
+                (holding, press) = (null, false);
+            }
+        }
+
+        // The pointer follows the hand that held the button as the frame began (a release lands where it was), else one
+        // on the panel whose trigger is moving, else the laser StereoKit focuses, else either on the panel.
+        var focused = focus.IsActive() && interactor != Interactor.None ? Lasers.HandOf(interactor.Source) : null;
+        Handed? Pulling(Handed each) => hits[(int)each] is not null && Input.Controller(each).trigger > LaserClick.RestTrigger ? each : null;
+        var hand = held ?? holding ?? Pulling(Handed.Left) ?? Pulling(Handed.Right)
+            ?? (focused is { } f && hits[(int)f] is not null ? f
+            : hits[(int)Handed.Left] is not null ? Handed.Left
+            : hits[(int)Handed.Right] is not null ? Handed.Right
+            : null);
+        if (hand != pointing)
+        {
+            click.Left();
+            pointing = hand;
+        }
+
+        layer.Point(hand is { } on && hits[(int)on] is not null ? on : null);
+        if (hand is { } h && hits[(int)h] is { } at)
+        {
+            var pointer = click.Pointer(at, Input.Controller(h).trigger, held is not null || holding is not null, size.x, size.y);
+            DesktopMouse.MoveTo(monitor, pointer.U, pointer.V);
+            Scroll(h);
+        }
+
+        if (press is { } down)
+        {
+            DesktopMouse.Left(down);
         }
     }
 
     public void Dispose()
     {
-        if (pressed)
+        if (holding is not null)
         {
-            Press(false);
+            DesktopMouse.Left(false);
         }
 
-        frames.Dispose();
-    }
-
-    private void Press(bool down)
-    {
-        pressed = down;
-        left?.Invoke(down);
+        layer.Hide();
     }
 
     /// <summary>The thumbstick of the hand whose laser is on the panel turns the wheel, a notch at a time.</summary>
-    private void Scroll(InteractorSource source)
+    private void Scroll(Handed? hand)
     {
-        var hand = (source & InteractorSource.ControllerLeft) != 0 ? Handed.Left
-            : (source & InteractorSource.ControllerRight) != 0 ? Handed.Right
-            : (Handed?)null;
         if (hand is null)
         {
             return;
@@ -133,7 +148,7 @@ internal sealed class DesktopPanel : IDisposable
         else if (Time.Total >= nextScroll)
         {
             nextScroll = Time.Total + ScrollEverySeconds;
-            scroll?.Invoke(push > 0 ? 1 : -1);
+            DesktopMouse.Scroll(push > 0 ? 1 : -1);
         }
     }
 }

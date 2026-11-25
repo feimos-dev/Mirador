@@ -265,6 +265,7 @@ public sealed class XrHostTests : IDisposable
         host.Line(XrLink.DashboardRole, XrLink.FormatRecentre([0, 0, 0, 1, 1, 1.7f, 1]));
 
         Assert.Equal(new MonadoPose(0, 0, 0, 1, 3, 0, 4), client.Stage);
+        Assert.Equal(1, client.LocalRecentres);
         Assert.Equal(["RECENTRED 1"], bar.Lines);
     }
 
@@ -272,6 +273,7 @@ public sealed class XrHostTests : IDisposable
     public void A_recentre_this_monado_cannot_do_is_answered_with_no()
     {
         client.StageOffsets = false;
+        client.LocalRecentre = false;
         var host = OpenAtHome();
 
         host.Line(XrLink.DashboardRole, XrLink.FormatRecentre([0, 0, 0, 1, 1, 1.7f, 1]));
@@ -515,6 +517,10 @@ public sealed class XrHostTests : IDisposable
 
         public bool StageOffsets { get; set; } = true;
 
+        public bool LocalRecentre { get; set; } = true;
+
+        public int LocalRecentres { get; private set; }
+
         public IReadOnlyList<MonadoApp> AppList { get; set; } = [];
 
         public IReadOnlyList<MonadoDevice> DeviceList { get; set; } = [];
@@ -552,6 +558,10 @@ public sealed class XrHostTests : IDisposable
         public MonadoPose GetStageOffset() => Stage;
 
         public void SetStageOffset(MonadoPose offset) => Stage = offset;
+
+        public bool OffersLocalRecentre => LocalRecentre;
+
+        public void RecentreLocalSpaces() => LocalRecentres++;
 
         public void Dispose()
         {

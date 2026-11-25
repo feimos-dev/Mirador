@@ -14,10 +14,18 @@
   <ItemGroup>
     <PackageReference Include="StereoKit" />
     <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Silk.NET.OpenXR" />
+    <PackageReference Include="Silk.NET.OpenXR.Extensions.KHR" />
   </ItemGroup>
   <ItemGroup>
     <!-- The icons (tools\make-xr-icons.py draws them). The package compiles the shaders into xr\ by itself. -->
     <Content Include="Assets\*.png" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The controllers' models, from the WebXR Input Profiles. -->
+    <Content Include="Assets\controllers\**\*.glb" Link="xr\controllers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The desktop program's OpenXR loader, which Silk.NET loads by name: tools\openxr-loader builds it. -->
+    <Content Include="..\..\artifacts\openxr-loader-build\openxr_loader.dll" Link="openxr_loader.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\openxr-loader-build\openxr_loader.dll')" />
+    <Content Include="..\..\artifacts\openxr-loader-build\vcpkg_installed\x64-windows-dll-static-crt\share\openxr-loader\copyright" Link="xr\openxr-loader-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\openxr-loader-build\vcpkg_installed\x64-windows-dll-static-crt\share\openxr-loader\copyright')" />
+    <Content Include="..\..\artifacts\openxr-loader-build\vcpkg_installed\x64-windows-dll-static-crt\share\jsoncpp\copyright" Link="xr\jsoncpp-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\openxr-loader-build\vcpkg_installed\x64-windows-dll-static-crt\share\jsoncpp\copyright')" />
     <!-- The libraries' licences travel with their DLLs. -->
     <Content Include="Assets\THIRD-PARTY-NOTICES.txt" Link="xr\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
