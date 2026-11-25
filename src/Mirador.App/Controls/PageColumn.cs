@@ -4,11 +4,6 @@ using Windows.Foundation;
 
 namespace Mirador.App.Controls;
 
-/// <summary>
-/// Lays a page's content out in one column at most <see cref="MaxColumnWidth"/> wide: centred, or at the left. XAML's
-/// own <c>MaxWidth</c> on stretched content places it by the width the content asks for, not the width it is given, so
-/// content whose text is short (Home with one message) ended up pushed to the right and cut off.
-/// </summary>
 public sealed partial class PageColumn : Panel
 {
     public static readonly DependencyProperty MaxColumnWidthProperty = DependencyProperty.Register(
@@ -17,14 +12,12 @@ public sealed partial class PageColumn : Panel
     public static readonly DependencyProperty IsCenteredProperty = DependencyProperty.Register(
         nameof(IsCentered), typeof(bool), typeof(PageColumn), new PropertyMetadata(true, OnLayoutChanged));
 
-    /// <summary>The column's widest; narrower when there is less room.</summary>
     public double MaxColumnWidth
     {
         get => (double)GetValue(MaxColumnWidthProperty);
         set => SetValue(MaxColumnWidthProperty, value);
     }
 
-    /// <summary>Whether the column is centred in the room there is (else at its left).</summary>
     public bool IsCentered
     {
         get => (bool)GetValue(IsCenteredProperty);
@@ -43,7 +36,6 @@ public sealed partial class PageColumn : Panel
             widest = Math.Max(widest, child.DesiredSize.Width);
         }
 
-        // All the room there is, so that the column's place never depends on what its content asks for.
         return new Size(double.IsInfinity(availableSize.Width) ? widest : availableSize.Width, height);
     }
 

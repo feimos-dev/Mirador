@@ -6,42 +6,21 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.Core.Diagnostics;
 
-/// <summary>The OpenVR files the zip takes: the user's paths file and OpenLamina's log.</summary>
 public sealed record OpenVrFiles(string PathsFile, string LogFile);
 
-/// <summary>
-/// The zip a user saves to report a problem: logs, the profile, the settings, the environment
-/// Mirador gave Monado and the versions, plus what the headset module adds. Files are read as they are, even while a
-/// log is being written; one that is missing is left out and named in <c>missing.txt</c>.
-/// </summary>
 public sealed class DiagnosticsZip : IDiagnosticsSink
 {
     private readonly List<(string Entry, string? File, string? Text)> entries = [];
     private readonly List<string> refused = [];
 
-    /// <summary>The entries added so far, in order.</summary>
     public IReadOnlyList<string> EntryNames => entries.Select(e => e.Entry).ToList();
 
-    /// <summary>Adds a file; a name that isn't a plain relative one, or is taken already, is left out and noted.</summary>
     public void AddFile(string entryName, string path) => Add(entryName, path, null);
 
-    /// <summary>Adds a text; a name that isn't a plain relative one, or is taken already, is left out and noted.</summary>
     public void AddText(string entryName, string text) => Add(entryName, null, text);
 
-    /// <summary>Notes, in <c>missing.txt</c>, something that couldn't be added, such as a log that doesn't exist yet.</summary>
     public void AddMissing(string entryName, string why) => refused.Add($"{entryName}: {why}");
 
-    /// <summary>
-    /// Gathers the usual entries: the newest <c>monado.log</c>, <c>mirador.log</c>, the newest Verify run's
-    /// <c>verify.log</c> when there is one, <c>profile.json</c> (the selected
-    /// profile), <c>monado-settings.json</c>, <c>environment.txt</c> (what Mirador set at the last Start, one
-    /// <c>NAME=value</c> a line), <c>versions.txt</c>, then the direct-mode layer's and the module's.
-    /// </summary>
-    /// <param name="lastEnvironment">The session's <c>LastMiradorEnvironment</c>; null before the first Start.</param>
-    /// <param name="versions">Mirador's, Windows' and the profile's Monado's versions, one a line.</param>
-    /// <param name="openVr">The OpenVR paths file and OpenLamina's log, added as <c>openvrpaths.vrpath</c> and
-    /// under the log's own name, <c>openlamina.log</c>; null leaves them out.</param>
-    /// <param name="directMode">The profile's direct-mode layer; null for none.</param>
     public static DiagnosticsZip Collect(
         AppPaths paths, Profile profile, IReadOnlyDictionary<string, string>? lastEnvironment, string versions, IHeadsetModule? module, ModuleContext ctx,
         OpenVrFiles? openVr = null, IDirectMode? directMode = null)
@@ -73,7 +52,6 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
         if (openVr is not null)
         {
             zip.AddFile("openvrpaths.vrpath", openVr.PathsFile);
-            // Named as the log is: an older OpenComposite's is opencomposite.log, and isn't passed off as OpenLamina's
             var logName = string.Equals(Path.GetFileName(openVr.LogFile), "opencomposite.log", StringComparison.OrdinalIgnoreCase)
                 ? "opencomposite.log"
                 : "openlamina.log";
@@ -85,9 +63,6 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
         return zip;
     }
 
-    /// <summary>Writes the zip to <paramref name="zipPath"/>, replacing a file there; nothing is left behind when it fails.</summary>
-    /// <exception cref="IOException">The zip couldn't be written.</exception>
-    /// <exception cref="UnauthorizedAccessException">The zip couldn't be written there.</exception>
     public void Save(string zipPath)
     {
         var missing = new StringBuilder();
@@ -111,7 +86,6 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
                         continue;
                     }
 
-                    // Opening the source is the part that may fail for the source's reasons; writing failures are the zip's.
                     FileStream source;
                     try
                     {
@@ -174,16 +148,13 @@ public sealed class DiagnosticsZip : IDiagnosticsSink
         entries.Add((name, file, text));
     }
 
-    /// <summary>The newest <c>monado-yyyyMMdd-HHmmss.log</c> (their names sort by time); null when there is none.</summary>
     public static string? NewestMonadoLog(string logsDir) =>
         Directory.Exists(logsDir)
             ? Directory.EnumerateFiles(logsDir, "monado-*.log").OrderBy(Path.GetFileName, StringComparer.Ordinal).LastOrDefault()
             : null;
 
-    /// <summary>The prefix of a "Verify build for Windows" run's own log, <c>verify-run-yyyyMMdd-HHmmss.log</c>.</summary>
     public const string VerifyLogPrefix = "verify-run-";
 
-    /// <summary>The newest Verify run's log (not the Monado logs a run leaves, <c>verify-monado-*.log</c>); null when there is none.</summary>
     public static string? NewestVerifyLog(string logsDir) =>
         Directory.Exists(logsDir)
             ? Directory.EnumerateFiles(logsDir, VerifyLogPrefix + "*.log").OrderBy(Path.GetFileName, StringComparer.Ordinal).LastOrDefault()

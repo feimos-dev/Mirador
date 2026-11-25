@@ -77,4 +77,4 @@ MemoryPick pick_memory_type(std::optional<uint32_t> handle_bits, uint32_t image_
     return pick;
 }
 
-} // namespace dvl
+}

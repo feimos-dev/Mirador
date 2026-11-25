@@ -2,13 +2,10 @@ using System.Runtime.InteropServices;
 
 namespace Mirador.Core.Monado.Libmonado;
 
-/// <summary>Loading <c>monado.dll</c> and finding its functions.</summary>
 internal static class LibmonadoNative
 {
-    /// <summary><c>LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR</c>: the loaded DLL's own folder is searched for its dependencies.</summary>
     public const uint SearchDllLoadDir = 0x100;
 
-    /// <summary><c>LOAD_LIBRARY_SEARCH_SYSTEM32</c>: System32 is searched for its dependencies.</summary>
     public const uint SearchSystem32 = 0x800;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
@@ -22,7 +19,6 @@ internal static class LibmonadoNative
     public static extern bool FreeLibrary(IntPtr module);
 }
 
-/// <summary><c>mnd_pose_t</c>: orientation x, y, z, w, then position x, y, z.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct MndPose
 {
@@ -33,13 +29,8 @@ internal struct MndPose
     public readonly MonadoPose ToPose() => new(Qx, Qy, Qz, Qw, X, Y, Z);
 }
 
-/// <summary>
-/// The libmonado functions Mirador calls (<c>monado.h</c>, API version 1). Results are <c>mnd_result_t</c>: negative
-/// on error, zero or positive on success. C <c>bool</c>s are single bytes.
-/// </summary>
 internal sealed unsafe class LibmonadoExports
 {
-    /// <summary><c>MND_ERROR_INVALID_PROPERTY</c>: the library doesn't know the property asked for.</summary>
     public const int ErrorInvalidProperty = -6;
 
     public const int PropertyNameString = 0;
@@ -55,13 +46,11 @@ internal sealed unsafe class LibmonadoExports
     public delegate* unmanaged[Cdecl]<IntPtr, byte*, int*, int> GetDeviceFromRole;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, byte*, byte*, float*, int> GetDeviceBatteryStatus;
 
-    /// <summary>The tracking-origin functions; null when the library lacks any of them.</summary>
     public delegate* unmanaged[Cdecl]<IntPtr, uint*, int> GetTrackingOriginCount;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, byte**, int> GetTrackingOriginName;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int> GetTrackingOriginOffset;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, MndPose*, int> SetTrackingOriginOffset;
 
-    /// <summary>The app functions; null when the library lacks any of them.</summary>
     public delegate* unmanaged[Cdecl]<IntPtr, int> UpdateClientList;
     public delegate* unmanaged[Cdecl]<IntPtr, uint*, int> GetNumberClients;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int> GetClientIdAtIndex;
@@ -69,47 +58,36 @@ internal sealed unsafe class LibmonadoExports
     public delegate* unmanaged[Cdecl]<IntPtr, uint, uint*, int> GetClientState;
     public delegate* unmanaged[Cdecl]<IntPtr, uint, int> SetClientPrimary;
 
-    /// <summary><c>mnd_root_set_client_io_blocks</c> (API 1.6); null when the library lacks it.</summary>
     public delegate* unmanaged[Cdecl]<IntPtr, uint, uint, int> SetClientIoBlocks;
 
-    /// <summary>The reference-space offset functions; null when the library lacks either.</summary>
     public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> GetReferenceSpaceOffset;
     public delegate* unmanaged[Cdecl]<IntPtr, int, MndPose*, int> SetReferenceSpaceOffset;
 
-    /// <summary><c>mnd_root_recenter_local_spaces</c>; null when the library lacks it.</summary>
     public delegate* unmanaged[Cdecl]<IntPtr, int> RecenterLocalSpaces;
 
-    /// <summary><c>mnd_client_flags_t</c>.</summary>
     public const uint ClientPrimaryApp = 1u << 0;
     public const uint ClientSessionActive = 1u << 1;
     public const uint ClientSessionOverlay = 1u << 4;
     public const uint ClientInputsBlocked = 1u << 8;
 
-    /// <summary><c>MND_IO_BLOCK_INPUTS</c>.</summary>
     public const uint IoBlockInputs = 1u << 2;
 
-    /// <summary><c>MND_SPACE_REFERENCE_TYPE_STAGE</c>.</summary>
     public const int ReferenceSpaceStage = 3;
 
     private LibmonadoExports() { }
 
-    /// <summary>For tests: no functions yet; the test sets the ones it needs.</summary>
     internal static LibmonadoExports ForTests() => new();
 
-    /// <summary>Whether the tracking-origin functions were all found.</summary>
     public bool OffersOriginOffsets => GetTrackingOriginCount != null;
 
-    /// <summary>Whether the app functions were all found.</summary>
     public bool OffersApps => UpdateClientList != null;
 
     public bool OffersInputBlocks => SetClientIoBlocks != null;
 
-    /// <summary>Whether the reference-space offset functions were both found.</summary>
     public bool OffersReferenceSpaceOffsets => GetReferenceSpaceOffset != null;
 
     public bool OffersLocalRecentre => RecenterLocalSpaces != null;
 
-    /// <summary>The functions of <paramref name="module"/>; null when it lacks one every client needs.</summary>
     public static LibmonadoExports? Resolve(IntPtr module)
     {
         var apiGetVersion = LibmonadoNative.GetProcAddress(module, "mnd_api_get_version");

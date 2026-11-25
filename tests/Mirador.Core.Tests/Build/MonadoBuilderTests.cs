@@ -106,7 +106,6 @@ public class MonadoBuilderTests : IDisposable
     [Fact]
     public async Task Locks_a_stopped_git_left_are_removed_before_the_fetch()
     {
-        // A cancelled build kills git mid-fetch: its shallow.lock (or index.lock) would fail every later fetch.
         var git = dir.File("Builds", "p1", "src", ".git");
         Directory.CreateDirectory(git);
         File.WriteAllText(Path.Combine(git, "shallow.lock"), "");
@@ -169,7 +168,7 @@ public class MonadoBuilderTests : IDisposable
         var outcome = await checkedTools.BuildAsync(Fork, Lines.Add, CancellationToken.None);
 
         Assert.True(outcome.Ok, outcome.Message);
-        Assert.Contains("Downloading CMake 4.4.5…", File.ReadAllText(outcome.Log)); // the install's lines are the build's
+        Assert.Contains("Downloading CMake 4.4.5…", File.ReadAllText(outcome.Log));
     }
 
     [Fact]

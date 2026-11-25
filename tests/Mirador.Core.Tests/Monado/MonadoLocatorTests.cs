@@ -5,7 +5,6 @@ namespace Mirador.Core.Tests.Monado;
 
 public class MonadoLocatorTests
 {
-    /// <summary>Creates an empty file (and its folders) and returns its path.</summary>
     private static string Touch(params string[] parts)
     {
         var path = Path.Combine(parts);
@@ -14,7 +13,6 @@ public class MonadoLocatorTests
         return path;
     }
 
-    /// <summary>A Monado build folder the way a dev build leaves it: a manifest with an absolute library path.</summary>
     private static string MakeBuild(string folder, string manifestName = "openxr_monado-dev.json", bool withService = true)
     {
         var dll = Touch(folder, "src", "xrt", "targets", "openxr", "openxr_monado.dll");

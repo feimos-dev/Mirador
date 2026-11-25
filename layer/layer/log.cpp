@@ -53,7 +53,7 @@ void write_all(HANDLE handle, const std::string& text)
     }
 }
 
-} // namespace
+}
 
 std::optional<Level> parse_level(std::string_view text)
 {
@@ -136,7 +136,6 @@ void rotate_logs(const std::wstring& dir, int keep)
         DeleteFileW(log_name(dir, 0).c_str());
         return;
     }
-    // layer.<keep-1>.log is the oldest that stays; the file that would take its place goes first.
     DeleteFileW(log_name(dir, keep - 1).c_str());
     for (int i = keep - 2; i >= 0; i--) {
         MoveFileExW(log_name(dir, i).c_str(), log_name(dir, i + 1).c_str(), MOVEFILE_REPLACE_EXISTING);
@@ -154,14 +153,12 @@ struct Logger::Impl {
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
 
-    // Opens the file at the first line that is written. Failing once, it does not try again.
     void open_file(bool rotate)
     {
         file_tried = true;
         if (config.dir.empty()) {
             return;
         }
-        // The folder is two levels below %LOCALAPPDATA%, which exists: Mirador's folder first.
         if (const size_t slash = config.dir.find_last_of(L'\\'); slash != std::wstring::npos) {
             CreateDirectoryW(config.dir.substr(0, slash).c_str(), nullptr);
         }
@@ -169,8 +166,6 @@ struct Logger::Impl {
         if (rotate) {
             rotate_logs(config.dir, config.keep);
         }
-        // Append-only and shared with everyone, so a second process can rotate this file away (rename it) or add a
-        // line (log_append) while this one writes on.
         file = CreateFileW(log_name(config.dir, 0).c_str(), FILE_APPEND_DATA,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -213,7 +208,6 @@ void Logger::write(Level level, std::string_view message, bool rotate)
                   t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, GetCurrentProcessId(),
                   GetCurrentThreadId(), level_name(level));
     const std::string file_line = std::string(stamp) + text + "\n";
-    // The console and the debugger get the short form: no date, no ids.
     const std::string short_line = std::string("[dvl] ") + level_name(level) + ": " + text + "\n";
 
     AcquireSRWLockExclusive(&impl_->lock);
@@ -252,8 +246,6 @@ LoggerConfig config_from_environment()
     return c;
 }
 
-// The tests' sink (set_log_sink_for_tests). Plain data, constant-initialised, never destroyed. The flag spares every
-// line the lock while no sink is set, which is always in the shipped layer.
 struct SinkSlot {
     SRWLOCK lock = SRWLOCK_INIT;
     LogSink sink = nullptr;
@@ -262,7 +254,6 @@ struct SinkSlot {
 SinkSlot g_sink;
 std::atomic<bool> g_sink_set{false};
 
-// The line to the sink, if one is set: true if it took it.
 bool to_sink(Level level, const char* format, va_list args)
 {
     if (!g_sink_set.load(std::memory_order_acquire)) {
@@ -287,7 +278,6 @@ bool to_sink(Level level, const char* format, va_list args)
 
 void vlog(Level level, bool rotate, const char* format, va_list args) noexcept
 {
-    // The log must never stop the layer: a failure to log (out of memory) is dropped, not thrown into a Vulkan call.
     try {
         if (to_sink(level, format, args)) {
             return;
@@ -308,12 +298,10 @@ void vlog(Level level, bool rotate, const char* format, va_list args) noexcept
     }
 }
 
-} // namespace
+}
 
 Logger& process_logger()
 {
-    // Made at first use and kept: a static Logger would run its destructor at process exit, when a thread that holds
-    // the lock may already be killed.
     static Logger* const logger = new Logger(config_from_environment());
     return *logger;
 }
@@ -343,4 +331,4 @@ void set_log_sink_for_tests(LogSink sink, void* context)
     ReleaseSRWLockExclusive(&g_sink.lock);
 }
 
-} // namespace dvl
+}

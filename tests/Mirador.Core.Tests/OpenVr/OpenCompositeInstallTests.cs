@@ -18,7 +18,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
     private readonly FakeCommandRunner runner = new();
     private readonly Answer answer = new();
 
-    // The release key, made for the test
     private readonly ECDsa key;
     private readonly string publicKey;
 
@@ -27,7 +26,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
         (key, publicKey) = SignedSumsTests.NewKey();
         answer.Files["OpenLamina-Windows-Installer.exe"] = Setup;
 
-        // The installer puts the release in its folder, as OpenLamina-Windows-Installer.exe /VERYSILENT does.
         runner.Effect = (spec, _) =>
         {
             Directory.CreateDirectory(Path.Combine(Folder, "bin"));
@@ -51,11 +49,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
 
     private OpenCompositeInstall Install => new(Folder, runner, publicKey);
 
-    /// <summary>
-    /// A release whose installer GitHub lists with <paramref name="sha"/> (default: the installer's), and whose
-    /// SHA256SUMS.txt lists <paramref name="listed"/> (default: the same), signed for <paramref name="signedFor"/>
-    /// (default: its tag) by <paramref name="signer"/> (default: the release key).
-    /// </summary>
     private Release Rel(string? url = Url, string? sha = null, string tag = "v2026.11.20", string? listed = null, string? signedFor = null, ECDsa? signer = null)
     {
         var digest = sha ?? SetupSha;
@@ -82,7 +75,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
 
         Assert.Equal(InstallOutcome.Installed, await RunAsync(Rel()));
 
-        // The signed checksums first, then the installer they list.
         Assert.Equal(
             ["SHA256SUMS.txt", "SHA256SUMS.txt.sig", "OpenLamina-Windows-Installer.exe"],
             answer.Requested.Select(u => u.Segments[^1]));
@@ -92,7 +84,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
         Assert.True(Install.IsInstalled);
         Assert.Equal("2026.11.20", Install.Source?.Version);
         Assert.Equal("OpenLamina: 2026.11.20 (7534249)", Install.VersionLine());
-        Assert.Empty(Directory.GetFiles(Downloads)); // the installer doesn't stay
+        Assert.Empty(Directory.GetFiles(Downloads));
     }
 
     [Fact]
@@ -159,7 +151,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
     {
         var release = Rel();
         var sums = answer.Files[SignedSums.SumsName];
-        sums[0] = (byte)'2'; // the portable zip's line: the installer's still matches
+        sums[0] = (byte)'2';
 
         await Assert.ThrowsAsync<MiradorException>(() => RunAsync(release));
 
@@ -241,7 +233,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
         Assert.Empty(runner.Commands);
         Assert.False(Install.InUse);
 
-        // A 32-bit game holds the DLL beside it.
         File.WriteAllBytes(Path.Combine(Folder, "bin", "vrclient.dll"), [2]);
         using (new FileStream(Path.Combine(Folder, "bin", "vrclient.dll"), FileMode.Open, FileAccess.Read, FileShare.None))
         {
@@ -267,7 +258,7 @@ public sealed class OpenCompositeInstallTests : IDisposable
 
         Assert.Equal("OpenLamina is being installed already: wait for that to finish.", e.Message);
         release.SetResult();
-        await Assert.ThrowsAsync<MiradorException>(() => first.WaitAsync(TimeSpan.FromSeconds(10))); // its fake put nothing in place
+        await Assert.ThrowsAsync<MiradorException>(() => first.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Single(runner.Commands);
     }
 
@@ -300,7 +291,6 @@ public sealed class OpenCompositeInstallTests : IDisposable
         Assert.Equal("OpenLamina 2026.11.06 has no installer that Mirador can check.", e.Message);
     }
 
-    /// <summary>GitHub's release files, by name; any other is not found.</summary>
     private sealed class Answer : HttpMessageHandler
     {
         public Dictionary<string, byte[]> Files { get; } = [];

@@ -3,11 +3,6 @@ using StereoKit;
 
 namespace Mirador.Xr;
 
-/// <summary>
-/// The home: a floor grid reaching to the horizon under a plain sky, at the stage's floor. It is a scene app like a
-/// game, so Monado shows it whenever no game runs; under a game it draws nothing. It tells Mirador when it is the app
-/// shown, which is what opens the dashboard.
-/// </summary>
 internal static class HomeApp
 {
     public static int Run(Link link)
@@ -45,13 +40,10 @@ internal static class HomeApp
     }
 }
 
-/// <summary>What the home draws: the floor grid at the stage's floor, the sky around the head, and the controllers.</summary>
 internal sealed class HomeScene
 {
-    /// <summary>The floor's edge length; it has faded into the horizon long before its edge.</summary>
     private const float FloorM = 600;
 
-    /// <summary>The sky's radius, inside the far clip plane.</summary>
     private const float SkyM = 250;
 
     private readonly Mesh floor = Mesh.GeneratePlane(new Vec2(FloorM, FloorM), Vec3.Up, Vec3.Forward);
@@ -61,7 +53,6 @@ internal sealed class HomeScene
 
     public HomeScene()
     {
-        // The controllers, but no rays, and no skybox behind the scene's own sky.
         Input.HandVisible(Handed.Max, true);
         Interaction.DefaultInteractors = DefaultInteractors.None;
         Interaction.DefaultDraw = false;
@@ -71,7 +62,6 @@ internal sealed class HomeScene
 
     public void Draw()
     {
-        // The floor follows the head along the ground in whole metres, so its edge is never reached and its lines stay put.
         var head = Input.Head.position;
         floor.Draw(grid, Matrix.T(MathF.Round(head.x), 0, MathF.Round(head.z)));
         dome.Draw(sky, Matrix.T(head));

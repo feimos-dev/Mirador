@@ -1,17 +1,5 @@
 name: Monado weekly
 
-# Mirador's Monado: upstream main, built once a week (it was nightly) with
-# Mirador's recipe (tools\build-monado.ps1) and checked (tools\check-monado-build.ps1, then a headless start on a machine
-# of its own: tools\check-monado-session.ps1), then signed and published as a prerelease monado-<yyyy.mm.dd>-<short sha>
-# when its checks pass. Skipped when upstream has no new commit since the last published build; a failed week publishes
-# nothing and fails the run (started again by hand, with workflow_dispatch). The last 2 are kept: Mirador offers only the
-# newest, and "Roll back" goes to the version the helper kept on disk, so older releases are never asked for.
-#
-# Signing waits for an approval: once the checks have passed, the run stops in the "release" environment until its
-# reviewer approves it (GitHub fails it after 30 days), and only then signs and publishes. Nothing is published unsigned.
-#
-# A push that changes the recipe, the checks or this file builds and checks too, without signing or publishing.
-
 on:
   schedule:
     - cron: '17 3 * * 1' # Mondays, 03:17 UTC
@@ -37,9 +25,6 @@ on:
 permissions:
   contents: read
 
-# A push's run gives way to a newer push; a scheduled or started run is never cancelled (a push to main during the
-# Monday run mustn't cost that week's build), and two of them take turns: a run that waits for its approval holds the
-# next one back until it is approved or rejected.
 concurrency:
   group: monado-weekly-${{ github.ref }}-${{ github.event_name == 'push' && 'push' || 'publish' }}
   cancel-in-progress: ${{ github.event_name == 'push' }}
@@ -56,7 +41,6 @@ jobs:
       skip: ${{ steps.upstream.outputs.skip }}
       commit: ${{ steps.upstream.outputs.commit }}
       tag: ${{ steps.upstream.outputs.tag }}
-      # The zip's hash, for the jobs that take it: an artifact can be replaced by any job of the run, this can't.
       sha256: ${{ steps.zip.outputs.sha256 }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -75,12 +59,8 @@ jobs:
           $tag = "monado-$([DateTime]::UtcNow.ToString('yyyy.MM.dd'))-$short"
           $last = gh release list --limit 100 --json tagName,isPrerelease,createdAt |
               ConvertFrom-Json | Where-Object { $_.tagName -like 'monado-*' } | Sort-Object createdAt -Descending | Select-Object -First 1
-          # Only a run that publishes skips: a scheduled one, or a started one with "publish" on, when upstream has no
-          # commit since the last published build ("force" builds and publishes it again). A push, or a started run
-          # that only tries the checks, always builds.
           $publishing = $env:GITHUB_EVENT_NAME -ne 'push' -and $env:PUBLISH -eq 'true'
           $skip = $publishing -and $last -and $last.tagName.EndsWith("-$short") -and $env:FORCE -ne 'true'
-          # The same commit published today already: its tag exists, so there is nothing new to publish.
           if ($publishing -and (gh release list --limit 100 --json tagName | ConvertFrom-Json | Where-Object { $_.tagName -eq $tag })) {
               $skip = $true
               Write-Host "::notice::$tag is published already today; nothing new to publish (force can't publish a tag twice)."
@@ -107,13 +87,10 @@ jobs:
         shell: pwsh
         run: |
           $pin = (Get-Content tools\vcpkg-commit.txt -TotalCount 1).Trim()
-          # The whole history: Monado's vcpkg.json names a baseline commit in it, and vcpkg reads old versions of its
-          # ports from git with a cleaned environment, in which a partial clone can't fetch what it lacks.
           git clone -q https://github.com/microsoft/vcpkg.git "$env:RUNNER_TEMP\vcpkg"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C "$env:RUNNER_TEMP\vcpkg" checkout -q $pin
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # A pin that isn't on vcpkg's history must fail the run, not build with vcpkg's newest.
           $head = (git -C "$env:RUNNER_TEMP\vcpkg" rev-parse HEAD).Trim()
           if ($head -ne $pin) { Write-Error "vcpkg is at $head, not the pin $pin."; exit 1 }
           & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
@@ -123,8 +100,6 @@ jobs:
           "VCPKG_DEFAULT_BINARY_CACHE=$($cache.FullName)" >> $env:GITHUB_ENV
           "pin=$pin" >> $env:GITHUB_OUTPUT
 
-      # A week without dependency changes doesn't build them again. Only the exact key: an entry under it is this
-      # job's own, while a prefix would also take one that another job of an earlier run saved.
       - name: vcpkg's binary cache
         if: steps.upstream.outputs.skip != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -142,7 +117,6 @@ jobs:
         shell: pwsh
         run: tools\check-monado-build.ps1 -Install "$env:RUNNER_TEMP\monado-install" -Build "$env:RUNNER_TEMP\monado-build"
 
-      # The OpenXR test client for the session job, built here where the tools and vcpkg are.
       - name: xr-check
         if: steps.upstream.outputs.skip != 'true'
         shell: pwsh
@@ -185,12 +159,6 @@ jobs:
             ${{ runner.temp }}/monado-build/Testing/Temporary/
             ${{ runner.temp }}/monado-build/vcpkg-manifest-install.log
 
-  # The last check: the zip just built starts headless and an OpenXR app connects to it (tools\check-monado-session.ps1).
-  # A scheduled or started run takes the self-hosted GPU runner (a Windows Server VM with a GTX 750 Ti, started for
-  # the week's run): there Monado's null compositor runs whole Vulkan and D3D11 sessions. A push
-  # stays on GitHub's runners, which have no GPU (Monado's compositor needs a Vulkan device with Windows' sharing
-  # extensions), so only an instance is checked and the push never waits for the VM. It tests the zip as uploaded, on
-  # a machine of its own, and can't write anything.
   session:
     needs: build
     if: needs.build.outputs.skip != 'true'
@@ -220,7 +188,6 @@ jobs:
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant() -ne $env:SHA256) { throw 'The zip isn''t the one the build job made.' }
           Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP\monado-install"
 
-      # The runner runs elevated, where the OpenXR loader ignores XR_RUNTIME_JSON: the build is made the machine's runtime.
       - name: The build as the OpenXR runtime
         shell: pwsh
         run: |
@@ -238,10 +205,6 @@ jobs:
           name: monado-session
           path: ${{ runner.temp }}/monado-session/
 
-  # The only job that can sign, and only for a run that publishes. It runs in the "release" environment, which takes
-  # main and v* tags only and waits for an approval, and Azure takes a token from no other job. It compiles nothing: it
-  # signs the build the session job checked (every program and DLL without a signature: Monado's own and the libraries
-  # vcpkg built for it; Microsoft's C++ runtime keeps its own) and packs the zip again.
   sign:
     name: Sign
     needs: [build, session]
@@ -273,7 +236,6 @@ jobs:
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant() -ne $env:SHA256) { throw 'The zip isn''t the one the build job made.' }
           Expand-Archive -LiteralPath $zip -DestinationPath "$env:RUNNER_TEMP\monado-install"
 
-      # The signing library runs on it.
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: '10.0.x'
@@ -288,7 +250,6 @@ jobs:
           tools\get-signing-library.ps1 -Out (Join-Path $env:RUNNER_TEMP 'signing')
           -Endpoint $env:ENDPOINT -Account $env:ACCOUNT -CertificateProfile $env:CERTIFICATE_PROFILE
 
-      # No secret: Azure takes GitHub's token for this job, in this environment, of this repository.
       - name: Azure
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -300,8 +261,6 @@ jobs:
         id: sign
         shell: pwsh
         run: |
-          # GitHub's token behind the login lasts minutes: the signing service's token is taken now, before the
-          # build's files are looked through.
           az account get-access-token --resource https://codesigning.azure.net --query expiresOn --output tsv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           tools\sign-monado.ps1 -Install "$env:RUNNER_TEMP\monado-install"
@@ -326,7 +285,6 @@ jobs:
           if-no-files-found: error
           path: out/
 
-  # Only a scheduled or started run publishes, only what the sign job signed, and only this job may write.
   publish:
     needs: [build, sign]
     if: needs.build.outputs.skip != 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish))

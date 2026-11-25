@@ -1,21 +1,4 @@
 #Requires -Version 7.3
-<#
-.SYNOPSIS
-  Starts a Monado build headless and connects an OpenXR app to it: the last check of the weekly build.
-.DESCRIPTION
-  Starts the build's monado-service.exe with its null compositor and simulated headset (XRT_COMPOSITOR_NULL=1,
-  SIMULATED_ENABLE=1: no display, no headset), waits for its pipe, then runs xr-check (tools\xr-check) against it,
-  once per -Api. The default, none, creates an OpenXR instance only: the runtime DLL loads with everything it needs,
-  and the service takes the app over its pipe. That is all a GitHub runner can show: it has no GPU, and Monado's
-  compositor (the null one too) needs a Vulkan device with Windows' sharing extensions, which no software driver tried
-  there gave (lavapipe lacks them; Mesa's Dozen didn't load). d3d11 and vulkan run a whole session, as
-  "Verify build for Windows" does on a PC with a GPU.
-  The build must be the OpenXR runtime the loader finds: XR_RUNTIME_JSON is set, but an elevated process's loader
-  ignores it (GitHub's runners are elevated), so there the build is made the machine's active runtime first.
-  Exit code 0 when every API asked for passed, 1 otherwise.
-.EXAMPLE
-  tools\check-monado-session.ps1 -Install $env:RUNNER_TEMP\monado-install -XrCheck $env:RUNNER_TEMP\xr-check-build\xr-check.exe
-#>
 param(
     [Parameter(Mandatory)][string]$Install,
     [Parameter(Mandatory)][string]$XrCheck,
@@ -35,7 +18,6 @@ foreach ($file in $service, $manifest, $XrCheck) {
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $serviceLog = Join-Path $LogDir 'monado-service.log'
 
-# What the machine offers, for reading a failure: its display adapters and the Vulkan drivers registered.
 Write-Host 'Display adapters:'
 Get-CimInstance Win32_VideoController | ForEach-Object { Write-Host "  $($_.Name) ($($_.DriverVersion))" }
 Write-Host 'Vulkan drivers:'
@@ -43,11 +25,9 @@ foreach ($key in 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers', 'HKLM:\SOFTWARE\WOW643
     if (Test-Path $key) { (Get-Item $key).Property | ForEach-Object { Write-Host "  $_" } }
 }
 
-# Headless, and only this build: the variables go to the service and to xr-check's OpenXR loader.
 $env:XRT_COMPOSITOR_NULL = '1'
 $env:SIMULATED_ENABLE = '1'
-$env:XR_RUNTIME_JSON = $manifest # an elevated process's loader ignores it: there, make the build the active runtime first
-# xr-check loads vulkan-1.dll by name: the build's own copy serves where Windows has none (no GPU driver brought one).
+$env:XR_RUNTIME_JSON = $manifest
 $env:PATH = "$(Join-Path $Install 'bin');$env:PATH"
 
 function Get-MonadoPipe {

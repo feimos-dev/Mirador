@@ -108,7 +108,6 @@ EventTable::Split EventTable::split(VkDevice device, const VkFence* fences, uint
 
 namespace {
 
-// The events' state now: whether the wait is satisfied by them, and the refresh time that did it.
 struct EventState {
     bool done = false;
     std::optional<int64_t> set_ns;
@@ -141,7 +140,6 @@ EventState look(const EventTable& table, VkDevice device, const std::vector<VkFe
     return s;
 }
 
-// The time left before `deadline_ns`, as a Vulkan timeout; UINT64_MAX for none.
 uint64_t left_until(int64_t deadline_ns, int64_t now_ns)
 {
     if (deadline_ns == INT64_MAX) {
@@ -150,7 +148,7 @@ uint64_t left_until(int64_t deadline_ns, int64_t now_ns)
     return deadline_ns > now_ns ? static_cast<uint64_t>(deadline_ns - now_ns) : 0;
 }
 
-} // namespace
+}
 
 EventWait wait_for_fences(EventTable& table, std::unique_lock<std::mutex>& lock, VkDevice device,
                           const VkFence* fences, uint32_t count, bool wait_all, uint64_t timeout_ns,
@@ -164,7 +162,6 @@ EventWait wait_for_fences(EventTable& table, std::unique_lock<std::mutex>& lock,
     EventWait out;
 
     if (wait_all) {
-        // The events first, under the lock; then the ordinary fences down, with what is left of the same timeout.
         for (;;) {
             const EventState s = look(table, device, split.events, true);
             if (s.done) {
@@ -187,13 +184,11 @@ EventWait wait_for_fences(EventTable& table, std::unique_lock<std::mutex>& lock,
         lock.lock();
         out.result = r;
         if (r != VK_SUCCESS) {
-            out.set_ns.reset(); // the events did not end it
+            out.set_ns.reset();
         }
         return out;
     }
 
-    // Wait any: whichever kind is done first. The driver is only asked to look (timeout 0), between waits for a
-    // refresh that end after kMixedPollNs at most while ordinary fences are in the list.
     for (;;) {
         const EventState s = look(table, device, split.events, false);
         if (s.done) {
@@ -206,7 +201,7 @@ EventWait wait_for_fences(EventTable& table, std::unique_lock<std::mutex>& lock,
             const VkResult r = host.wait_down(split.ordinary, false, 0);
             lock.lock();
             if (r != VK_TIMEOUT) {
-                out.result = r; // VK_SUCCESS, or an error such as a lost device
+                out.result = r;
                 return out;
             }
         }
@@ -221,4 +216,4 @@ EventWait wait_for_fences(EventTable& table, std::unique_lock<std::mutex>& lock,
     }
 }
 
-} // namespace dvl
+}

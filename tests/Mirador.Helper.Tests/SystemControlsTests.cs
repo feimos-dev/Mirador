@@ -3,10 +3,6 @@ using Microsoft.Win32;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>
-/// The real controls, as far as an unelevated test can reach them: reading services, ending and listing a process
-/// of the test's own, and the registry code against a scratch key under <c>HKEY_CURRENT_USER</c>.
-/// </summary>
 public sealed class SystemControlsTests : IDisposable
 {
     private readonly TempDir temp = new();
@@ -26,7 +22,6 @@ public sealed class SystemControlsTests : IDisposable
         temp.Dispose();
     }
 
-    /// <summary>Starts a copy of <c>ping.exe</c> under a name no other program has, so nothing else is touched.</summary>
     private (string Name, Process Process) StartSleeper()
     {
         var name = "mirador-test-" + Guid.NewGuid().ToString("N")[..12];
@@ -36,8 +31,6 @@ public sealed class SystemControlsTests : IDisposable
         started.Add(process);
         return (name, process);
     }
-
-    // Services
 
     [Fact]
     public void A_service_that_exists_and_runs_is_found()
@@ -63,8 +56,6 @@ public sealed class SystemControlsTests : IDisposable
     {
         Assert.True(new SystemServiceControl().Exists("eventlog"));
     }
-
-    // Processes
 
     [Fact]
     public void KillAll_ends_the_named_processes_and_only_those()
@@ -145,8 +136,6 @@ public sealed class SystemControlsTests : IDisposable
     {
         Assert.Throws<ArgumentException>(() => new SystemProcessControl().CommandLines(name));
     }
-
-    // The registry
 
     private SystemRuntimeRegistry Registry() =>
         new(RegistryHive.CurrentUser, scratch + @"\OpenXR\1", scratch + @"\Mirador");

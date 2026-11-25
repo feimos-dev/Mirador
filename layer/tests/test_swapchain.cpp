@@ -1,13 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The swapchain, acquire, present, present-wait and display events through the layer's chain: the
-// test build of the layer DLL, a fake driver below it, and a display session on a FakeApi whose clock runs at the real
-// rate, so the layer's real display thread (DisplayThread, DisplayLoop, Win32Waiter) presents to it and its counter
-// flips every 1/90 s. Monado is played as it calls the layer: its render loop (acquire, present with a present id,
-// present-wait) and its vblank thread (register a display event, wait on its fence for up to 1 s, destroy it). Nothing
-// here reaches the real NVAPI or the real display session.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -48,16 +41,13 @@ T fake_handle(uintptr_t value)
     return reinterpret_cast<T>(value);
 }
 
-// Monado's semaphores: the fake driver only counts them.
 const VkSemaphore kAcquireSemaphore = fake_handle<VkSemaphore>(0x5E3A0001);
 const VkSemaphore kRenderSemaphore = fake_handle<VkSemaphore>(0x5E3A0002);
 
-// The rig with Monado's setup done, in Monado's order: instance, device (compute compositor queue, present id and wait,
-// display control), the display query (which runs the trial import on the device), the mode, the surface on plane 0.
 struct Monado {
     ChainRig rig{dvl_test::default_gpus(), true};
     VkDevice device = VK_NULL_HANDLE;
-    VkQueue queue = VK_NULL_HANDLE; // Monado's main queue: family 2, index 0
+    VkQueue queue = VK_NULL_HANDLE;
     VkDisplayKHR display = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
 
@@ -127,7 +117,6 @@ struct Monado {
         return rig.device_fn<Fn>(device, name);
     }
 
-    // Monado's compute compositor's swapchain: R8G8B8A8_UNORM, storage, FIFO, three images.
     VkSwapchainCreateInfoKHR swapchain_info(VkSwapchainKHR old = VK_NULL_HANDLE) const
     {
         VkSwapchainCreateInfoKHR ci{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
@@ -184,7 +173,6 @@ struct Monado {
         return r;
     }
 
-    // Monado's vblank thread's registration: a FIRST_PIXEL_OUT event on the layer's display, its fence.
     VkFence display_event()
     {
         VkDisplayEventInfoEXT info{VK_STRUCTURE_TYPE_DISPLAY_EVENT_INFO_EXT};
@@ -194,7 +182,6 @@ struct Monado {
         return fence;
     }
 
-    // One frame of Monado's render loop: acquire (UINT64_MAX, a semaphore), present with its id, wait for it.
     uint32_t frame(VkSwapchainKHR swapchain, uint64_t id, uint64_t present_wait_timeout = 500 * kMs)
     {
         uint32_t index = UINT32_MAX;
@@ -214,14 +201,11 @@ struct Monado {
     }
 };
 
-// Monado's vblank thread (comp_target_swapchain.c): after every present but the first, register a FIRST_PIXEL_OUT
-// event, wait on its fence for up to 1 s, stamp the time, destroy the fence (also after a timeout).
 class VblankThread {
 public:
     explicit VblankThread(Monado& m) : m_(m), thread_([this] { run(); }) {}
     ~VblankThread() { stop(); }
 
-    // The render loop presented a frame.
     void presented()
     {
         std::lock_guard<std::mutex> hold(mutex_);
@@ -243,10 +227,10 @@ public:
     struct Wait {
         VkFence fence;
         VkResult result;
-        int64_t registered; // on the session's clock
-        int64_t stamp;      // when the wait returned
+        int64_t registered;
+        int64_t stamp;
     };
-    std::vector<Wait> waits; // read after stop()
+    std::vector<Wait> waits;
 
 private:
     void run()
@@ -256,7 +240,7 @@ private:
                 std::unique_lock<std::mutex> hold(mutex_);
                 cv_.wait(hold, [this] { return stopping_ || asked_ > done_; });
                 if (asked_ == done_) {
-                    return; // stopping, nothing left
+                    return;
                 }
                 ++done_;
             }
@@ -284,7 +268,6 @@ private:
     std::thread thread_;
 };
 
-// The FakeApi's flips: at k * refresh on the session's clock (it was made at clock 0 and never stopped here).
 int64_t flip_at_or_before(int64_t t)
 {
     return (t / kRefresh) * kRefresh;
@@ -301,7 +284,6 @@ std::vector<uint64_t> present_tags(const nvdm::FakeApi& api)
     return tags;
 }
 
-// How often the display thread reads the stats over `ms` milliseconds of real time.
 size_t stats_reads_during(const nvdm::FakeApi& api, int ms)
 {
     const size_t before = api.count("present_stats");
@@ -309,7 +291,6 @@ size_t stats_reads_during(const nvdm::FakeApi& api, int ms)
     return api.count("present_stats") - before;
 }
 
-// A folder for MIRADOR_DIRECT_MODE_TRACE that is gone again at the end of the test, and the file the layer makes in it.
 class TraceDir {
 public:
     TraceDir()
@@ -331,7 +312,6 @@ public:
     {
         return path_ / ("mirador-trace-" + std::to_string(GetCurrentProcessId()) + ".csv");
     }
-    // The file's lines; none while it is not there.
     std::vector<std::string> lines() const
     {
         std::vector<std::string> out;
@@ -346,7 +326,6 @@ private:
     std::filesystem::path path_;
 };
 
-// How many of a trace's lines are of this kind (the second column).
 size_t records_of_kind(const std::vector<std::string>& lines, nvdm::TraceKind kind)
 {
     const std::string wanted = std::to_string(static_cast<uint32_t>(kind));
@@ -356,13 +335,10 @@ size_t records_of_kind(const std::vector<std::string>& lines, nvdm::TraceKind ki
     }));
 }
 
-} // namespace
+}
 
 TEST_CASE("monado_frame_loop_against_the_fake")
 {
-    // A few hundred frames of Monado's pattern: every acquire, present, present-wait and display-event wait succeeds;
-    // each frame gets its own NVAPI Present of the back-buffer it acquired; each event fires at the refresh after it
-    // was registered; the event fences never reach the driver but to be made and destroyed.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     const std::vector<VkImage> images = m.images(swapchain);
@@ -376,7 +352,7 @@ TEST_CASE("monado_frame_loop_against_the_fake")
         VblankThread vblank(m);
         for (uint64_t id = 1; id <= kFrames; ++id) {
             const uint32_t index = m.frame(swapchain, id);
-            acquired_tags.push_back(0x100 + index); // the FakeApi's tag of back-buffer `index`
+            acquired_tags.push_back(0x100 + index);
             if (id > 1) {
                 vblank.presented();
             }
@@ -388,8 +364,6 @@ TEST_CASE("monado_frame_loop_against_the_fake")
         for (const VblankThread::Wait& w : vblank.waits) {
             CHECK(w.result == VK_SUCCESS);
             CHECK(w.stamp >= w.registered);
-            // The event fired at a refresh after its registration (the test reads the clock just after the layer
-            // did), and the wait returned soon after that refresh.
             const int64_t flip = flip_at_or_before(w.stamp);
             CHECK(flip + 1'000'000 > w.registered);
             late.push_back(w.stamp - flip);
@@ -398,7 +372,6 @@ TEST_CASE("monado_frame_loop_against_the_fake")
         INFO("median wake after the refresh: " << late[late.size() / 2] << " ns");
         CHECK(late[late.size() / 2] < 2'000'000);
 
-        // The event fences: made and destroyed by the driver, never waited on, read or reset there.
         for (const VblankThread::Wait& w : vblank.waits) {
             CHECK(g_driver.count_on("vkCreateFence", handle_value(w.fence)) == 1);
             CHECK(g_driver.count_on("vkDestroyFence", handle_value(w.fence)) == 1);
@@ -408,18 +381,14 @@ TEST_CASE("monado_frame_loop_against_the_fake")
         }
     }
 
-    // One NVAPI Present per frame, of the back-buffer acquired for it, in order.
     CHECK(present_tags(m.rig.api) == acquired_tags);
 
-    // The driver never saw our swapchain: acquire, present and present-wait were the layer's alone.
     for (const char* name : {"vkAcquireNextImageKHR", "vkQueuePresentKHR", "vkWaitForPresentKHR"}) {
         INFO(name);
         CHECK(g_driver.count_on(name, handle_value(swapchain)) == 0);
         CHECK(g_driver.count(name) == 0);
     }
 
-    // The acquire semaphore was signalled on the private queue (one empty submit each), and every present was one
-    // submit on Monado's queue waiting on its semaphore at ALL_COMMANDS and signalling a frame fence.
     const VkQueue private_queue = reinterpret_cast<VkQueue>(&g_driver.queue_objects.front());
     REQUIRE(private_queue != m.queue);
     const std::vector<dvl_test::FakeDriver::Submit> on_private = g_driver.submits_on(private_queue);
@@ -437,12 +406,12 @@ TEST_CASE("monado_frame_loop_against_the_fake")
         CHECK(s.fence != VK_NULL_HANDLE);
         frame_fences.insert(s.fence);
     }
-    CHECK(frame_fences.size() <= nvdm::kFencePoolCap); // the pool's fences, reused
+    CHECK(frame_fences.size() <= nvdm::kFencePoolCap);
     CHECK(g_driver.bad_fence_uses == 0);
 
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
-    CHECK(g_driver.live_fences() == 0); // every frame fence destroyed with the device
+    CHECK(g_driver.live_fences() == 0);
     CHECK(g_driver.live_images.empty());
     CHECK(g_driver.live_memory.empty());
     CHECK(g_driver.bad_fence_uses == 0);
@@ -450,17 +419,13 @@ TEST_CASE("monado_frame_loop_against_the_fake")
 
 TEST_CASE("driving_the_headset_keeps_monados_timer_resolution_when_its_console_is_hidden")
 {
-    // Design 6.7, Monado's timers: with Monado's console minimized, Windows 11 ignored its
-    // timeBeginPeriod(1), its compositor slept to the 15.6 ms tick and missed a third of the refreshes. Once the layer
-    // drives the headset (the first swapchain), the process is out of timer-resolution throttling. ctest runs each test
-    // case in a process of its own, so this is the layer's doing.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     PROCESS_POWER_THROTTLING_STATE state{};
     state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
     REQUIRE(GetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state)));
-    CHECK((state.ControlMask & PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION) != 0); // the layer decides...
-    CHECK((state.StateMask & PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION) == 0);   // ...not throttled
+    CHECK((state.ControlMask & PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION) != 0);
+    CHECK((state.StateMask & PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION) == 0);
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
 }
@@ -473,17 +438,14 @@ TEST_CASE("recreate_with_old_swapchain_moves_images")
     m.frame(a, 1);
     const size_t made = g_driver.images_made.size();
 
-    // The same parameters: the new swapchain wraps the same images and memory, with no second import.
     const VkSwapchainKHR b = m.make_swapchain(a);
     CHECK(b != a);
     CHECK(m.images(b) == images_a);
     CHECK(g_driver.images_made.size() == made);
 
-    // Ids are per swapchain record: b starts from nothing, a keeps what it completed.
     CHECK(m.wait_for_present(m.device, b, 1, 0) == VK_TIMEOUT);
     CHECK(m.wait_for_present(m.device, a, 1, 0) == VK_SUCCESS);
 
-    // The old one goes: its images stay (b has them), and the display thread runs on for b.
     g_driver.clear_calls();
     m.destroy_swapchain(m.device, a, nullptr);
     CHECK(g_driver.count("vkDestroyImage") == 0);
@@ -492,7 +454,6 @@ TEST_CASE("recreate_with_old_swapchain_moves_images")
     m.frame(b, 2);
     m.frame(b, 3);
 
-    // Other parameters (Monado's graphics compositor: SRGB, no storage): imported again, the old images untouched.
     VkSwapchainCreateInfoKHR ci = m.swapchain_info(b);
     ci.imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
     ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -505,7 +466,6 @@ TEST_CASE("recreate_with_old_swapchain_moves_images")
     }
     m.frame(c, 1);
 
-    // b goes: it owned a's images, now released; c keeps its own.
     g_driver.clear_calls();
     m.destroy_swapchain(m.device, b, nullptr);
     CHECK(g_driver.count("vkDestroyImage") == 3);
@@ -522,17 +482,16 @@ TEST_CASE("recreate_with_old_swapchain_moves_images")
 TEST_CASE("destroying_the_last_swapchain_stops_the_display_thread")
 {
     Monado m;
-    CHECK(stats_reads_during(m.rig.api, 50) == 0); // no swapchain, no display thread
+    CHECK(stats_reads_during(m.rig.api, 50) == 0);
     const VkSwapchainKHR a = m.make_swapchain();
-    CHECK(stats_reads_during(m.rig.api, 60) > 0); // the first swapchain started it
+    CHECK(stats_reads_during(m.rig.api, 60) > 0);
     const VkSwapchainKHR b = m.make_swapchain(a);
     m.destroy_swapchain(m.device, a, nullptr);
-    CHECK(stats_reads_during(m.rig.api, 60) > 0); // b still exists
+    CHECK(stats_reads_during(m.rig.api, 60) > 0);
     m.frame(b, 1);
     m.destroy_swapchain(m.device, b, nullptr);
-    CHECK(stats_reads_during(m.rig.api, 80) == 0); // the last one stopped it, joined
+    CHECK(stats_reads_during(m.rig.api, 80) == 0);
 
-    // A new swapchain starts a new epoch, and frames run again.
     const VkSwapchainKHR c = m.make_swapchain();
     m.frame(c, 1);
     m.frame(c, 2);
@@ -548,7 +507,6 @@ TEST_CASE("destroy_device_tears_down_in_order")
     for (uint64_t id = 1; id <= 20; ++id) {
         m.frame(swapchain, id);
     }
-    // A frame queued whose GPU work never ends by itself: its fence is outstanding at teardown.
     g_driver.hold_fences = true;
     uint32_t index = 0;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &index) == VK_SUCCESS);
@@ -562,8 +520,6 @@ TEST_CASE("destroy_device_tears_down_in_order")
     m.destroy_device();
     const std::vector<std::string> order = g_driver.names(
         {"vkWaitForFences", "vkQueueWaitIdle", "vkDestroyFence", "vkDestroyDevice", "vkDestroyImage"});
-    // Design 6.10: outstanding frame fences waited for (at most 100 ms), the private queue idled, the frame fences
-    // destroyed, then the device.
     REQUIRE_FALSE(order.empty());
     CHECK(order.front() == "vkWaitForFences");
     CHECK(order.back() == "vkDestroyDevice");
@@ -573,7 +529,7 @@ TEST_CASE("destroy_device_tears_down_in_order")
     REQUIRE(first_destroy != order.end());
     CHECK(idle < first_destroy);
     CHECK(std::count(order.begin(), order.end(), "vkDestroyFence") == static_cast<long>(fences));
-    CHECK(std::count(order.begin(), order.end(), "vkDestroyImage") == 0); // released with the swapchain already
+    CHECK(std::count(order.begin(), order.end(), "vkDestroyImage") == 0);
     const VkQueue private_queue = reinterpret_cast<VkQueue>(&g_driver.queue_objects.front());
     CHECK(g_driver.last("vkQueueWaitIdle").handle == handle_value(private_queue));
     CHECK(g_driver.live_fences() == 0);
@@ -582,8 +538,6 @@ TEST_CASE("destroy_device_tears_down_in_order")
 
 TEST_CASE("destroy_device_with_its_swapchain_still_alive")
 {
-    // An application error, but the device's swapchain is not left behind: destroyed first (images released, the
-    // display thread stopped), then the device's teardown.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     m.frame(swapchain, 1);
@@ -625,12 +579,11 @@ TEST_CASE("present_mixing_our_swapchain_with_another_is_refused")
     CHECK(m.present(m.queue, &info) == VK_ERROR_UNKNOWN);
     CHECK(results[0] == VK_ERROR_UNKNOWN);
     CHECK(results[1] == VK_ERROR_UNKNOWN);
-    CHECK(g_driver.count("vkQueuePresentKHR") == 0); // nothing went down: the driver never sees our handle
+    CHECK(g_driver.count("vkQueuePresentKHR") == 0);
     CHECK(g_driver.count("vkQueueSubmit") == 0);
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
     CHECK(m.rig.api.count("present") == presents);
 
-    // The acquired image is still ours to present alone.
     REQUIRE(m.present_one(ours, index, 1) == VK_SUCCESS);
     CHECK(m.wait_for_present(m.device, ours, 1, 500 * kMs) == VK_SUCCESS);
     m.destroy_swapchain(m.device, theirs, nullptr);
@@ -640,8 +593,6 @@ TEST_CASE("present_mixing_our_swapchain_with_another_is_refused")
 
 TEST_CASE("foreign_swapchains_and_fences_go_down")
 {
-    // Monado's peek window: a Win32 surface and a driver swapchain on the same device. Every call on it, and every
-    // ordinary fence, goes down unchanged; no display thread runs for it.
     Monado m;
     VkSwapchainCreateInfoKHR peek = m.swapchain_info();
     peek.surface = dvl_test::kPeekSurface;
@@ -666,7 +617,6 @@ TEST_CASE("foreign_swapchains_and_fences_go_down")
     m.destroy_swapchain(m.device, theirs, nullptr);
     CHECK(g_driver.count_on("vkDestroySwapchainKHR", handle_value(theirs)) == 1);
 
-    // Ordinary fences, with no display event registered and with one registered.
     VkFenceCreateInfo fci{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     VkFence fence = VK_NULL_HANDLE;
@@ -688,7 +638,6 @@ TEST_CASE("foreign_swapchains_and_fences_go_down")
         if (event != VK_NULL_HANDLE) {
             m.destroy_fence(m.device, event, nullptr);
         }
-        // Signalled again for the next pass, the driver's way.
         VkFence again = VK_NULL_HANDLE;
         REQUIRE(m.create_fence(m.device, &fci, nullptr, &again) == VK_SUCCESS);
         m.destroy_fence(m.device, fence, nullptr);
@@ -706,31 +655,29 @@ TEST_CASE("display_event_fences_are_answered_by_the_layer")
     VkDisplayEventInfoEXT ei{VK_STRUCTURE_TYPE_DISPLAY_EVENT_INFO_EXT};
     ei.displayEvent = VK_DISPLAY_EVENT_TYPE_FIRST_PIXEL_OUT_EXT;
 
-    // Not signalled before the next refresh; signalled by it; vkResetFences unsignals it for good.
     VkFence event = VK_NULL_HANDLE;
     REQUIRE(m.register_event(m.device, m.display, &ei, nullptr, &event) == VK_SUCCESS);
     const VkResult early = m.fence_status(m.device, event);
-    CHECK((early == VK_NOT_READY || early == VK_SUCCESS)); // a refresh may land right after the registration
+    CHECK((early == VK_NOT_READY || early == VK_SUCCESS));
     CHECK(m.wait_fences(m.device, 1, &event, VK_TRUE, 1'000'000'000) == VK_SUCCESS);
     CHECK(m.fence_status(m.device, event) == VK_SUCCESS);
     CHECK(m.reset_fences(m.device, 1, &event) == VK_SUCCESS);
     CHECK(m.fence_status(m.device, event) == VK_NOT_READY);
-    CHECK(m.wait_fences(m.device, 1, &event, VK_TRUE, 30 * kMs) == VK_TIMEOUT); // the wait honours the timeout
+    CHECK(m.wait_fences(m.device, 1, &event, VK_TRUE, 30 * kMs) == VK_TIMEOUT);
     m.destroy_fence(m.device, event, nullptr);
-    CHECK(g_driver.count_on("vkDestroyFence", handle_value(event)) == 1); // the real fence goes down
+    CHECK(g_driver.count_on("vkDestroyFence", handle_value(event)) == 1);
     CHECK(g_driver.count_on("vkWaitForFences", handle_value(event)) == 0);
     CHECK(g_driver.count_on("vkGetFenceStatus", handle_value(event)) == 0);
     CHECK(g_driver.count_on("vkResetFences", handle_value(event)) == 0);
 
-    // A list mixing an event and an ordinary fence: split, the ordinary one down alone, "wait all" and "wait any".
     VkFenceCreateInfo fci{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     VkFence ordinary = VK_NULL_HANDLE;
     REQUIRE(m.create_fence(m.device, &fci, nullptr, &ordinary) == VK_SUCCESS);
     REQUIRE(m.register_event(m.device, m.display, &ei, nullptr, &event) == VK_SUCCESS);
     const VkFence mixed[] = {event, ordinary};
-    CHECK(m.wait_fences(m.device, 2, mixed, VK_FALSE, 1'000'000'000) == VK_SUCCESS); // the ordinary one is signalled
-    CHECK(m.wait_fences(m.device, 2, mixed, VK_TRUE, 1'000'000'000) == VK_SUCCESS);  // and the event at its refresh
+    CHECK(m.wait_fences(m.device, 2, mixed, VK_FALSE, 1'000'000'000) == VK_SUCCESS);
+    CHECK(m.wait_fences(m.device, 2, mixed, VK_TRUE, 1'000'000'000) == VK_SUCCESS);
     CHECK(m.fence_status(m.device, event) == VK_SUCCESS);
     CHECK(g_driver.count_on("vkWaitForFences", handle_value(event)) == 0);
     CHECK(g_driver.count_on("vkWaitForFences", handle_value(ordinary)) >= 2);
@@ -741,14 +688,13 @@ TEST_CASE("display_event_fences_are_answered_by_the_layer")
     m.destroy_fence(m.device, event, nullptr);
     m.destroy_fence(m.device, ordinary, nullptr);
 
-    // The counter and the other display-control commands.
     const auto counter = m.fn<PFN_vkGetSwapchainCounterEXT>("vkGetSwapchainCounterEXT");
     uint64_t first = 0;
     uint64_t later = 0;
     REQUIRE(counter(m.device, swapchain, VK_SURFACE_COUNTER_VBLANK_BIT_EXT, &first) == VK_SUCCESS);
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
     REQUIRE(counter(m.device, swapchain, VK_SURFACE_COUNTER_VBLANK_BIT_EXT, &later) == VK_SUCCESS);
-    CHECK(later > first); // the flip count runs while the display thread does
+    CHECK(later > first);
     const auto power = m.fn<PFN_vkDisplayPowerControlEXT>("vkDisplayPowerControlEXT");
     VkDisplayPowerInfoEXT on{VK_STRUCTURE_TYPE_DISPLAY_POWER_INFO_EXT};
     on.powerState = VK_DISPLAY_POWER_STATE_ON_EXT;
@@ -769,8 +715,6 @@ TEST_CASE("display_event_fences_are_answered_by_the_layer")
 
 TEST_CASE("acquire_with_a_finite_timeout")
 {
-    // Three back-buffers, nothing on screen yet: three acquires succeed; a fourth (more than Vulkan allows with an
-    // infinite timeout) gives VK_NOT_READY for 0 and VK_TIMEOUT for a finite timeout, after it.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     std::set<uint32_t> indices;
@@ -786,7 +730,6 @@ TEST_CASE("acquire_with_a_finite_timeout")
     CHECK(m.acquire(m.device, swapchain, 40 * kMs, kAcquireSemaphore, VK_NULL_HANDLE, &index) == VK_TIMEOUT);
     CHECK(std::chrono::steady_clock::now() - start >= std::chrono::milliseconds(39));
 
-    // vkAcquireNextImage2KHR, and an acquire fence signalled on the private queue.
     for (uint32_t i : {0u, 1u}) {
         REQUIRE(m.present_one(swapchain, i, i + 1) == VK_SUCCESS);
     }
@@ -812,14 +755,12 @@ TEST_CASE("acquire_with_a_finite_timeout")
 TEST_CASE("swapchain_refusals_are_design_6_10s_exceptions")
 {
     Monado m;
-    // An SRGB swapchain with storage usage cannot be made on this driver.
     VkSwapchainCreateInfoKHR srgb = m.swapchain_info();
     srgb.imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
     srgb.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT;
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     CHECK(m.create_swapchain(m.device, &srgb, nullptr, &swapchain) == VK_ERROR_INITIALIZATION_FAILED);
 
-    // A device on another GPU (not the display's) gets none.
     dvl_test::MonadoQueue monado;
     VkDevice other = VK_NULL_HANDLE;
     REQUIRE(m.rig.create_device(1, {monado.info}, {"VK_KHR_swapchain"}, &other) == VK_SUCCESS);
@@ -827,15 +768,12 @@ TEST_CASE("swapchain_refusals_are_design_6_10s_exceptions")
     CHECK(m.rig.device_fn<PFN_vkCreateSwapchainKHR>(other, "vkCreateSwapchainKHR")(other, &ci, nullptr, &swapchain) ==
           VK_ERROR_INITIALIZATION_FAILED);
 
-    // A second device of the display's GPU, made after the display query: its trial import runs now and passes, but
-    // while the first device has a swapchain it gets none.
     VkDevice second = VK_NULL_HANDLE;
     REQUIRE(m.rig.create_device(0, {monado.info}, {"VK_KHR_swapchain"}, &second) == VK_SUCCESS);
     const VkSwapchainKHR first = m.make_swapchain();
     const auto create_on_second = m.rig.device_fn<PFN_vkCreateSwapchainKHR>(second, "vkCreateSwapchainKHR");
     CHECK(create_on_second(second, &ci, nullptr, &swapchain) == VK_ERROR_INITIALIZATION_FAILED);
 
-    // Once the first device's swapchain is gone, the second device can present (its frames, its fences).
     m.frame(first, 1);
     m.destroy_swapchain(m.device, first, nullptr);
     REQUIRE(create_on_second(second, &ci, nullptr, &swapchain) == VK_SUCCESS);
@@ -867,7 +805,6 @@ TEST_CASE("misc_commands_on_our_handles")
     const VkSwapchainKHR swapchain = m.make_swapchain();
     g_driver.clear_calls();
 
-    // Debug names: accepted for ours, not passed down; others go down.
     const auto name = m.fn<PFN_vkSetDebugUtilsObjectNameEXT>("vkSetDebugUtilsObjectNameEXT");
     VkDebugUtilsObjectNameInfoEXT ni{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     ni.pObjectName = "headset";
@@ -880,11 +817,10 @@ TEST_CASE("misc_commands_on_our_handles")
     }
     CHECK(g_driver.count("vkSetDebugUtilsObjectNameEXT") == 0);
     ni.objectType = VK_OBJECT_TYPE_IMAGE;
-    ni.objectHandle = handle_value(m.images(swapchain)[0]); // the images are the driver's
+    ni.objectHandle = handle_value(m.images(swapchain)[0]);
     CHECK(name(m.device, &ni) == VK_SUCCESS);
     CHECK(g_driver.count("vkSetDebugUtilsObjectNameEXT") == 1);
 
-    // Private data: kept by the layer for ours, the driver's for the rest.
     const auto set = m.fn<PFN_vkSetPrivateData>("vkSetPrivateData");
     const auto get = m.fn<PFN_vkGetPrivateData>("vkGetPrivateData");
     const VkPrivateDataSlot slot = fake_handle<VkPrivateDataSlot>(0x5107);
@@ -900,7 +836,6 @@ TEST_CASE("misc_commands_on_our_handles")
     CHECK(value == 77);
     CHECK(g_driver.count("vkGetPrivateData") == 1);
 
-    // An image made for our swapchain is refused; an ordinary image goes down.
     VkImageSwapchainCreateInfoKHR for_swapchain{VK_STRUCTURE_TYPE_IMAGE_SWAPCHAIN_CREATE_INFO_KHR};
     for_swapchain.swapchain = swapchain;
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -923,7 +858,6 @@ TEST_CASE("misc_commands_on_our_handles")
     CHECK(g_driver.images_made.size() == images + 1);
     destroy_image(m.device, image, nullptr);
 
-    // GOOGLE display timing, shared swapchains, the status, HDR metadata, full-screen exclusive.
     VkRefreshCycleDurationGOOGLE refresh{};
     CHECK(m.fn<PFN_vkGetRefreshCycleDurationGOOGLE>("vkGetRefreshCycleDurationGOOGLE")(m.device, swapchain,
                                                                                          &refresh) == VK_SUCCESS);
@@ -943,7 +877,6 @@ TEST_CASE("misc_commands_on_our_handles")
     CHECK(m.fn<PFN_vkAcquireFullScreenExclusiveModeEXT>("vkAcquireFullScreenExclusiveModeEXT")(m.device, swapchain) ==
           VK_SUCCESS);
 
-    // vkReleaseSwapchainImagesEXT: an acquired image goes back, so all three can be acquired again.
     uint32_t a = 0;
     uint32_t b = 0;
     uint32_t c = 0;
@@ -958,7 +891,6 @@ TEST_CASE("misc_commands_on_our_handles")
     uint32_t again = UINT32_MAX;
     CHECK(m.acquire(m.device, swapchain, 0, kAcquireSemaphore, VK_NULL_HANDLE, &again) == VK_SUCCESS);
     CHECK(again == b);
-    // Its KHR name (VK_KHR_swapchain_maintenance1) does the same.
     VkReleaseSwapchainImagesInfoKHR release_khr{VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_KHR};
     release_khr.swapchain = swapchain;
     release_khr.imageIndexCount = 1;
@@ -969,7 +901,6 @@ TEST_CASE("misc_commands_on_our_handles")
     CHECK(once_more == again);
     CHECK(g_driver.count("vkReleaseSwapchainImagesKHR") == 0);
 
-    // None of it reached the driver with our handles.
     for (const std::string& n : {std::string("vkCreateSwapchainKHR"), std::string("vkQueuePresentKHR"),
                                  std::string("vkDestroySwapchainKHR")}) {
         CHECK(g_driver.count(n) == 0);
@@ -978,31 +909,22 @@ TEST_CASE("misc_commands_on_our_handles")
     m.destroy_device();
 }
 
-// --- Task H: the paths a bug would skew the measurements on, or hang Monado on ----------------------------------
-
 TEST_CASE("a_display_event_wait_leaves_pending_lines_for_later")
 {
-    // Monado's vblank thread stamps the vblank when vkWaitForFences returns, so the wait must not write the log's
-    // pending lines (file, console, debugger) on its way out. They are written later: by the next
-    // intercept that is not a wait, or by the display thread before one of its own waits.
     Monado m;
     LogCapture log(m.rig);
     REQUIRE(log.ready());
     const DWORD self = GetCurrentThreadId();
 
-    // No swapchain, so no display thread: nothing else writes the line, and nothing sets the event.
     VkFence event = m.display_event();
     REQUIRE(m.rig.add_pending_line("pending line 0") == 1);
     CHECK(m.wait_fences(m.device, 1, &event, VK_TRUE, 20 * kMs) == VK_TIMEOUT);
     CHECK(log.count("pending line 0") == 0);
-    CHECK(m.fence_status(m.device, event) == VK_NOT_READY); // a look at the event is a wait too
+    CHECK(m.fence_status(m.device, event) == VK_NOT_READY);
     CHECK(log.count("pending line 0") == 0);
-    m.destroy_fence(m.device, event, nullptr); // not a wait: it writes the line
+    m.destroy_fence(m.device, event, nullptr);
     CHECK(log.count("pending line 0", self) == 1);
 
-    // The display thread runs: each event is set at the next refresh, and its wait returns without writing the line
-    // left pending before it. By the time the fence is destroyed the line has been written, once, by whichever came
-    // first.
     const VkSwapchainKHR swapchain = m.make_swapchain();
     for (int pass = 1; pass <= 20; ++pass) {
         const std::string line = "pending line " + std::to_string(pass) + ".";
@@ -1014,7 +936,6 @@ TEST_CASE("a_display_event_wait_leaves_pending_lines_for_later")
         CHECK(log.count(line) == 1);
     }
 
-    // The render loop's present-wait is a wait for a refresh too; the acquire and the present are not.
     REQUIRE(m.rig.add_pending_line("pending line before acquire") == 1);
     uint32_t index = UINT32_MAX;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &index) == VK_SUCCESS);
@@ -1033,18 +954,12 @@ TEST_CASE("a_display_event_wait_leaves_pending_lines_for_later")
 
 TEST_CASE("the_fence_fallback_line_is_written_at_most_once_a_second")
 {
-    // With every frame fence left over and unsignalled (the fake GPU holds them), a present waits a frame period on
-    // the oldest, then falls back to vkQueueWaitIdle. Monado presents at 90 Hz holding its
-    // queue lock, so that line comes at most once a second; the warnings' once-per-app-session line
-    // stays.
     Monado m;
     LogCapture log(m.rig);
     REQUIRE(log.ready());
     const VkSwapchainKHR swapchain = m.make_swapchain();
     g_driver.hold_fences = true;
     const auto fallbacks = [&] { return g_driver.count_on("vkQueueWaitIdle", handle_value(m.queue)); };
-    // Presents of an image that is not acquired: nothing to show, so each frame fence is left over at once. One in
-    // seventeen finds none of the sixteen free.
     uint64_t id = 0;
     const auto present_until = [&](size_t more) {
         const size_t target = fallbacks() + more;
@@ -1057,15 +972,14 @@ TEST_CASE("the_fence_fallback_line_is_written_at_most_once_a_second")
 
     const Clock::time_point start = Clock::now();
     present_until(4);
-    REQUIRE(Clock::now() - start < 900ms); // four fallbacks within a second...
-    CHECK(log.count(line) == 1);           // ...one line
+    REQUIRE(Clock::now() - start < 900ms);
+    CHECK(log.count(line) == 1);
 
     std::this_thread::sleep_for(1100ms);
     present_until(1);
-    CHECK(log.count(line) == 2); // a second later, the next one is written
+    CHECK(log.count(line) == 2);
     present_until(2);
     CHECK(log.count(line) == 2);
-    // The warnings' line, once per app session (the pause above started a new one).
     CHECK(log.count("no frame fence was free for a present") >= 1);
 
     g_driver.hold_fences = false;
@@ -1077,9 +991,6 @@ TEST_CASE("the_fence_fallback_line_is_written_at_most_once_a_second")
 
 TEST_CASE("a_present_whose_submit_fails_releases_its_image_for_a_later_acquire")
 {
-    // After a failed vkQueuePresentKHR Monado acquires again and never presents that image. Its frame
-    // is released, as a failed acquire's is, so the image comes back to a later acquire instead of
-    // staying acquired for good. Here all three are acquired, so only the released one can come back.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     std::vector<uint32_t> held;
@@ -1096,7 +1007,6 @@ TEST_CASE("a_present_whose_submit_fails_releases_its_image_for_a_later_acquire")
     CHECK(m.acquire(m.device, swapchain, 100 * kMs, kAcquireSemaphore, VK_NULL_HANDLE, &again) == VK_SUCCESS);
     CHECK(again == held[0]);
 
-    // Monado's loop goes on with every image.
     REQUIRE(m.present_one(swapchain, held[0], 2) == VK_SUCCESS);
     REQUIRE(m.present_one(swapchain, held[1], 3) == VK_SUCCESS);
     REQUIRE(m.present_one(swapchain, held[2], 4) == VK_SUCCESS);
@@ -1110,19 +1020,16 @@ TEST_CASE("a_present_whose_submit_fails_releases_its_image_for_a_later_acquire")
 
 TEST_CASE("a_present_whose_fallback_queue_wait_fails_releases_its_image_too")
 {
-    // The other error return of vkQueuePresentKHR: no frame fence was free (the fake GPU holds every one), the present
-    // falls back to vkQueueWaitIdle, and that fails.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     g_driver.hold_fences = true;
     uint32_t first = UINT32_MAX;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &first) == VK_SUCCESS);
-    // Presents of an image that is not acquired: nothing to show, and each leaves its fence over, unsignalled.
     const uint32_t other = (first + 1) % 3;
     for (uint64_t id = 1; id <= nvdm::kFencePoolCap; ++id) {
         REQUIRE(m.present_one(swapchain, other, id) == VK_SUCCESS);
     }
-    REQUIRE(g_driver.count_on("vkQueueWaitIdle", handle_value(m.queue)) == 0); // no fallback yet
+    REQUIRE(g_driver.count_on("vkQueueWaitIdle", handle_value(m.queue)) == 0);
     std::vector<uint32_t> held{first};
     for (int i = 0; i < 2; ++i) {
         uint32_t index = UINT32_MAX;
@@ -1133,7 +1040,7 @@ TEST_CASE("a_present_whose_fallback_queue_wait_fails_releases_its_image_too")
 
     g_driver.fail_next_call("vkQueueWaitIdle", VK_ERROR_DEVICE_LOST);
     CHECK(m.present_one(swapchain, first, 100) == VK_ERROR_DEVICE_LOST);
-    CHECK(g_driver.count_on("vkQueueWaitIdle", handle_value(m.queue)) == 1); // it was the fallback that failed
+    CHECK(g_driver.count_on("vkQueueWaitIdle", handle_value(m.queue)) == 1);
     uint32_t again = UINT32_MAX;
     CHECK(m.acquire(m.device, swapchain, 100 * kMs, kAcquireSemaphore, VK_NULL_HANDLE, &again) == VK_SUCCESS);
     CHECK(again == first);
@@ -1147,9 +1054,6 @@ TEST_CASE("a_present_whose_fallback_queue_wait_fails_releases_its_image_too")
 
 TEST_CASE("latency_sleep_signals_its_semaphore_only_through_the_khr_command")
 {
-    // vkLatencySleepNV on the layer's swapchain does not sleep; it signals the application's semaphore from the host at
-    // once, with vkSignalSemaphoreKHR (VK_KHR_timeline_semaphore). Never the core 1.2 vkSignalSemaphore (Monado's
-    // instance is API 1.0, constraints): without the KHR command nothing is signalled, and one line says so.
     Monado m;
     LogCapture log(m.rig);
     REQUIRE(log.ready());
@@ -1164,7 +1068,6 @@ TEST_CASE("latency_sleep_signals_its_semaphore_only_through_the_khr_command")
     CHECK(g_driver.count("vkSignalSemaphore") == 0);
     CHECK(g_driver.count("vkLatencySleepNV") == 0);
 
-    // A device whose driver has no vkSignalSemaphoreKHR (VK_KHR_timeline_semaphore not enabled).
     g_driver.offer_signal_semaphore_khr = false;
     dvl_test::MonadoQueue queue;
     VkDevice other = VK_NULL_HANDLE;
@@ -1177,7 +1080,7 @@ TEST_CASE("latency_sleep_signals_its_semaphore_only_through_the_khr_command")
     CHECK(g_driver.count("vkSignalSemaphore") == 0);
     CHECK(g_driver.count("vkSignalSemaphoreKHR") == 0);
     CHECK(g_driver.count("vkLatencySleepNV") == 0);
-    CHECK(log.count("vkLatencySleepNV:") == 1); // once
+    CHECK(log.count("vkLatencySleepNV:") == 1);
 
     m.rig.destroy_device(other);
     m.destroy_swapchain(m.device, swapchain, nullptr);
@@ -1186,14 +1089,9 @@ TEST_CASE("latency_sleep_signals_its_semaphore_only_through_the_khr_command")
 
 TEST_CASE("a_stopped_display_never_hangs_monado")
 {
-    // The FakeApi's counter stops (the headset unplugged). Monado's frames, as it runs them: the first is Presented and
-    // never credited, the next two queue behind it, each present-wait ends at its own timeout. The fourth acquire
-    // (UINT64_MAX) finds no free back-buffer and still returns past the bound with the back-buffer of a queued frame,
-    // never the presented one. The vblank thread's display-event wait ends at its own timeout with the event not set
-    //.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
-    std::this_thread::sleep_for(30ms); // the display thread sees the counter run first
+    std::this_thread::sleep_for(30ms);
     m.rig.api.stop_counter();
     const Clock::time_point stopped = Clock::now();
     const size_t presents = m.rig.api.count("present");
@@ -1211,12 +1109,12 @@ TEST_CASE("a_stopped_display_never_hangs_monado")
         indices.push_back(index);
     }
     CHECK(std::set<uint32_t>(indices.begin(), indices.end()).size() == 3);
-    CHECK(m.rig.api.count("present") == presents + 1); // one outstanding Present, never credited
+    CHECK(m.rig.api.count("present") == presents + 1);
 
     uint32_t index = UINT32_MAX;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &index) == VK_SUCCESS);
     const Clock::duration acquired_after = Clock::now() - stopped;
-    CHECK(acquired_after >= 550ms); // the bound (or flips seen stopped, which drops the queued frames)
+    CHECK(acquired_after >= 550ms);
     CHECK(acquired_after < 1500ms);
     CHECK((index == indices[1] || index == indices[2]));
 
@@ -1236,9 +1134,6 @@ TEST_CASE("a_stopped_display_never_hangs_monado")
 
 TEST_CASE("a_late_frame_fence_holds_back_its_present_until_it_signals")
 {
-    // A frame whose GPU work ends late (the fake GPU holds its fence) in the middle of Monado's loop: the display
-    // thread makes no NVAPI Present for it while its fence is unsignalled, Presents it once the fence signals, and the
-    // present ids still complete in order.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     std::vector<uint64_t> acquired_tags;
@@ -1251,7 +1146,7 @@ TEST_CASE("a_late_frame_fence_holds_back_its_present_until_it_signals")
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &index) == VK_SUCCESS);
     REQUIRE(m.present_one(swapchain, index, 6) == VK_SUCCESS);
     const size_t presents = m.rig.api.count("present");
-    std::this_thread::sleep_for(60ms); // five refreshes
+    std::this_thread::sleep_for(60ms);
     CHECK(m.rig.api.count("present") == presents);
     CHECK(m.wait_for_present(m.device, swapchain, 5, 0) == VK_SUCCESS);
     CHECK(m.wait_for_present(m.device, swapchain, 6, 0) == VK_TIMEOUT);
@@ -1263,7 +1158,7 @@ TEST_CASE("a_late_frame_fence_holds_back_its_present_until_it_signals")
     for (uint64_t id = 7; id <= 10; ++id) {
         acquired_tags.push_back(0x100 + m.frame(swapchain, id));
     }
-    CHECK(present_tags(m.rig.api) == acquired_tags); // each frame its own Present, in order
+    CHECK(present_tags(m.rig.api) == acquired_tags);
 
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
@@ -1272,12 +1167,9 @@ TEST_CASE("a_late_frame_fence_holds_back_its_present_until_it_signals")
 
 TEST_CASE("destroy_device_while_a_display_event_wait_is_in_progress")
 {
-    // Monado joins its vblank thread before teardown; if a wait on a display event were still in progress when its
-    // device is destroyed, the wait ends at its own deadline (the event is forgotten, never set) and touches nothing of
-    // the destroyed device.
     Monado m;
     const VkDevice device = m.device;
-    const VkFence event = m.display_event(); // no swapchain: no display thread, so nothing sets it
+    const VkFence event = m.display_event();
     VkResult result = VK_RESULT_MAX_ENUM;
     Clock::duration waited{};
     std::thread vblank([&] {
@@ -1295,7 +1187,7 @@ TEST_CASE("destroy_device_while_a_display_event_wait_is_in_progress")
     CHECK(waited < 800ms);
     const std::vector<std::string> calls = g_driver.names();
     REQUIRE_FALSE(calls.empty());
-    CHECK(calls.back() == "vkDestroyDevice"); // nothing reached the driver after it
+    CHECK(calls.back() == "vkDestroyDevice");
     CHECK(g_driver.count_on("vkWaitForFences", handle_value(event)) == 0);
     CHECK(g_driver.count_on("vkGetFenceStatus", handle_value(event)) == 0);
     CHECK(g_driver.bad_fence_uses == 0);
@@ -1303,8 +1195,6 @@ TEST_CASE("destroy_device_while_a_display_event_wait_is_in_progress")
 
 TEST_CASE("the_trace_is_appended_each_time_the_display_thread_stops")
 {
-    // MIRADOR_DIRECT_MODE_TRACE=<folder>: nothing is written while the thread runs; the last swapchain's destruction
-    // writes what it recorded, a later stop adds only what came after (one header, the old lines as they were).
     TraceDir dir;
     const dvl_test::ScopedEnv trace_on(L"MIRADOR_DIRECT_MODE_TRACE", dir.folder().c_str());
     Monado m;
@@ -1337,8 +1227,6 @@ TEST_CASE("the_trace_is_appended_each_time_the_display_thread_stops")
 
 TEST_CASE("ctrl_c_writes_the_trace_before_the_default_handler_ends_the_process")
 {
-    // The console control handler runs the stop hook on a helper thread and gives it 100 ms; the process ends right
-    // after. The hook stops the display thread and writes the trace in that time, the swapchain still alive.
     TraceDir dir;
     const dvl_test::ScopedEnv trace_on(L"MIRADOR_DIRECT_MODE_TRACE", dir.folder().c_str());
     Monado m;
@@ -1348,8 +1236,7 @@ TEST_CASE("ctrl_c_writes_the_trace_before_the_default_handler_ends_the_process")
     }
     CHECK_FALSE(std::filesystem::exists(dir.file()));
 
-    REQUIRE(m.rig.console(CTRL_C_EVENT) == 0); // FALSE: the default handler would end the process
-    // The handler may return before the hook is done (a loaded machine): the helper thread goes on.
+    REQUIRE(m.rig.console(CTRL_C_EVENT) == 0);
     for (int i = 0; i < 300 && records_of_kind(dir.lines(), nvdm::TraceKind::PresentReturn) < 10; ++i) {
         std::this_thread::sleep_for(10ms);
     }
@@ -1358,7 +1245,7 @@ TEST_CASE("ctrl_c_writes_the_trace_before_the_default_handler_ends_the_process")
     CHECK(lines[0] == "t_ns,kind,a,b");
     CHECK(records_of_kind(lines, nvdm::TraceKind::Acquire) == 10);
     CHECK(records_of_kind(lines, nvdm::TraceKind::PresentReturn) == 10);
-    CHECK(stats_reads_during(m.rig.api, 80) == 0); // and the thread is stopped
+    CHECK(stats_reads_during(m.rig.api, 80) == 0);
 
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
@@ -1366,9 +1253,6 @@ TEST_CASE("ctrl_c_writes_the_trace_before_the_default_handler_ends_the_process")
 
 TEST_CASE("ctrl_c_with_a_full_trace_writes_only_the_newest_65536_records_and_says_how_many_it_left_out")
 {
-    // The hook has 100 ms and a full array (2^20 records) takes ~160 ms to write, so the hook writes the newest 2^16
-    // only (kConsoleHookTraceRecords in layer/swapchain.cpp), and the log says how many older ones stay out. That the
-    // ones written are the newest is pinned on Trace itself (test_trace.cpp, "a bound writes the newest records").
     constexpr size_t kHeld = size_t{1} << 20;
     constexpr size_t kHookRecords = size_t{1} << 16;
     TraceDir dir;
@@ -1376,11 +1260,10 @@ TEST_CASE("ctrl_c_with_a_full_trace_writes_only_the_newest_65536_records_and_say
     Monado m;
     LogCapture log(m.rig);
     const VkSwapchainKHR swapchain = m.make_swapchain();
-    REQUIRE(m.rig.fill_trace() == 1); // the array holds kHeld records; later ones are dropped
+    REQUIRE(m.rig.fill_trace() == 1);
     CHECK_FALSE(std::filesystem::exists(dir.file()));
 
-    REQUIRE(m.rig.console(CTRL_C_EVENT) == 0); // FALSE: the default handler would end the process
-    // The handler may return before the hook is done (it waits 100 ms for it): the helper thread goes on.
+    REQUIRE(m.rig.console(CTRL_C_EVENT) == 0);
     for (int i = 0; i < 300 && log.count("records written to") == 0; ++i) {
         std::this_thread::sleep_for(10ms);
     }
@@ -1388,20 +1271,18 @@ TEST_CASE("ctrl_c_with_a_full_trace_writes_only_the_newest_65536_records_and_say
     const std::vector<std::string> lines = dir.lines();
     REQUIRE_FALSE(lines.empty());
     CHECK(lines[0] == "t_ns,kind,a,b");
-    CHECK(lines.size() == kHookRecords + 1); // the header and exactly 65536 records
+    CHECK(lines.size() == kHookRecords + 1);
     CHECK(log.count("trace: " + std::to_string(kHookRecords) + " records written to") == 1);
     CHECK(log.count("trace: " + std::to_string(kHeld - kHookRecords) + " older records not written yet are left out") ==
           1);
 
     m.destroy_swapchain(m.device, swapchain, nullptr);
-    CHECK(dir.lines().size() == kHookRecords + 1); // the left-out records stay out: the stop has nothing more to write
+    CHECK(dir.lines().size() == kHookRecords + 1);
     m.destroy_device();
 }
 
 TEST_CASE("a_full_trace_says_so_once_and_the_file_gets_what_it_holds")
 {
-    // The array of records fills up: one Info line names the file and says later records are dropped, however many are
-    // dropped after it; the stop writes what the array holds.
     TraceDir dir;
     const dvl_test::ScopedEnv trace_on(L"MIRADOR_DIRECT_MODE_TRACE", dir.folder().c_str());
     Monado m;
@@ -1409,7 +1290,7 @@ TEST_CASE("a_full_trace_says_so_once_and_the_file_gets_what_it_holds")
     const VkSwapchainKHR swapchain = m.make_swapchain();
     REQUIRE(m.rig.fill_trace() == 1);
     for (uint64_t id = 1; id <= 3; ++id) {
-        m.frame(swapchain, id); // the intercepts write the pending lines; their records are dropped
+        m.frame(swapchain, id);
     }
     CHECK(log.count("records is full; later records are dropped") == 1);
     CHECK(log.count(dir.file().filename().string() + " gets the ones held") == 1);
@@ -1425,15 +1306,12 @@ TEST_CASE("a_full_trace_says_so_once_and_the_file_gets_what_it_holds")
     m.destroy_device();
 }
 
-// --- Present timing ---------------------------------------------------------------------------------
-
 namespace {
 
 constexpr VkPresentStageFlagsEXT kTimedStages = VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT |
                                                 VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
                                                 VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
 
-// The swapchain Monado makes with VK_EXT_present_timing, present id 2 and present wait 2.
 VkSwapchainKHR make_timed_swapchain(Monado& m)
 {
     VkSwapchainCreateInfoKHR ci = m.swapchain_info();
@@ -1444,8 +1322,6 @@ VkSwapchainKHR make_timed_swapchain(Monado& m)
     return swapchain;
 }
 
-// A present with a present-id2 id and one timing info: the swapchain's QPC domain, `stages`, and a target time (0:
-// none) with its flags, read against the first pixel out as Monado asks.
 VkResult present_timed(Monado& m, VkSwapchainKHR swapchain, uint32_t index, uint64_t id,
                        VkPresentStageFlagsEXT stages = kTimedStages, uint64_t target = 0,
                        VkPresentTimingInfoFlagsEXT flags = 0)
@@ -1454,7 +1330,7 @@ VkResult present_timed(Monado& m, VkSwapchainKHR swapchain, uint32_t index, uint
     VkPresentTimingInfoEXT timing{VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT};
     timing.flags = flags;
     timing.targetTime = target;
-    timing.timeDomainId = 1; // the QPC domain (vkGetSwapchainTimeDomainPropertiesEXT)
+    timing.timeDomainId = 1;
     timing.presentStageQueries = stages;
     timing.targetTimeDomainPresentStage = VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
     VkPresentTimingsInfoEXT timings{VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, &ids, 1, &timing};
@@ -1477,7 +1353,6 @@ VkResult wait_for_present_2(Monado& m, VkSwapchainKHR swapchain, uint64_t id)
     return m.fn<PFN_vkWaitForPresent2KHR>("vkWaitForPresent2KHR")(m.device, swapchain, &info);
 }
 
-// vkGetPastPresentationTimingEXT with room for `n` results of four stages each.
 struct PastTimings {
     explicit PastTimings(size_t n)
         : results(n, VkPastPresentationTimingEXT{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_EXT}), stages(n)
@@ -1501,13 +1376,10 @@ struct PastTimings {
     VkPastPresentationTimingPropertiesEXT props{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_PROPERTIES_EXT};
 };
 
-} // namespace
+}
 
 TEST_CASE("present_timing_gives_each_frame_its_flip")
 {
-    // Monado's frame loop with present timing, as the feedback pacer runs it: present with an id2 and the three stages,
-    // wait for it with present-wait 2, read its results. Each frame's first pixel out is the FakeApi flip that put it on
-    // screen, after its queue operations ended and its Present started, and none of it reaches the driver.
     Monado m;
     const VkSwapchainKHR swapchain = make_timed_swapchain(m);
     REQUIRE(m.fn<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>("vkSetSwapchainPresentTimingQueueSizeEXT")(
@@ -1518,7 +1390,7 @@ TEST_CASE("present_timing_gives_each_frame_its_flip")
     REQUIRE(m.fn<PFN_vkGetSwapchainTimingPropertiesEXT>("vkGetSwapchainTimingPropertiesEXT")(
                 m.device, swapchain, &properties, &counter) == VK_SUCCESS);
     CHECK(properties.refreshDuration == static_cast<uint64_t>(kRefresh));
-    CHECK(properties.refreshInterval == static_cast<uint64_t>(kRefresh)); // a fixed refresh rate
+    CHECK(properties.refreshInterval == static_cast<uint64_t>(kRefresh));
     CHECK(counter == 1);
     VkSwapchainTimeDomainPropertiesEXT domains{VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT};
     REQUIRE(m.fn<PFN_vkGetSwapchainTimeDomainPropertiesEXT>("vkGetSwapchainTimeDomainPropertiesEXT")(
@@ -1535,7 +1407,6 @@ TEST_CASE("present_timing_gives_each_frame_its_flip")
         REQUIRE(wait_for_present_2(m, swapchain, id) == VK_SUCCESS);
         const int64_t waited = m.rig.clock.now_ns();
 
-        // Its id completed when it went on screen, so its results are complete.
         PastTimings past(2);
         REQUIRE(past.read(m, swapchain) == VK_SUCCESS);
         REQUIRE(past.props.presentationTimingCount == 1);
@@ -1554,12 +1425,11 @@ TEST_CASE("present_timing_gives_each_frame_its_flip")
         const uint64_t pixel_out = r.pPresentStages[2].time;
         CHECK(queue_end >= static_cast<uint64_t>(presented));
         CHECK(queue_end <= dequeued);
-        CHECK(dequeued < pixel_out);                      // a refresh after its Present returned
-        CHECK(pixel_out <= static_cast<uint64_t>(waited)); // the flip came before the wait returned
+        CHECK(dequeued < pixel_out);
+        CHECK(pixel_out <= static_cast<uint64_t>(waited));
         flips.push_back(pixel_out);
     }
 
-    // The first pixel out of every frame is a flip of the FakeApi's, which come every refresh period from its start.
     for (size_t i = 1; i < flips.size(); ++i) {
         INFO("frames " << i << " and " << i + 1);
         CHECK(flips[i] > flips[i - 1]);
@@ -1570,7 +1440,6 @@ TEST_CASE("present_timing_gives_each_frame_its_flip")
     CHECK(static_cast<uint64_t>(now.qpc_ns) >= flips.back());
     CHECK((static_cast<uint64_t>(now.qpc_ns) - flips.back()) % static_cast<uint64_t>(kRefresh) == 0);
 
-    // None of it reached the driver.
     for (const char* name : {"vkSetSwapchainPresentTimingQueueSizeEXT", "vkGetSwapchainTimingPropertiesEXT",
                              "vkGetSwapchainTimeDomainPropertiesEXT", "vkGetPastPresentationTimingEXT",
                              "vkWaitForPresent2KHR", "vkQueuePresentKHR", "vkCreateSwapchainKHR"}) {
@@ -1585,8 +1454,6 @@ namespace {
 
 constexpr VkPresentTimingInfoFlagsEXT kNearest = VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT;
 
-// The FakeApi's flips exactly: every kRefresh from its start, which is a little after clock 0 (flip_at_or_before()
-// is near enough for the tests above, not for naming a flip to the nanosecond).
 struct Flips {
     explicit Flips(Monado& m)
     {
@@ -1604,8 +1471,6 @@ struct Flips {
         const int64_t before = at_or_before(t);
         return before == t ? t : before + kRefresh;
     }
-    // Waits until 1-4 ms after a flip, so that a present made now makes the next flip with time to spare and a test
-    // can name the flip it goes out at.
     void early_in_a_period(Monado& m) const
     {
         for (;;) {
@@ -1621,8 +1486,6 @@ struct Flips {
     int64_t phase = 0;
 };
 
-// One frame of Monado's present-at-time pacer: acquire, present with `target` (0: none), wait for it; its first pixel
-// out (0 if it was never on screen). `presented`: when it was presented.
 uint64_t present_at(Monado& m, VkSwapchainKHR swapchain, uint64_t id, uint64_t target, VkPresentTimingInfoFlagsEXT flags,
                     int64_t* presented = nullptr)
 {
@@ -1638,20 +1501,16 @@ uint64_t present_at(Monado& m, VkSwapchainKHR swapchain, uint64_t id, uint64_t t
     REQUIRE(past.props.presentationTimingCount == 1);
     const VkPastPresentationTimingEXT& r = past.results[0];
     CHECK(r.presentId == id);
-    CHECK(r.targetTime == target); // echoed
+    CHECK(r.targetTime == target);
     CHECK(r.reportComplete == VK_TRUE);
     REQUIRE(r.presentStageCount == 3);
     return r.pPresentStages[2].time;
 }
 
-} // namespace
+}
 
 TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_after_it")
 {
-    // Design 6.11, present at a time, as Monado's pacer asks for it: an absolute QPC target, read against the first
-    // pixel out. An early frame is held for the flip at or after its target (within 1 ms; with NEAREST, the flip
-    // nearest it), never one flip later, whatever the target's phase; a frame whose target has passed, or that has
-    // none, goes at the first flip it can make. The first pixel out stays the real flip.
     dvl_test::ScopedEnv present_at_on(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", nullptr);
     Monado m;
     LogCapture log(m.rig);
@@ -1663,8 +1522,8 @@ TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_aft
 
     struct Case {
         const char* what;
-        int64_t ahead; // the target: this long after the present (0: no target)...
-        bool on_flip;  // ...or after the flip before the present
+        int64_t ahead;
+        bool on_flip;
         VkPresentTimingInfoFlagsEXT flags;
     };
     const Case cases[] = {
@@ -1685,7 +1544,6 @@ TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_aft
     for (const Case& c : cases) {
         INFO(c.what);
         ++id;
-        // The target is set just before the present, on the clock the flips run on.
         flips.early_in_a_period(m);
         const int64_t now = m.rig.clock.now_ns();
         const int64_t base = c.on_flip ? flips.at_or_before(now) : now;
@@ -1693,7 +1551,6 @@ TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_aft
         int64_t presented = 0;
         const uint64_t pixel_out = present_at(m, swapchain, id, target, c.flags, &presented);
         INFO("target " << target << ", presented " << presented << ", first pixel out " << pixel_out);
-        // The first flip it can make, and with a target not before it: never a flip early, never a flip late.
         int64_t expected = flips.at_or_before(presented) + kRefresh;
         if (c.ahead > 0) {
             const int64_t early = (c.flags & kNearest) != 0 ? kRefresh / 2 : 1'000'000;
@@ -1709,14 +1566,12 @@ TEST_CASE("present_at_a_target_time_shows_each_frame_at_the_first_flip_at_or_aft
 
 TEST_CASE("a_frame_behind_a_held_one_waits_for_it")
 {
-    // Presents are taken in order: an untargeted frame queued behind a held one is not shown before the held one's
-    // flip. At that flip the newest queued frame goes, as always, and the held one is retired unshown.
     dvl_test::ScopedEnv present_at_on(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", nullptr);
     Monado m;
     const VkSwapchainKHR swapchain = make_timed_swapchain(m);
     REQUIRE(m.fn<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>("vkSetSwapchainPresentTimingQueueSizeEXT")(
                 m.device, swapchain, 4) == VK_SUCCESS);
-    present_at(m, swapchain, 1, 0, 0); // one on screen
+    present_at(m, swapchain, 1, 0, 0);
     const Flips flips(m);
 
     uint32_t first = UINT32_MAX;
@@ -1734,17 +1589,15 @@ TEST_CASE("a_frame_behind_a_held_one_waits_for_it")
     REQUIRE(past.props.presentationTimingCount == 2);
     CHECK(past.results[0].presentId == 2);
     CHECK(past.results[0].reportComplete == VK_TRUE);
-    CHECK(past.results[0].pPresentStages[2].time == 0); // retired at the flip it was held for
+    CHECK(past.results[0].pPresentStages[2].time == 0);
     CHECK(past.results[1].presentId == 3);
-    CHECK(static_cast<int64_t>(past.results[1].pPresentStages[2].time) == target); // not before it
+    CHECK(static_cast<int64_t>(past.results[1].pPresentStages[2].time) == target);
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
 }
 
 TEST_CASE("present_at_a_time_switched_off_shows_targeted_frames_at_the_first_flip")
 {
-    // MIRADOR_DIRECT_MODE_NO_PRESENT_AT=1, read when the swapchain is made, for an A/B of the same build: a target is
-    // ignored (said once) and the timings go on as before. (The surface's caps: test_surface.cpp.)
     dvl_test::ScopedEnv present_at_off(L"MIRADOR_DIRECT_MODE_NO_PRESENT_AT", L"1");
     Monado m;
     LogCapture log(m.rig);
@@ -1759,9 +1612,9 @@ TEST_CASE("present_at_a_time_switched_off_shows_targeted_frames_at_the_first_fli
         const uint64_t target = static_cast<uint64_t>(m.rig.clock.now_ns() + 5 * kRefresh);
         int64_t presented = 0;
         const uint64_t pixel_out = present_at(m, swapchain, id, target, kNearest, &presented);
-        CHECK(static_cast<int64_t>(pixel_out) == flips.at_or_before(presented) + kRefresh); // not held
+        CHECK(static_cast<int64_t>(pixel_out) == flips.at_or_before(presented) + kRefresh);
     }
-    CHECK(log.count("present at a time is off") == 1); // said once
+    CHECK(log.count("present at a time is off") == 1);
     CHECK(log.count("each frame is held") == 0);
     m.destroy_swapchain(m.device, swapchain, nullptr);
     m.destroy_device();
@@ -1776,7 +1629,6 @@ TEST_CASE("a_full_present_timing_queue_fails_the_present_before_anything_is_subm
     uint32_t first = UINT32_MAX;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &first) == VK_SUCCESS);
 
-    // No size set yet: no slot. Nothing is submitted, and the image stays acquired for a present that works.
     const size_t submits = g_driver.submits_on(m.queue).size();
     CHECK(present_timed(m, swapchain, first, 1) == VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT);
     CHECK(g_driver.submits_on(m.queue).size() == submits);
@@ -1784,8 +1636,6 @@ TEST_CASE("a_full_present_timing_queue_fails_the_present_before_anything_is_subm
     REQUIRE(present_timed(m, swapchain, first, 1) == VK_SUCCESS);
     REQUIRE(wait_for_present_2(m, swapchain, 1) == VK_SUCCESS);
 
-    // Its results unread hold the one slot: the next timed present fails, the size cannot go below it, and a present
-    // that asks for no stages still goes.
     uint32_t second = UINT32_MAX;
     REQUIRE(m.acquire(m.device, swapchain, kForever, kAcquireSemaphore, VK_NULL_HANDLE, &second) == VK_SUCCESS);
     CHECK(present_timed(m, swapchain, second, 2) == VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT);
@@ -1793,7 +1643,6 @@ TEST_CASE("a_full_present_timing_queue_fails_the_present_before_anything_is_subm
     REQUIRE(present_timed(m, swapchain, second, 2, 0) == VK_SUCCESS);
     REQUIRE(wait_for_present_2(m, swapchain, 2) == VK_SUCCESS);
 
-    // Read: frame 1's results (frame 2 asked for none), and its slot is free again.
     PastTimings past(4);
     REQUIRE(past.read(m, swapchain) == VK_SUCCESS);
     REQUIRE(past.props.presentationTimingCount == 1);
@@ -1809,8 +1658,6 @@ TEST_CASE("a_full_present_timing_queue_fails_the_present_before_anything_is_subm
 
 TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qpc_reading")
 {
-    // A VkSwapchainCalibratedTimestampInfoEXT may name the layer's swapchain: the driver gets a QPC entry in place of
-    // its local domain and never the handle; the layer gives that reading in nanoseconds, the timeline of its results.
     Monado m;
     const VkSwapchainKHR swapchain = m.make_swapchain();
     const auto get = m.fn<PFN_vkGetCalibratedTimestampsKHR>("vkGetCalibratedTimestampsKHR");
@@ -1832,7 +1679,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
     uint64_t ts[2] = {};
     uint64_t deviation = 0;
 
-    // The device clock and a present stage of ours: the driver reads the device clock and QPC.
     VkCalibratedTimestampInfoKHR device_and_stage[2] = {info(VK_TIME_DOMAIN_DEVICE_KHR),
                                                         info(VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT, &ours)};
     REQUIRE(get(m.device, 2, device_and_stage, ts, &deviation) == VK_SUCCESS);
@@ -1845,7 +1691,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
     CHECK(ts[1] == qpc_ns);
     CHECK(deviation == dvl_test::fake::kFakeMaxDeviation);
 
-    // QPC asked for too, and our swapchain-local domain: one QPC reading serves both, in ticks and in nanoseconds.
     VkCalibratedTimestampInfoKHR qpc_and_local[2] = {info(VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR),
                                                      info(VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT, &ours)};
     REQUIRE(get(m.device, 2, qpc_and_local, ts, &deviation) == VK_SUCCESS);
@@ -1855,7 +1700,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
     CHECK(ts[0] == qpc_ticks);
     CHECK(ts[1] == qpc_ns);
 
-    // Our swapchain named with a domain that is not local: down without the struct.
     VkCalibratedTimestampInfoKHR qpc_naming_ours = info(VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR, &ours);
     REQUIRE(get(m.device, 1, &qpc_naming_ours, ts, &deviation) == VK_SUCCESS);
     REQUIRE(g_driver.calibrations.size() == 3);
@@ -1863,7 +1707,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
     CHECK_FALSE(g_driver.calibrations[2][0].chained);
     CHECK(ts[0] == qpc_ticks);
 
-    // The driver's own swapchain: unchanged.
     VkSwapchainCalibratedTimestampInfoEXT theirs = ours;
     theirs.swapchain = dvl_test::fake::driver_swapchain(0);
     VkCalibratedTimestampInfoKHR their_stage = info(VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT, &theirs);
@@ -1873,7 +1716,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
     CHECK(g_driver.calibrations[3][0].swapchain == handle_value(theirs.swapchain));
     CHECK(ts[0] == dvl_test::fake::fake_timestamp(VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT));
 
-    // The EXT name does the same.
     REQUIRE(m.fn<PFN_vkGetCalibratedTimestampsEXT>("vkGetCalibratedTimestampsEXT")(m.device, 2, device_and_stage, ts,
                                                                                    &deviation) == VK_SUCCESS);
     CHECK(g_driver.count("vkGetCalibratedTimestampsEXT") == 1);
@@ -1892,7 +1734,6 @@ TEST_CASE("calibrated_timestamps_answer_our_swapchains_local_domains_from_the_qp
 
 TEST_CASE("present_timing_commands_on_a_driver_swapchain_go_down")
 {
-    // Monado's peek window has a swapchain of the driver's: its present timing goes down unchanged.
     Monado m;
     const VkSwapchainKHR theirs = dvl_test::fake::driver_swapchain(0);
     const uint64_t handle = handle_value(theirs);
@@ -1903,7 +1744,7 @@ TEST_CASE("present_timing_commands_on_a_driver_swapchain_go_down")
     CHECK(m.fn<PFN_vkGetSwapchainTimingPropertiesEXT>("vkGetSwapchainTimingPropertiesEXT")(m.device, theirs,
                                                                                              &properties, &counter) ==
           VK_SUCCESS);
-    CHECK(properties.refreshDuration == 16'666'667); // the driver's answer
+    CHECK(properties.refreshDuration == 16'666'667);
     CHECK(counter == 7);
     VkSwapchainTimeDomainPropertiesEXT domains{VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT};
     domains.timeDomainCount = 9;

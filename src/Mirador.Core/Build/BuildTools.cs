@@ -3,70 +3,44 @@ using System.Text.RegularExpressions;
 
 namespace Mirador.Core.Build;
 
-/// <summary>Where the build tools are: Mirador's own copies when it has them, else what is on <c>PATH</c>.</summary>
-/// <param name="Recipe">Mirador's <c>build-monado.ps1</c> (<c>{app}\tools</c>).</param>
-/// <param name="ToolsDir">Mirador's own vcpkg, CMake, Ninja and Git (<see cref="AppPaths.ToolsDir"/>); used once it exists.</param>
-/// <param name="PowerShell">Windows PowerShell, which runs the recipe.</param>
 public sealed record BuildTools(string Recipe, string? ToolsDir, string PowerShell)
 {
-    /// <summary>The tools of an installed Mirador.</summary>
     public static BuildTools For(string appDir, AppPaths paths) => new(
         Path.Combine(appDir, "tools", "build-monado.ps1"),
         paths.ToolsDir,
         Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"));
 
-    /// <summary>
-    /// <see cref="ToolsDir"/> when it exists now: a build fills it while Mirador runs, and the next build uses it
-    /// without a restart.
-    /// </summary>
     public string? ExistingToolsDir => ToolsDir is { } dir && Directory.Exists(dir) ? dir : null;
 
-    /// <summary>Git: Mirador's copy, else the one on <c>PATH</c>.</summary>
     public string Git => ToolsDir is { } dir && File.Exists(Path.Combine(dir, "git", "cmd", "git.exe"))
         ? Path.Combine(dir, "git", "cmd", "git.exe")
         : "git";
 
-    /// <summary>ctest: beside Mirador's CMake, else the one on <c>PATH</c>.</summary>
     public string Ctest => ToolsDir is { } dir && File.Exists(Path.Combine(dir, "cmake", "bin", "ctest.exe"))
         ? Path.Combine(dir, "cmake", "bin", "ctest.exe")
         : "ctest";
 }
 
-/// <summary>The state of one build tool.</summary>
 public enum ToolState
 {
-    /// <summary>There and as builds need it.</summary>
     Found,
 
-    /// <summary>There, but not as builds need it: Mirador can fix it.</summary>
     Fixable,
 
-    /// <summary>Not there: Mirador can install it.</summary>
     Missing,
 }
 
-/// <summary>One part's state and what it means, in plain words.</summary>
 public sealed record ToolStatus(string Name, ToolState State, string Detail);
 
-/// <summary>A Visual Studio or Build Tools install, as vswhere lists it.</summary>
-/// <param name="Path">Its installation folder.</param>
-/// <param name="Name">Its display name ("Visual Studio Build Tools 2026").</param>
-/// <param name="Version">Its installation version (17 is 2022, 18 is 2026).</param>
-/// <param name="IsComplete">Whether its last install or update finished.</param>
-/// <param name="Packages">The ids of its components and packages.</param>
 public sealed record VsInstance(string Path, string Name, Version Version, bool IsComplete, IReadOnlySet<string> Packages);
 
-/// <summary>vswhere, Visual Studio's own finder: how Mirador lists the installs and their components.</summary>
 public static class VsWhere
 {
-    /// <summary>Where Visual Studio's installer keeps vswhere.</summary>
     public static string DefaultPath { get; } = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
 
-    /// <summary>Every install (Build Tools too), with its packages, as JSON. No prereleases: the recipe takes none.</summary>
     public static IReadOnlyList<string> Arguments { get; } = ["-all", "-products", "*", "-include", "packages", "-format", "json", "-utf8"];
 
-    /// <summary>The installs in vswhere's JSON; none for output that isn't its JSON.</summary>
     public static IReadOnlyList<VsInstance> Parse(string json)
     {
         try
@@ -111,7 +85,6 @@ public static class VsWhere
         }
     }
 
-    /// <summary>Runs vswhere at <paramref name="vswhere"/>; no installs when it isn't there or fails.</summary>
     public static async Task<IReadOnlyList<VsInstance>> FindAsync(ICommandRunner runner, string vswhere, CancellationToken ct)
     {
         if (!File.Exists(vswhere))
@@ -137,16 +110,13 @@ public static class VsWhere
         item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 }
 
-/// <summary>The Visual Studio components Monado's build needs, and those a new install gets.</summary>
 public static class VsComponents
 {
     public const string CppTools = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64";
     public const string Windows11Sdk = "Microsoft.VisualStudio.Component.Windows11SDK.26100";
 
-    /// <summary>What the check asks of the install the recipe uses: MSVC for x64 and the Windows 11 SDK 26100.</summary>
     public static IReadOnlyList<string> Required { get; } = [CppTools, Windows11Sdk];
 
-    /// <summary>What a new Build Tools install gets: exactly upstream's CI (<c>.gitlab-ci/windows/monado_deps_vs2022.ps1</c>).</summary>
     public static IReadOnlyList<string> Install { get; } =
     [
         "Microsoft.VisualStudio.Component.VC.CoreBuildTools",
@@ -157,7 +127,6 @@ public static class VsComponents
         CppTools,
     ];
 
-    /// <summary>A component in plain words.</summary>
     public static string Describe(string id) => id switch
     {
         CppTools => "the C++ x64 tools (MSVC)",
@@ -166,20 +135,10 @@ public static class VsComponents
     };
 }
 
-/// <summary>
-/// Visual Studio for Monado's build: the install the recipe enters (vswhere's newest with the C++ x64 tools, else the
-/// newest at all), what it lacks, and the one installer command that fixes it.
-/// </summary>
-/// <param name="State">Found, fixable (components to add) or missing (no Visual Studio 2022 or newer).</param>
-/// <param name="Install">The install checked; null when there is none.</param>
-/// <param name="Missing">The components to add; for a missing install, those a new one gets.</param>
-/// <param name="Detail">The state in plain words.</param>
 public sealed record VsPlan(ToolState State, VsInstance? Install, IReadOnlyList<string> Missing, string Detail)
 {
-    /// <summary>The part's name on the page.</summary>
     public const string Name = "Visual Studio C++ tools";
 
-    /// <summary>The plan for these installs.</summary>
     public static VsPlan For(IReadOnlyList<VsInstance> all)
     {
         var usable = all.Where(i => i.IsComplete && i.Version.Major >= 17).ToList();
@@ -200,16 +159,8 @@ public sealed record VsPlan(ToolState State, VsInstance? Install, IReadOnlyList<
                 $"{name}, without {string.Join(" and ", missing.Select(VsComponents.Describe))}: the next branch build adds {(missing.Count == 1 ? "it" : "them")} with Visual Studio's installer (one administrator prompt).");
     }
 
-    /// <summary>
-    /// The command that fixes this: Visual Studio's own installer (<c>setup.exe modify</c> in <paramref name="installerDir"/>)
-    /// adding what is missing, or Microsoft's bootstrapper (<paramref name="bootstrapper"/>) for a new install. Both
-    /// show their progress and wait until they are done.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Nothing is to be fixed.</exception>
     public CommandSpec Command(string installerDir, string bootstrapper)
     {
-        // --wait is the bootstrapper's alone (it would otherwise hand over to the installer and return); setup.exe is the
-        // installer itself and runs until it is done.
         var adds = Missing.SelectMany(c => new[] { "--add", c });
         return State switch
         {
@@ -220,22 +171,10 @@ public sealed record VsPlan(ToolState State, VsInstance? Install, IReadOnlyList<
     }
 }
 
-/// <summary>One of Mirador's small build tools: a zip from a GitHub release, checked by its SHA-256.</summary>
-/// <param name="Name">Its name ("CMake").</param>
-/// <param name="Folder">Its folder under <see cref="AppPaths.ToolsDir"/>, where the recipe looks (<c>cmake</c>).</param>
-/// <param name="Version">Its version.</param>
-/// <param name="Url">Its zip, an https URL on github.com.</param>
-/// <param name="Sha256">The zip's SHA-256 (lower-case hex), from GitHub's digest of the release file.</param>
-/// <param name="Exe">Its program inside the folder (<c>bin\cmake.exe</c>), which must be in the zip.</param>
 public sealed record ToolPin(string Name, string Folder, string Version, string Url, string Sha256, string Exe);
 
-/// <summary>
-/// The versions Mirador's builds use. Raising one is
-/// a code change, with the new release file's SHA-256 from GitHub.
-/// </summary>
 public static class ToolPins
 {
-    /// <summary>MinGit, the portable Git for Windows: cloning vcpkg and the branches.</summary>
     public static readonly ToolPin Git = new(
         "Git", "git", "2.56.0.4",
         "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/MinGit-2.56.0.4-64-bit.zip",
@@ -251,23 +190,15 @@ public static class ToolPins
         "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
         "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65", "ninja.exe");
 
-    /// <summary>Every pinned tool, Git first (vcpkg is cloned with it).</summary>
     public static IReadOnlyList<ToolPin> All { get; } = [Git, CMake, Ninja];
 }
 
-/// <summary>
-/// Checks Mirador's own build tools under <c>%LOCALAPPDATA%\Mirador\tools</c>: each pinned tool and vcpkg at the commit
-/// Mirador pins (<c>tools\vcpkg-commit.txt</c>). Reads files only; nothing is run.
-/// </summary>
 public sealed partial class BuildToolsCheck(string toolsDir, string vcpkgCommit)
 {
-    /// <summary>The file in a tool's folder that says which pinned download it came from.</summary>
     public const string MarkerFile = "mirador-tool.json";
 
-    /// <summary>Where vcpkg is cloned.</summary>
     public string VcpkgDir => Path.Combine(toolsDir, "vcpkg");
 
-    /// <summary>The state of <paramref name="pin"/>'s copy.</summary>
     public ToolStatus Tool(ToolPin pin)
     {
         var folder = Path.Combine(toolsDir, pin.Folder);
@@ -287,7 +218,6 @@ public sealed partial class BuildToolsCheck(string toolsDir, string vcpkgCommit)
             $"{marker?.Version ?? "An unknown version"}: the next branch build replaces it with {pin.Version}.");
     }
 
-    /// <summary>The state of Mirador's vcpkg clone.</summary>
     public ToolStatus Vcpkg()
     {
         if (!Commit().IsMatch(vcpkgCommit))
@@ -322,7 +252,6 @@ public sealed partial class BuildToolsCheck(string toolsDir, string vcpkgCommit)
         return new ToolStatus("vcpkg", ToolState.Fixable, $"At {at}: the next branch build moves it to commit {shortPin}.");
     }
 
-    /// <summary>The pinned vcpkg commit in <paramref name="file"/> (<c>{app}\tools\vcpkg-commit.txt</c>), or null.</summary>
     public static string? ReadPin(string file)
     {
         try

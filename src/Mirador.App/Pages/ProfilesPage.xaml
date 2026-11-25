@@ -7,10 +7,6 @@
     xmlns:vm="using:Mirador.App.ViewModels"
     NavigationCacheMode="Required">
 
-    <!--
-        The profile picked at the top (its drop-down ends with "Add a profile…"), its settings below, in the same centred
-        column as the other pages; Save and Revert under them in that column, always in view.
-    -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -141,10 +137,6 @@
                         <ToggleSwitch IsOn="{x:Bind ViewModel.RunAsAdministrator, Mode=TwoWay}" />
                     </StackPanel>
                 </toolkit:SettingsCard>
-                <!--
-                    The build with its log's newest line inside, opened only by its arrow; it closes when the build ends. The
-                    line keeps the card's width, cut short with an ellipsis.
-                -->
                 <toolkit:SettingsExpander
                     x:Name="BuildExpander"
                     Description="{x:Bind ViewModel.Build.Status, Mode=OneWay}"
@@ -195,7 +187,6 @@
                             Content="Browse…" />
                     </Grid>
                 </toolkit:SettingsCard>
-                <!-- Passed or failed with the date; each step and the run's log are on Diagnostics. -->
                 <toolkit:SettingsCard
                     Description="{x:Bind ViewModel.Verify.Status, Mode=OneWay}"
                     Header="Verify build for Windows"
@@ -303,7 +294,6 @@
                     </StackPanel>
                 </toolkit:SettingsCard>
 
-                <!-- What stops a save: it goes as soon as the profile is fixed. -->
                 <InfoBar
                     Margin="0,8,0,0"
                     IsClosable="False"

@@ -41,7 +41,6 @@ std::wstring from_utf8(std::string_view text)
 
 std::optional<std::string> env_get(const wchar_t* name)
 {
-    // The size can change between two calls (another thread sets the variable): loop until it fits.
     std::vector<wchar_t> buffer(256);
     for (;;) {
         SetLastError(ERROR_SUCCESS);
@@ -50,7 +49,7 @@ std::optional<std::string> env_get(const wchar_t* name)
             if (GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
                 return std::nullopt;
             }
-            return std::string(); // set, and empty
+            return std::string();
         }
         if (n < buffer.size()) {
             return to_utf8(std::wstring_view(buffer.data(), n));
@@ -59,4 +58,4 @@ std::optional<std::string> env_get(const wchar_t* name)
     }
 }
 
-} // namespace dvl
+}

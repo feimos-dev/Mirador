@@ -2,10 +2,6 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Mirador.Tests;
 
-/// <summary>
-/// The fake clock, telling the test when a timer has been set, so that it moves the clock only once the code under
-/// test waits on it (a timer set after the clock moved would be due later than the test means).
-/// </summary>
 internal sealed class TimerWatch(FakeTimeProvider clock) : TimeProvider
 {
     private readonly List<TimeSpan> created = [];
@@ -37,7 +33,6 @@ internal sealed class TimerWatch(FakeTimeProvider clock) : TimeProvider
         return timer;
     }
 
-    /// <summary>Completes once <paramref name="count"/> timers due after <paramref name="dueTime"/> have been set.</summary>
     public Task Set(TimeSpan dueTime, int count = 1)
     {
         lock (created)
@@ -53,7 +48,6 @@ internal sealed class TimerWatch(FakeTimeProvider clock) : TimeProvider
         }
     }
 
-    /// <summary>How many timers due after <paramref name="dueTime"/> have been set so far.</summary>
     public int Created(TimeSpan dueTime)
     {
         lock (created)

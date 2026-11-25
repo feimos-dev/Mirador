@@ -4,19 +4,6 @@ using Mirador.Core.OpenVr;
 
 namespace Mirador.App.Services;
 
-/// <summary>
-/// What a check for updates found.
-/// </summary>
-/// <param name="At">When it was made.</param>
-/// <param name="Reached">Whether GitHub answered for both repositories.</param>
-/// <param name="Mirador">This Mirador's version.</param>
-/// <param name="NewerMirador">Mirador's latest full release when it is newer; null otherwise (also when GitHub couldn't be asked).</param>
-/// <param name="OpenComposite">The OpenLamina in use: its release version (or commit); null when this build has none.</param>
-/// <param name="NewerOpenComposite">OpenLamina's latest full release when it is newer; null otherwise.</param>
-/// <param name="NewerMonado">
-/// Mirador's Monado's newest weekly build when it isn't the one installed; null otherwise, and when
-/// no profile runs Mirador's Monado.
-/// </param>
 public sealed record UpdateReport(
     DateTimeOffset At,
     bool Reached,
@@ -26,7 +13,6 @@ public sealed record UpdateReport(
     Release? NewerOpenComposite,
     string? NewerMonado = null)
 {
-    /// <summary>The report in words, for the "Updates" card.</summary>
     public string Describe()
     {
         if (!Reached)
@@ -56,40 +42,21 @@ public sealed record UpdateReport(
         return string.Join(' ', parts);
     }
 
-    /// <summary>A tag without its <c>v</c>.</summary>
     public static string Plain(string tag) => tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
 }
 
-/// <summary>
-/// The check for newer releases of Mirador and of OpenLamina: once a day at most at
-/// launch when it is on, and "Check now". It only asks and reports; Mirador installs nothing by itself.
-/// </summary>
 public sealed class Updates(AppHost host)
 {
-    /// <summary>The last report made in this run; null before the first.</summary>
     public UpdateReport? Last { get; private set; }
 
-    /// <summary>
-    /// Why the last check couldn't be written down in the settings (so that the daily check would ask again at the next
-    /// launch rather than in a day); null when it could.
-    /// </summary>
     public string? RecordProblem { get; private set; }
 
-    /// <summary>Raised, on whichever thread made the check, when <see cref="Last"/> changed.</summary>
     public event Action? Changed;
 
-    /// <summary>The OpenLamina installed for this user (the one place that says so).</summary>
     private OpenCompositeSource? Installed() => host.OpenComposite.Source;
 
-    /// <summary>Whether OpenLamina can be updated from the notice and the Updates card.</summary>
     public bool CanUpdateOpenComposite => true;
 
-    /// <summary>
-    /// The "Update" buttons and "Get OpenLamina": downloads <paramref name="release"/>'s installer, checks it against its signed checksums
-    /// (<see cref="Mirador.Core.OpenVr.SignedSums"/>) and runs it silently, then asks GitHub again.
-    /// </summary>
-    /// <returns>What happened, in words for the user.</returns>
-    /// <exception cref="MiradorException">Why nothing changed.</exception>
     public async Task<string> UpdateOpenCompositeAsync(Release release)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
@@ -105,11 +72,6 @@ public sealed class Updates(AppHost host)
         return message;
     }
 
-    /// <summary>
-    /// "Get OpenLamina": the fork's latest release, downloaded and checked like an update.
-    /// </summary>
-    /// <returns>What happened, in words for the user.</returns>
-    /// <exception cref="MiradorException">Why nothing changed.</exception>
     public async Task<string> GetOpenCompositeAsync()
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
@@ -124,10 +86,6 @@ public sealed class Updates(AppHost host)
             : await UpdateOpenCompositeAsync(latest);
     }
 
-    /// <summary>
-    /// The newest weekly build of Mirador's Monado when a profile runs Mirador's Monado and a newer one than the installed is
-    /// out; never installed from here.
-    /// </summary>
     private async Task<string?> NewerMonadoAsync(HttpClient http)
     {
         try
@@ -147,7 +105,6 @@ public sealed class Updates(AppHost host)
         }
     }
 
-    /// <summary>The daily check at launch: only when it is on and a day has passed since the last. Null when it didn't ask.</summary>
     public async Task<UpdateReport?> CheckDailyAsync()
     {
         AppSettings settings;
@@ -170,7 +127,6 @@ public sealed class Updates(AppHost host)
         return await CheckAsync();
     }
 
-    /// <summary>Asks GitHub about both. When both answered, the check is recorded as the daily one.</summary>
     public async Task<UpdateReport> CheckAsync()
     {
         var now = DateTimeOffset.UtcNow;
@@ -194,7 +150,6 @@ public sealed class Updates(AppHost host)
             RecordProblem = SettingsWrite(now);
         }
 
-        // Offline or refused: not recorded, so the next launch asks again rather than in a day.
         Last = report;
 
         if (report.NewerMirador is { } newerMirador)

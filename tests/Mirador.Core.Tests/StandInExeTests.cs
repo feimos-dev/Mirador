@@ -4,7 +4,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Tests;
 
-/// <summary>A test of the built stand-in (<c>artifacts\standin\mirador-standin.exe</c>, from <c>standin\build.ps1</c>); skipped when it isn't built.</summary>
 public class StandInFactAttribute : FactAttribute
 {
     public StandInFactAttribute()
@@ -20,7 +19,6 @@ public class StandInFactAttribute : FactAttribute
     }
 }
 
-/// <summary>A stand-in test on a test pipe: an elevated stand-in ignores <c>MIRADOR_STANDIN_PIPE</c> by design, so these run unelevated only.</summary>
 public sealed class UnelevatedStandInFactAttribute : StandInFactAttribute
 {
     public UnelevatedStandInFactAttribute()
@@ -32,7 +30,6 @@ public sealed class UnelevatedStandInFactAttribute : StandInFactAttribute
     }
 }
 
-/// <summary>The theory form of <see cref="UnelevatedStandInFactAttribute"/>.</summary>
 public sealed class UnelevatedStandInTheoryAttribute : TheoryAttribute
 {
     public UnelevatedStandInTheoryAttribute() => Skip = new UnelevatedStandInFactAttribute().Skip;
@@ -47,10 +44,6 @@ public class StandInExeTests
 
     private static string UniqueName() => "mirador-standin-test-" + Guid.NewGuid().ToString("N")[..12];
 
-    /// <summary>
-    /// Runs the stand-in against the test pipe <paramref name="pipe"/> (beside any real Mirador); its exit code, stderr
-    /// and time taken. With <paramref name="localAppData"/>, the stand-in reads Mirador's settings from there.
-    /// </summary>
     private static async Task<(int Code, string Error, TimeSpan Took)> RunAsync(
         string pipe, string? appPath = null, string? exe = null, string? localAppData = null, TimeSpan? limit = null)
     {
@@ -106,14 +99,12 @@ public class StandInExeTests
 
         Assert.Equal(1, code);
         Assert.Contains("SteamVR runs", error);
-        Assert.True(took < TimeSpan.FromSeconds(2), took.ToString()); // no linger: an OK takes 2 s at least
+        Assert.True(took < TimeSpan.FromSeconds(2), took.ToString());
     }
 
     [UnelevatedStandInFact]
     public async Task Starts_mirador_and_waits_for_it()
     {
-        // attrib.exe stands in for a Mirador that hands over to another and ends well: it takes the stand-in's
-        // "--background" as a file name to list, only reads, and exits 0. The "Mirador" answering comes a second later.
         var name = UniqueName();
         var handsOver = Path.Combine(Environment.SystemDirectory, "attrib.exe");
         await using var server = new AppPipeServer(name, (_, _) => Task.FromResult(AppPipe.Ok));
@@ -147,8 +138,6 @@ public class StandInExeTests
         var standIn = Path.Combine(service, "monado-service.exe");
         File.Copy(Exe, standIn);
 
-        // whoami.exe as that Mirador: it turns "--background" down (exit 1), which the stand-in reports, so it was the
-        // one beside the stand-in that started, not the Mirador in the registry.
         File.Copy(Path.Combine(Environment.SystemDirectory, "whoami.exe"), Path.Combine(app, "Mirador.exe"));
 
         var (code, error, _) = await RunAsync(UniqueName(), exe: standIn);
@@ -163,13 +152,8 @@ public class StandInExeTests
         Assert.True(StandIn.IsStandIn(Exe));
     }
 
-    /// <summary>The run's limit for the switch's tests: the stand-in either exits at once or starts its "Mirador", which ends at once.</summary>
     private static readonly TimeSpan SwitchLimit = TimeSpan.FromSeconds(20);
 
-    /// <summary>
-    /// whoami.exe as the Mirador to start: it turns "--background" down at once (exit 1), and the stand-in then says
-    /// "closed at once". That message is the mark that it started Mirador.
-    /// </summary>
     private static string Marker => Path.Combine(Environment.SystemDirectory, "whoami.exe");
 
     private const string Started = "closed at once (exit code 1)";
@@ -211,7 +195,6 @@ public class StandInExeTests
     {
         using var dir = new TempDir();
 
-        // Over 64 KB, the file counts as on, even with the switch off at its start.
         var text = settings == "big" ? """{"startMiradorForGames": false}""" + new string(' ', 2 * 1024 * 1024) : settings;
         var (code, error) = await RunWithSettingsAsync(dir, text);
 

@@ -4,16 +4,10 @@ using Mirador.Core.Modules;
 
 namespace Mirador.DirectMode;
 
-/// <summary>
-/// Turns the direct-mode layer's lines in Monado's output into the display's status line on Home. Lines are matched by
-/// their message, whatever prefix the log puts in front. Fed one line at a time; <see cref="Line"/> may be read from
-/// any thread.
-/// </summary>
 public sealed partial class DirectModeLogParser
 {
     public const string DisplayKey = "display";
 
-    /// <summary>How long after construction the layer may take to log <c>display session open</c> before the display counts as failed.</summary>
     public static readonly TimeSpan DisplayWait = TimeSpan.FromSeconds(60);
 
     private const string Layer = "[dvl] ";
@@ -29,8 +23,6 @@ public sealed partial class DirectModeLogParser
     private long missed;
     private bool sawStats;
 
-    /// <param name="timeProvider">The clock for <see cref="DisplayWait"/>.</param>
-    /// <param name="layerUsed">Whether the layer drives the display: only then is there a display session to wait for.</param>
     public DirectModeLogParser(TimeProvider? timeProvider = null, bool layerUsed = true)
     {
         time = timeProvider ?? TimeProvider.System;
@@ -38,7 +30,6 @@ public sealed partial class DirectModeLogParser
         this.layerUsed = layerUsed;
     }
 
-    /// <summary>The display line.</summary>
     public StatusLine Line
     {
         get
@@ -50,10 +41,6 @@ public sealed partial class DirectModeLogParser
         }
     }
 
-    /// <summary>
-    /// Why Monado can't bring the display up: no <c>display session open</c> came within <see cref="DisplayWait"/> of the
-    /// start (with the layer's last message). Null while it may still come, and once it did.
-    /// </summary>
     public string? Failed
     {
         get
@@ -65,7 +52,6 @@ public sealed partial class DirectModeLogParser
         }
     }
 
-    /// <summary>Looks at the clock: sets <see cref="Failed"/> once the display session hasn't opened within <see cref="DisplayWait"/>.</summary>
     public void Tick()
     {
         lock (gate)
@@ -78,7 +64,6 @@ public sealed partial class DirectModeLogParser
         }
     }
 
-    /// <summary>Reads one line of Monado's output; whether <see cref="Line"/> changed.</summary>
     public bool Feed(string line)
     {
         lock (gate)
@@ -89,7 +74,6 @@ public sealed partial class DirectModeLogParser
         }
     }
 
-    /// <summary>The layer's text without the level name (<c>error</c>, <c>warn</c>, <c>info</c>, <c>debug</c>) it puts in front.</summary>
     private static string WithoutLevel(string text)
     {
         foreach (var level in new[] { "error", "warn", "info", "debug" })

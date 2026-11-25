@@ -9,8 +9,6 @@ public class DreamAirChecksTests
     private const string ServiceKey = @"HKLM\SYSTEM\CurrentControlSet\Services\PiServiceLauncher";
     private const string Uninstall = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PimaxPlay";
 
-    // Full paths on whichever system runs the tests (C:\… on Windows): the checks only ask whether files are there,
-    // and PimaxInstallTests covers reading Windows paths from the registry.
     private static readonly string Runtime = Path.GetFullPath("/Program Files/Pimax/Runtime");
     private static readonly string SteamVrDir = Path.GetFullPath("/Steam/steamapps/common/SteamVR");
 

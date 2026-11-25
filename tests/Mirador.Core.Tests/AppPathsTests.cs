@@ -41,7 +41,7 @@ public class AppPathsTests
         var saved = Thread.CurrentThread.CurrentCulture;
         try
         {
-            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("th-TH"); // Buddhist calendar
+            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("th-TH");
             var p = new AppPaths(@"C:\data\Mirador");
             Assert.Equal(@"C:\data\Mirador\logs\monado-20261103-141502.log",
                 p.NewMonadoLogFile(new DateTime(2026, 11, 3, 14, 15, 2)));

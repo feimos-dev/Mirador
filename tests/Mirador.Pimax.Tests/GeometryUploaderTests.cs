@@ -9,7 +9,6 @@ public sealed class GeometryUploaderTests : IDisposable
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
-    // What the runtime writes on a good upload; the last two only as it ends (its stdout holds them back).
     private static readonly string[] Licence =
     [
         "Tobii platform runtime 1.21.0.0",
@@ -49,7 +48,6 @@ public sealed class GeometryUploaderTests : IDisposable
 
     private string LogPath => Path.Combine(paths.GeometryDir, "runtime.log");
 
-    /// <summary>Runs an upload through its two waits: the moment after the licence check, and the end.</summary>
     private async Task<GeometryResult> UploadAsync(string variant = "K11_RAWH")
     {
         var upload = Uploader().UploadAsync(pimax, variant, CancellationToken.None);
@@ -133,7 +131,7 @@ public sealed class GeometryUploaderTests : IDisposable
     [Theory]
     [InlineData("pi_server")]
     [InlineData("vrss_gaze_provider")]
-    [InlineData("platform_runtime_XR5EYECHIP_WIN10_x64")] // Pimax's own copy of the runtime
+    [InlineData("platform_runtime_XR5EYECHIP_WIN10_x64")]
     public async Task A_program_holding_the_tracker_refuses(string holder)
     {
         processes.Add(holder);
@@ -148,7 +146,6 @@ public sealed class GeometryUploaderTests : IDisposable
     [Fact]
     public async Task Mirador_s_stand_in_doesnt_count_as_a_holder()
     {
-        // A game's Start: the stand-in, named monado-service, waits for Mirador while the module uploads.
         processes.Add("monado-service");
 
         Assert.True((await UploadAsync()).Ok);
@@ -244,7 +241,6 @@ public sealed class GeometryUploaderTests : IDisposable
     [Fact]
     public async Task A_runtime_that_doesnt_stop_is_killed_after_15_seconds()
     {
-        // Its stdout holds back the created line until it ends, so a killed runtime never says it.
         var starter = new FakeConsoleStarter(_ => new FakeConsole(Licence) { ExitCodeAtEnter = null });
         var upload = new GeometryUploader(starter.Start, usb, processes, paths, time).UploadAsync(pimax, "K11_RAWH", CancellationToken.None);
         await time.Set(GeometryUploader.SendWait).WaitAsync(Limit);

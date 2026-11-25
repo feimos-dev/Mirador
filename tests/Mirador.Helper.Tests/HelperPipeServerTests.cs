@@ -40,10 +40,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
     private HelperPipeServer NewServer(string name, TimeSpan? readLimit = null) =>
         new(NewHandler(), logger, lifetime, name) { ReadLimit = readLimit ?? TimeSpan.FromSeconds(5) };
 
-    /// <summary>
-    /// Connects with a bare pipe, writes <paramref name="request"/> as given and reads until the end of the helper's
-    /// reply line, or until the helper closes when it doesn't answer.
-    /// </summary>
     private async Task<string> RawAsync(byte[] request)
     {
         await using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
@@ -56,7 +52,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
         }
         catch (IOException)
         {
-            // The helper may close on a bad request before it has read all of it; what matters is what comes back.
         }
 
         using var answer = new MemoryStream();
@@ -69,7 +64,7 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
                 answer.Write(buffer, 0, read);
                 if (buffer[read - 1] == (byte)'\n')
                 {
-                    break; // the helper waits for us to hang up after a reply
+                    break;
                 }
             }
         }
@@ -120,7 +115,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
     [ElevatedFact]
     public async Task Revoking_over_the_pipe_deletes_the_consent_of_whoever_connected()
     {
-        // The helper learns the caller from the pipe: this process's user, never anything in the request.
         var me = WindowsIdentity.GetCurrent().User!.Value;
         consentValues.Sids.Add(me);
         consentValues.Sids.Add("S-1-5-21-1-2-3-1002");
@@ -142,8 +136,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
     [ElevatedFact]
     public async Task More_clients_at_once_than_pipe_instances_are_all_served()
     {
-        // A pipe client blocks a pool thread while it connects. Here the clients and the server share one process, so
-        // give the pool the threads they would each have in a process of their own.
         ThreadPool.GetMinThreads(out var workers, out var io);
         ThreadPool.SetMinThreads(Math.Max(workers, 64), io);
 
@@ -267,7 +259,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
         Assert.Contains("longer than 4096 bytes", entry.Message);
     }
 
-    /// <summary>A server whose pipes after the first come from <paramref name="replacement"/>.</summary>
     private HelperPipeServer ServerWithReplacements(string name, Func<NamedPipeServerStream> replacement) =>
         new(NewHandler(), logger, lifetime, name)
         {
@@ -359,8 +350,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
         var held = new List<NamedPipeClientStream>();
         try
         {
-            // Twice as many connections as the pipe has instances, each kept open without a word. Each is dropped after
-            // the read limit; if a dropped one kept its instance, the helper would run out of instances and stop.
             for (var i = 0; i < 8; i++)
             {
                 var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
@@ -397,7 +386,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
             await LineCodec.WriteAsync(client, new HelperRequest(HelperCommand.Ping), CancellationToken.None);
             var reply = await LineCodec.ReadAsync<HelperReply>(client, CancellationToken.None);
 
-            // The reply came, and the helper doesn't wait for ever for the caller to hang up.
             Assert.Equal(new HelperReply(true, Value: "9.9.9"), reply);
             var buffer = new byte[1];
             using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -465,10 +453,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
         Assert.StartsWith("Mirador's helper service isn't running", reply.Error);
     }
 
-    /// <summary>
-    /// Another program (any signed-in user can do this) keeps trying to create the pipe as its first instance, which only
-    /// works while no instance of the name exists. It must never get in.
-    /// </summary>
     private sealed class Squatter : IDisposable
     {
         private readonly CancellationTokenSource stop = new();
@@ -573,8 +557,6 @@ public sealed class HelperPipeServerTests : IAsyncLifetime
         Assert.Equal(0, squatter.Takeovers);
         Assert.True((await new HelperClient(pipeName).SendAsync(HelperCommand.Ping, CancellationToken.None)).Ok);
     }
-
-    // The pipe's permissions
 
     private static (SecurityIdentifier Who, PipeAccessRights Rights, AccessControlType Type)[] Rules()
     {

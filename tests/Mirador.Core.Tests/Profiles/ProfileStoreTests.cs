@@ -116,7 +116,7 @@ public class ProfileStoreTests
         Assert.Equal(["a", "c"], set.Profiles.Select(p => p.Id));
         Assert.Equal(@"D:\monado\build", set.Profiles[0].Monado.Folder);
         Assert.Equal("c", set.SelectedId);
-        Assert.Equal(text, File.ReadAllText(path)); // still there until the next save
+        Assert.Equal(text, File.ReadAllText(path));
         Assert.Equal(text, File.ReadAllText(path + ".bad"));
     }
 

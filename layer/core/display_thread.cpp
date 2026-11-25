@@ -15,8 +15,8 @@
 namespace nvdm {
 
 struct DisplayThread::Baton {
-    HANDLE free = nullptr;            // auto-reset event, set while no epoch holds the baton
-    std::atomic<uint64_t> holder{0}; // the epoch holding it, 0 for none
+    HANDLE free = nullptr;
+    std::atomic<uint64_t> holder{0};
     Baton() { free = CreateEventW(nullptr, FALSE, TRUE, nullptr); }
     ~Baton()
     {
@@ -34,7 +34,7 @@ struct DisplayThread::Epoch {
     std::shared_ptr<Baton> baton;
     std::function<void(const std::string&)> log;
     int64_t baton_wait_ns = kBatonWaitNs;
-    HANDLE stop = nullptr;   // manual-reset: ends the wait for the baton
+    HANDLE stop = nullptr;
     HANDLE thread = nullptr;
     Epoch() = default;
     ~Epoch()
@@ -72,7 +72,6 @@ long long to_ms(int64_t ns)
     return static_cast<long long>(ns / 1'000'000);
 }
 
-// Nanoseconds to whole milliseconds for a Win32 wait, rounded up and below INFINITE.
 DWORD wait_ms(int64_t ns)
 {
     if (ns <= 0) {
@@ -88,12 +87,10 @@ void tell(const DisplayThread::Epoch& e, const std::string& line)
     }
 }
 
-// Waits for the baton. False if the epoch was asked to stop first, or the wait failed: it
-// then makes no NVAPI call.
 bool take_baton(DisplayThread::Epoch& e)
 {
     bool told = false;
-    uint64_t old = 0; // the epoch that held it when we told
+    uint64_t old = 0;
     for (;;) {
         const HANDLE handles[2] = {e.baton->free, e.stop};
         const DWORD result = WaitForMultipleObjects(2, handles, FALSE, wait_ms(e.baton_wait_ns));
@@ -140,8 +137,6 @@ DWORD WINAPI run_epoch(void* param)
                     mmcss != nullptr ? "MMCSS \"Games\"" : "THREAD_PRIORITY_TIME_CRITICAL"));
 
     if (take_baton(*e)) {
-        // Nothing may leave a thread procedure. The frame model throws only for a broken invariant (a bug): log it and
-        // end this epoch; acquire and present-wait bound themselves, so Monado runs on at its own timeouts.
         try {
             while (!e->loop->stop_requested()) {
                 e->loop->pass();
@@ -161,7 +156,7 @@ DWORD WINAPI run_epoch(void* param)
     return 0;
 }
 
-} // namespace
+}
 
 DisplayThread::DisplayThread(std::function<void(const std::string&)> log, int64_t baton_wait_ns)
     : log_(std::move(log)), baton_wait_ns_(baton_wait_ns), baton_(std::make_shared<Baton>())
@@ -247,4 +242,4 @@ uint64_t DisplayThread::epoch() const
     return epoch_.load();
 }
 
-} // namespace nvdm
+}

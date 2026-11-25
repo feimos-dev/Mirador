@@ -10,10 +10,8 @@ public class HelperClientTests
 {
     private static string NewName() => "mirador-test-client-" + Guid.NewGuid().ToString("N");
 
-    /// <summary>A pretend helper: accepts one connection and lets <paramref name="behave"/> deal with it.</summary>
     private static async Task WithFakeHelper(string name, Func<NamedPipeServerStream, CancellationToken, Task> behave, Func<Task> client)
     {
-        // Buffers: with none, a pipe passes data only while the other side reads, which a pretend helper may never do.
         await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 8192, 8192);
         using var done = new CancellationTokenSource();
         var serving = Task.Run(async () =>
@@ -42,7 +40,7 @@ public class HelperClientTests
 
         var reply = await client.SendAsync(HelperCommand.Ping, CancellationToken.None);
 
-        Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(6)); // gives up after the 2 s connect timeout
+        Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(6));
         Assert.False(reply.Ok);
         Assert.True(reply.NotDelivered);
         Assert.StartsWith("Mirador's helper service isn't running", reply.Error);
@@ -54,7 +52,6 @@ public class HelperClientTests
     [Fact]
     public async Task Client_that_the_pipe_turns_away_says_so()
     {
-        // A pipe only SYSTEM may open: the caller (an administrator, but not SYSTEM) is refused.
         var name = NewName();
         var security = new PipeSecurity();
         security.AddAccessRule(new PipeAccessRule(
@@ -132,7 +129,7 @@ public class HelperClientTests
             async () => reply = await new HelperClient(name).SendAsync(HelperCommand.Ping, CancellationToken.None));
 
         Assert.False(reply!.Ok);
-        Assert.False(reply.NotDelivered); // it was delivered: the helper may have acted on it
+        Assert.False(reply.NotDelivered);
         Assert.StartsWith("Mirador's helper service sent an answer Mirador couldn't read", reply.Error);
     }
 
@@ -151,7 +148,7 @@ public class HelperClientTests
             async () => reply = await new HelperClient(name).SendAsync(HelperCommand.Ping, CancellationToken.None));
 
         Assert.False(reply!.Ok);
-        Assert.False(reply.NotDelivered); // it was delivered: the helper may have acted on it
+        Assert.False(reply.NotDelivered);
         Assert.StartsWith("Mirador's helper service sent an answer Mirador couldn't read", reply.Error);
     }
 }

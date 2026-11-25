@@ -24,14 +24,13 @@ public class RayGrabTests
         grab.Start(1.5f, 0.3f);
 
         var pushed = 0f;
-        for (var i = 0; i < 45; i++) // half a second, all the way forward
+        for (var i = 0; i < 45; i++)
         {
             pushed = grab.Update(0.3f, 1, Frame);
         }
 
         Assert.Equal(1.5f + (RayGrab.PushSpeed / 2), pushed, 3);
 
-        // As fast near as far: half a second back takes off as much.
         var pulled = pushed;
         for (var i = 0; i < 45; i++)
         {
@@ -40,7 +39,6 @@ public class RayGrabTests
 
         Assert.Equal(1.5f, pulled, 3);
 
-        // A stick barely off centre pushes nothing.
         var still = grab.Update(0.3f, 0, Frame);
         Assert.Equal(still, grab.Update(0.3f, RayGrab.StickDeadZone / 2, Frame), 5);
     }
@@ -51,15 +49,14 @@ public class RayGrabTests
         var grab = new RayGrab();
         grab.Start(2, 0.3f);
 
-        for (var i = 0; i < 300; i++) // the stick held forward far longer than 5 m needs
+        for (var i = 0; i < 300; i++)
         {
             Assert.True(grab.Update(0.3f, 1, Frame) <= RayGrab.FarthestM);
         }
 
         Assert.Equal(RayGrab.FarthestM, grab.Update(0.3f, 1, Frame), 4);
-        Assert.True(grab.Update(0.3f, -1, Frame) < RayGrab.FarthestM); // the first pull already comes closer
+        Assert.True(grab.Update(0.3f, -1, Frame) < RayGrab.FarthestM);
 
-        // The same for the reach.
         Assert.Equal(RayGrab.FarthestM, grab.Update(0.9f, 0, Frame), 4);
         Assert.True(grab.Update(0.85f, 0, Frame) < RayGrab.FarthestM);
     }

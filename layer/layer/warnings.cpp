@@ -24,7 +24,7 @@ std::string count_text(uint64_t n)
     return std::to_string(static_cast<unsigned long long>(n));
 }
 
-} // namespace
+}
 
 void Warnings::set_display_control(bool enabled)
 {
@@ -109,8 +109,6 @@ void Warnings::on_event_waited(uint64_t key)
 
 void Warnings::on_event_gone(uint64_t)
 {
-    // Not forgotten if no wait reached the layer first: Monado always waits before it destroys, so a
-    // destroy alone means its wait went past the layer. check() warns about it at 2 s, and then forgets it.
 }
 
 void Warnings::check(int64_t now_ns)
@@ -119,7 +117,7 @@ void Warnings::check(int64_t now_ns)
     for (auto it = unwaited_.begin(); it != unwaited_.end();) {
         if (now_ns - it->second >= kEventWaitNs) {
             overdue = true;
-            it = unwaited_.erase(it); // each event counts once
+            it = unwaited_.erase(it);
         } else {
             ++it;
         }
@@ -173,4 +171,4 @@ std::vector<std::string> Warnings::take_lines()
     return out;
 }
 
-} // namespace dvl
+}

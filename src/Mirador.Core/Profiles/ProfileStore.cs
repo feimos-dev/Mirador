@@ -2,15 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Mirador.Core.Profiles;
 
-/// <summary>Keeps the <see cref="ProfileSet"/> in one JSON file.</summary>
 public sealed class ProfileStore(string path)
 {
-    /// <summary>
-    /// The saved profiles. A missing file gives <see cref="ProfileSet.Defaults"/>; a file that cannot be read or has
-    /// no usable profiles is kept as <c>.bad</c> next to it and the defaults are returned. A file with some unusable
-    /// entries (a hand edit gone wrong) loads without them, and a copy of it is kept as <c>.bad</c>, so that one broken
-    /// profile doesn't cost the others.
-    /// </summary>
     public ProfileSet Load()
     {
         var leftOut = false;
@@ -31,12 +24,6 @@ public sealed class ProfileStore(string path)
     public void Save(ProfileSet set) =>
         JsonFile.Save(path, set, ProfilesJsonContext.Default.ProfileSet);
 
-    /// <summary>
-    /// The set filled in where an older or hand-edited file left things out, or null when it has no usable profiles.
-    /// Unusable entries are left out (<paramref name="leftOut"/> says so): a profile without an id, a name or a Monado
-    /// build, a second profile with an id already used, a variable without a name, an option without a value. A
-    /// variable without a value gets an empty one. A selected id that matches no profile selects the first one.
-    /// </summary>
     private static ProfileSet? Usable(ProfileSet set, out bool leftOut)
     {
         leftOut = false;

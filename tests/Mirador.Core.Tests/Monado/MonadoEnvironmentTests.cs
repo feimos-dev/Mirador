@@ -6,7 +6,6 @@ namespace Mirador.Core.Tests.Monado;
 
 public class MonadoEnvironmentTests
 {
-    /// <summary>A small stand-in for the process environment; the real one is never read.</summary>
     private static Dictionary<string, string> Inherited() => new()
     {
         ["SystemRoot"] = @"C:\WINDOWS",
@@ -49,7 +48,7 @@ public class MonadoEnvironmentTests
         Assert.Equal("100", env["XRT_COMPOSITOR_SCALE_PERCENTAGE"]);
         Assert.Equal("6", env["U_PACING_COMP_MIN_TIME_MS"]);
         Assert.False(env.ContainsKey("IPC_EXIT_ON_DISCONNECT"));
-        Assert.Equal(@"C:\WINDOWS", env["SystemRoot"]); // inherited kept
+        Assert.Equal(@"C:\WINDOWS", env["SystemRoot"]);
         Assert.Equal(@"C:\WINDOWS\system32;C:\WINDOWS", env["Path"]);
     }
 
@@ -68,7 +67,6 @@ public class MonadoEnvironmentTests
     [Fact]
     public void Numbers_are_formatted_with_the_invariant_culture()
     {
-        // Swedish writes a negative sign as U+2212, which Monado cannot parse.
         var settings = new MonadoSettings(LighthouseWaitMs: -5, RenderScalePercent: -5, CompositorMinTimeMs: -5);
         var before = CultureInfo.CurrentCulture;
         try
@@ -118,7 +116,7 @@ public class MonadoEnvironmentTests
 
         Assert.Equal("9000", env["LH_DISCOVER_WAIT_MS"]);
         Assert.Equal("0", env["XRT_DEBUG_GUI"]);
-        Assert.Equal("100", env["XRT_COMPOSITOR_SCALE_PERCENTAGE"]); // other settings untouched
+        Assert.Equal("100", env["XRT_COMPOSITOR_SCALE_PERCENTAGE"]);
     }
 
     [Fact]
@@ -154,13 +152,12 @@ public class MonadoEnvironmentTests
 
         var env = MonadoEnvironment.Build(inherited, new MonadoSettings(), profile, moduleFixed);
 
-        // A plain list, so these checks compare spellings exactly instead of using the dictionary's ignore-case lookup.
         var names = env.Keys.ToList();
-        Assert.Contains("LH_DISCOVER_WAIT_MS", names); // settings over inherited
+        Assert.Contains("LH_DISCOVER_WAIT_MS", names);
         Assert.DoesNotContain("lh_discover_wait_ms", names);
-        Assert.Contains("Xrt_Compositor_Scale_Percentage", names); // module over settings
+        Assert.Contains("Xrt_Compositor_Scale_Percentage", names);
         Assert.DoesNotContain("XRT_COMPOSITOR_SCALE_PERCENTAGE", names);
-        Assert.Contains("path", names); // extra over inherited
+        Assert.Contains("path", names);
         Assert.DoesNotContain("Path", names);
         Assert.Equal("X", env["PATH"]);
     }
@@ -183,7 +180,7 @@ public class MonadoEnvironmentTests
 
         Assert.Equal("d", env["KEPT"]);
         Assert.All(env.Keys, k => Assert.False(string.IsNullOrWhiteSpace(k)));
-        Assert.Equal(2 + 3 + 1, env.Count); // inherited, the three settings, KEPT
+        Assert.Equal(2 + 3 + 1, env.Count);
     }
 
     [Fact]
@@ -210,8 +207,6 @@ public class MonadoEnvironmentTests
     [Fact]
     public void No_variable_reaches_monado_empty()
     {
-        // An empty XDG_RUNTIME_DIR would be "" to Monado's getenv, not "unset", and move its pipe away from where
-        // Mirador and games look for it.
         var inherited = Inherited();
         inherited["XDG_RUNTIME_DIR"] = "";
         inherited["EMPTY"] = "";
@@ -219,7 +214,7 @@ public class MonadoEnvironmentTests
         var env = MonadoEnvironment.Build(inherited, new MonadoSettings(), CustomWith(new EnvVar("ALSO_EMPTY", "")), [new("FIXED_EMPTY", "")]);
 
         Assert.All(env.Values, v => Assert.NotEqual("", v));
-        Assert.Equal(2 + 3, env.Count); // inherited, the three settings
+        Assert.Equal(2 + 3, env.Count);
     }
 
     [Fact]

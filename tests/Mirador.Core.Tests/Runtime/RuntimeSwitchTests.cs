@@ -6,7 +6,6 @@ namespace Mirador.Core.Tests.Runtime;
 
 public class RuntimeSwitchTests
 {
-    // Full paths on any system, so that OpenXrRuntime takes them as such.
     private static readonly string Build = Path.Combine(Path.GetTempPath(), "Monado", "build");
     private static readonly string Manifest = Path.Combine(Build, "openxr_monado-dev.json");
 

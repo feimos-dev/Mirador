@@ -6,11 +6,6 @@ namespace Mirador.Pimax.Tests;
 [Trait("Category", "Hardware")]
 public class MachineGeometryTests
 {
-    /// <summary>
-    /// Uploads the tested variant's geometry with the real runtime, from this PC's Pimax Play, to the real tracker. Stop
-    /// Pimax's service first (<c>Stop-Service PiServiceLauncher</c>, elevated), then run with <c>MIRADOR_MACHINE_TESTS=1</c>:
-    /// <c>dotnet test tests\Mirador.Pimax.Tests --filter Category=Machine</c>. Files go to a temp folder.
-    /// </summary>
     [Trait("Category", "Machine")]
     [MachineFact]
     public async Task The_real_runtime_uploads_the_geometry()

@@ -4,23 +4,14 @@ using Mirador.Ipc;
 
 namespace Mirador.DirectMode;
 
-/// <summary>The direct-mode Vulkan layer's files Mirador uses.</summary>
-/// <param name="ManifestDir">The folder holding <c>mirador_direct_mode.json</c> and its DLL.</param>
-/// <param name="CheckExe">The full path of <c>mirador-display-check.exe</c>, which tells whether direct mode works.</param>
 public sealed record LayerFiles(string ManifestDir, string CheckExe);
 
-/// <summary>Finds the direct-mode Vulkan layer that comes with Mirador (<c>{app}\layer</c>).</summary>
 public static class DirectModeLayer
 {
     public const string ManifestName = DirectModeEnvironment.ManifestName;
     public const string DllName = "mirador_direct_mode.dll";
     public const string CheckExeName = "mirador-display-check.exe";
 
-    /// <summary>
-    /// The variables that turn the layer on for Monado (<see cref="DirectModeEnvironment"/>), and the ones it takes out
-    /// of what Monado inherits (an empty value removes one).
-    /// </summary>
-    /// <exception cref="MiradorException">The layer isn't there (<see cref="Locate"/>).</exception>
     public static IReadOnlyList<EnvVar> Environment(string bundledDir)
     {
         Locate(bundledDir);
@@ -33,9 +24,6 @@ public static class DirectModeLayer
 
     private static readonly string[] LayerFileNames = [ManifestName, DllName, CheckExeName];
 
-    /// <summary>Finds the layer's manifest, DLL and check tool side by side in <paramref name="bundledDir"/>.</summary>
-    /// <param name="bundledDir">The layer that comes with Mirador (<c>{app}\layer</c>).</param>
-    /// <exception cref="MiradorException">The folder or a file is missing; the message names it and says what to do.</exception>
     public static LayerFiles Locate(string bundledDir)
     {
         if (string.IsNullOrWhiteSpace(bundledDir))

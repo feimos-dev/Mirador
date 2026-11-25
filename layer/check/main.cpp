@@ -1,12 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// mirador-display-check [--no-heartbeat] [--ignore-holders] [--seconds=20] [--enable-direct-mode]
-//
-// The order: arguments, then the holder checks (before anything is touched: no NVAPI, no HID if Pimax or Monado runs),
-// then the board heartbeat, then the NVAPI check, then the verdict. Exit code: 0 PASS, 1 a check failed, 2 usage,
-// 3 NOT USED (the headset's EDID leaves it to Windows).
-
 #include <windows.h>
 
 #include <cstdio>
@@ -39,7 +33,6 @@ int main(int argc, char** argv)
 
     StdoutOutput out;
     if (options.enable_direct_mode) {
-        // Inside a try like the check below: an exception still ends in a FAIL line and the failing exit code.
         try {
             const std::unique_ptr<nvdm::Api> api = nvdm::make_nvapi();
             return run_enable_direct_mode(*api, out);
@@ -52,11 +45,9 @@ int main(int argc, char** argv)
     say(out, "mirador-display-check %s: NVAPI only, %d s%s%s", DVL_CHECK_VERSION, options.seconds,
         options.no_heartbeat ? ", no heartbeat" : "", options.ignore_holders ? ", holder checks skipped" : "");
 
-    // The environment first: the display session reads its holder switch when it is first used.
     apply_environment(options);
     install_interrupt_handler();
 
-    // Design 7: the holder checks come first, naming what runs. Nothing else is touched until they pass.
     const HolderFindings findings = holder_findings(nvdm::list_processes());
     for (const std::string& warning : findings.warnings) {
         say(out, "warning: %s", warning.c_str());
@@ -80,15 +71,12 @@ int main(int argc, char** argv)
         say(out, "holder checks: nothing holds the display, the board or the eye tracker");
     }
 
-    // heartbeat.py refuses to run beside Pimax: two hosts on the board's command channel is untested. --ignore-holders
-    // lets it through, so say so (the M1 runs beside Pimax pass --no-heartbeat: Pimax keeps the board awake).
     if (options.ignore_holders && !options.no_heartbeat && (findings.board_held || findings.monado_running)) {
         say(out, "warning: a program that holds the board is running and --no-heartbeat is not set, so this tool sends "
                  "the heartbeat as a second host on the board's command channel, which is untested; pass "
                  "--no-heartbeat to leave the board to the program that has it");
     }
 
-    // Without Monado nothing keeps the board awake, and the display only appears while it gets its heartbeat.
     Heartbeat heartbeat;
     if (options.no_heartbeat) {
         say(out, "heartbeat: off (--no-heartbeat)");

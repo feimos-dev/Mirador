@@ -17,7 +17,6 @@ public class DreamAirStateTests
     [Fact]
     public void A_file_with_the_old_gaze_checks_result_still_loads()
     {
-        // "Check my calibration" kept its last result here until it was taken out (2026-11-09).
         using var dir = new TempDir();
         var path = Path.Combine(dir.Path, "dreamair.json");
         File.WriteAllText(path, """{ "lastGoodDriver": "621.01", "blobVariant": "K11_RAWH", "lastCheck": { "when": "2026-11-04T19:03:00+00:00", "medianDeg": 0.89, "worstDotDeg": 1.15, "dots": 9 } }""");

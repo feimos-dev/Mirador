@@ -3,13 +3,6 @@ using System.Text;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// The Authenticode signer subject of a file, through <c>WinVerifyTrust</c> and the crypto API: the subject string
-/// (<c>CN=Valve Corp., O=…</c>) when the file is signed and its chain is trusted, else null. Passed to
-/// <see cref="SteamVrDriverCheck.Verify"/> (the helper) and <see cref="SteamVrDriverCheck.UnsignedFiles"/> (the consent
-/// step), which parse it and require its CN and O to be exactly <c>Valve Corp.</c> Callers hold the file open without
-/// write or delete sharing while asking, so the bytes checked are the bytes that are hashed and loaded.
-/// </summary>
 public static class WinTrustSigner
 {
     private const uint WtdUiNone = 2;
@@ -28,7 +21,6 @@ public static class WinTrustSigner
 
     private static Guid genericVerifyV2 = new("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
 
-    /// <summary>The signer subject, or null when the file isn't a trusted Authenticode signature Windows accepts.</summary>
     public static string? SubjectOf(string path)
     {
         if (!IsTrusted(path))
@@ -41,8 +33,6 @@ public static class WinTrustSigner
 
     private static bool IsTrusted(string path)
     {
-        // WINTRUST_DATA points at the WINTRUST_FILE_INFO, which points at the path: both live in unmanaged memory for
-        // the two calls (a struct with a string in it can't be pinned), and are freed whatever happens.
         var pathText = IntPtr.Zero;
         var fileInfo = IntPtr.Zero;
         try
@@ -147,19 +137,16 @@ public static class WinTrustSigner
         }
     }
 
-    // CERT_FIND_SUBJECT_CERT: CERT_COMPARE_SUBJECT_CERT (11) << CERT_COMPARE_SHIFT (16). (0x00010000 is CERT_FIND_SHA1_HASH.)
     private const uint CertFindSubjectCert = 0x000B0000;
 
     private static string? SubjectName(IntPtr cert)
     {
-        // CERT_CONTEXT.pCertInfo is the 4th pointer-sized field (dwCertEncodingType, pbCertEncoded, cbCertEncoded, pCertInfo).
         var context = (CertContext)Marshal.PtrToStructure(cert, typeof(CertContext))!;
         if (context.pCertInfo == IntPtr.Zero)
         {
             return null;
         }
 
-        // CERT_INFO.Subject (a CERT_NAME_BLOB) sits after the fields before it; marshal the whole struct.
         var info = (CertInfo)Marshal.PtrToStructure(context.pCertInfo, typeof(CertInfo))!;
         var subject = info.Subject;
 
@@ -174,7 +161,6 @@ public static class WinTrustSigner
         return text.ToString();
     }
 
-    /// <summary>WINTRUST_FILE_INFO, blittable: the path is a pointer to a string the caller allocated.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct WintrustFileInfo
     {

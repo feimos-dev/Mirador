@@ -1,19 +1,4 @@
 #Requires -Version 7.3
-<#
-.SYNOPSIS
-    Signs files with signtool: Authenticode, SHA-256, timestamped.
-.DESCRIPTION
-    What signs Mirador's own programs and DLLs (tools\sign-bundle.ps1) and a Monado build (tools\sign-monado.ps1),
-    and what Inno Setup runs for the uninstaller and the installer (tools\build-installer.ps1 -Sign). The environment
-    says what signs:
-
-      SIGN_DLIB, SIGN_METADATA   Azure Artifact Signing: its signtool library and the file that names the account
-                                 (tools\get-signing-library.ps1 sets both). The Azure CLI must be logged in.
-      SIGN_THUMBPRINT            instead: the SHA-1 thumbprint of a code-signing certificate in the user's store
-      SIGNTOOL                   signtool.exe, if not the newest one of the Windows SDK
-.EXAMPLE
-    tools\sign.ps1 artifacts\bundle\Mirador.exe artifacts\bundle\Mirador.dll
-#>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory, ValueFromRemainingArguments)]
@@ -47,7 +32,6 @@ if ($env:SIGN_DLIB -or $env:SIGN_METADATA) {
 
 $files = @($Path | ForEach-Object { (Resolve-Path -LiteralPath $_).Path })
 
-# The signing service and the timestamp server are on the network: a failed call is tried again, three times in all.
 for ($try = 1; ; $try++) {
     & $signtool sign /v /fd SHA256 /tr $timestampServer /td SHA256 @with @files
     if ($LASTEXITCODE -eq 0) {

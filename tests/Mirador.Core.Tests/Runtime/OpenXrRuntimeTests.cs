@@ -116,7 +116,6 @@ public class OpenXrRuntimeTests
         Assert.False(runtime.IsActive("C:\\Monado\\open\0xr_monado.json"));
     }
 
-    // The registry reader is tested through its lookup seam: these never open a real registry key.
     private sealed class FakeRegistry(object? value)
     {
         public List<(RegistryView View, string KeyPath, string ValueName)> Asked { get; } = [];

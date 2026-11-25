@@ -14,13 +14,8 @@ using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// Diagnostics: Monado's and Mirador's logs as they grow, the versions, the display check for a direct-mode layer, and the
-/// zip to send with a problem. The page is kept while Mirador runs, so a check under way survives leaving it.
-/// </summary>
 public sealed partial class DiagnosticsViewModel : ObservableObject
 {
-    /// <summary>The most lines each log box holds.</summary>
     public const int MaxLines = 2000;
 
     private readonly AppHost host;
@@ -41,10 +36,6 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         flush.Tick += (_, _) => Flush();
     }
 
-    /// <summary>
-    /// Raised on the UI thread with the new text of the boxes that changed (null for one that didn't): the page puts
-    /// it in, unless the user is selecting there, and follows the end only of a box that was at its end.
-    /// </summary>
     public event Action<string?, string?>? LogsChanged;
 
     [ObservableProperty]
@@ -76,19 +67,15 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(CheckDisplayCommand), nameof(FixDirectModeCommand))]
     public partial bool IsBusy { get; set; }
 
-    /// <summary>Whether a profile has a "Verify build for Windows" result.</summary>
     [ObservableProperty]
     public partial bool HasVerify { get; set; }
 
-    /// <summary>The newest Verify result's profile, time and outcome.</summary>
     [ObservableProperty]
     public partial string VerifySummary { get; set; } = "";
 
-    /// <summary>Each step of that result, a line each.</summary>
     [ObservableProperty]
     public partial string VerifySteps { get; set; } = "";
 
-    /// <summary>The newest Verify run's own log (the Verify tab).</summary>
     [ObservableProperty]
     public partial string VerifyLog { get; set; } = "";
 
@@ -104,7 +91,6 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         host.Session.Changed += OnSessionChanged;
         AppLog.LineWritten += OnMiradorLine;
 
-        // What is on disk first (2,000 lines rather than the 200 kept in memory); lines from now on come as events.
         var monadoLines = ReadTail(DiagnosticsZip.NewestMonadoLog(host.Paths.LogsDir));
         var miradorLines = ReadTail(host.Paths.AppLogFile);
         lock (gate)
@@ -187,10 +173,6 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
 
     private bool CanRunCheck() => CanCheckDisplay && !IsBusy;
 
-    /// <summary>
-    /// "Fix direct mode": the headset's module frees its display and the direct-mode layer turns direct mode on, while
-    /// Monado is stopped.
-    /// </summary>
     [RelayCommand(CanExecute = nameof(CanRunCheck))]
     private async Task FixDirectModeAsync()
     {
@@ -206,7 +188,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
             var problem = await host.WithDisplayFreeAsync(profile, (directMode, ct) => directMode.FixAsync(host.Context, ct));
             CheckPassed = problem is null;
             CheckResult = problem is null ? "Direct mode is on for the headset." : Sentence(problem);
-            host.NotifyDevicesChanged(); // Home looks at its checks again
+            host.NotifyDevicesChanged();
         }
         catch (MiradorException e)
         {
@@ -253,7 +235,6 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
 
     private static string Sentence(string s) => s.EndsWith('.') || s.EndsWith('!') || s.EndsWith('?') ? s : s + ".";
 
-    /// <summary>The last <see cref="MaxLines"/> lines of a file that may be being written; none when it can't be read.</summary>
     private static List<string> ReadTail(string? path)
     {
         var lines = new Queue<string>();
@@ -307,20 +288,12 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
     private string? wantedVerifyProfile;
     private string? wantedVerifyLog;
 
-    /// <summary>
-    /// What the Profiles page's Diagnostics button sends: the profile whose result to show, and the log of its last run
-    /// (a run that stopped has a log but no result). Kept until the next one.
-    /// </summary>
     public void ShowVerify(string? profileId, string? logFile)
     {
         wantedVerifyProfile = profileId;
         wantedVerifyLog = logFile;
     }
 
-    /// <summary>
-    /// The Verify result of the profile the Profiles page sent the user here for, else the newest of any
-    /// (<see cref="VerifyResult.ForDiagnostics"/>), and its run's log (else the newest run's).
-    /// </summary>
     private void RefreshVerify()
     {
         IReadOnlyList<Profile> profiles;
@@ -384,7 +357,6 @@ public sealed partial class DiagnosticsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Hands new lines to the page, at most four times a second: a busy log doesn't redraw at every line.</summary>
     private void Flush()
     {
         string? monadoText = null, miradorText = null;

@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The layer's log: levels from MIRADOR_DIRECT_MODE_LOG, a new file per process with the last five kept.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -19,7 +17,6 @@ namespace {
 
 namespace fs = std::filesystem;
 
-// A scratch folder that is gone again at the end of the test.
 class TempDir {
 public:
     TempDir()
@@ -67,7 +64,7 @@ dvl::LoggerConfig quiet_config(const TempDir& dir, dvl::Level threshold = dvl::L
     return c;
 }
 
-} // namespace
+}
 
 TEST_CASE("log_level_parsing")
 {
@@ -118,7 +115,6 @@ TEST_CASE("a display-session failure line is written with MIRADOR_DIRECT_MODE_LO
 
 TEST_CASE("trace_folder_is_off_the_log_folder_or_another")
 {
-    // MIRADOR_DIRECT_MODE_TRACE: unset, empty or 0 is off; 1 is the log's folder; anything else is a folder.
     const std::wstring log_dir = L"C:\\Users\\user\\AppData\\Local\\Mirador\\direct-mode";
     const auto folder = [&](std::optional<std::string> setting) { return dvl::trace_folder(setting, log_dir); };
 
@@ -130,15 +126,14 @@ TEST_CASE("trace_folder_is_off_the_log_folder_or_another")
 
     REQUIRE(folder("1").has_value());
     CHECK(*folder("1") == log_dir);
-    CHECK(*folder("1 ") == log_dir); // set in a cmd file with a blank after it
+    CHECK(*folder("1 ") == log_dir);
 
     REQUIRE(folder("D:\\traces").has_value());
     CHECK(*folder("D:\\traces") == L"D:\\traces");
-    CHECK(*folder("10") == L"10"); // a folder, not 1
-    CHECK(*folder("00") == L"00"); // not 0 either
+    CHECK(*folder("10") == L"10");
+    CHECK(*folder("00") == L"00");
     CHECK(*folder("D:\\sp\xC3\xA4t") == L"D:\\sp\u00E4t");
 
-    // 1 with no log folder (no %LOCALAPPDATA%): on, but with no folder to put the file in; the caller says so.
     const std::optional<std::wstring> nowhere = dvl::trace_folder(std::string("1"), L"");
     REQUIRE(nowhere.has_value());
     CHECK(nowhere->empty());
@@ -154,7 +149,6 @@ TEST_CASE("log_rotation_keeps_the_last_five")
     dvl::rotate_logs(dir.dir(), 5);
 
     CHECK_FALSE(fs::exists(dir.path() / "layer.log"));
-    // Each file moved one place up; the oldest is gone.
     CHECK(read_file(dir.path() / "layer.1.log") == "0");
     CHECK(read_file(dir.path() / "layer.2.log") == "1");
     CHECK(read_file(dir.path() / "layer.3.log") == "2");
@@ -172,10 +166,8 @@ TEST_CASE("log_rotation_with_gaps_and_a_missing_folder")
     CHECK(read_file(dir.path() / "layer.3.log") == "old");
     CHECK_FALSE(fs::exists(dir.path() / "layer.log"));
 
-    // Nothing there: nothing happens, and nothing throws.
     dvl::rotate_logs((dir.path() / "missing").wstring(), 5);
 
-    // Keeping one file: the previous one goes.
     write_file(dir.path() / "layer.log", "x");
     dvl::rotate_logs(dir.dir(), 1);
     CHECK_FALSE(fs::exists(dir.path() / "layer.log"));
@@ -196,11 +188,9 @@ TEST_CASE("logger_writes_lines_at_or_above_the_level")
     CHECK(text.find("a warning line") != std::string::npos);
     CHECK(text.find("an info line") != std::string::npos);
     CHECK(text.find("a debug line") == std::string::npos);
-    // The level is named and the line says which process wrote it.
     CHECK(text.find("error") != std::string::npos);
     CHECK(text.find("warn") != std::string::npos);
     CHECK(text.find("pid " + std::to_string(GetCurrentProcessId())) != std::string::npos);
-    // One line per message.
     CHECK(std::count(text.begin(), text.end(), '\n') == 3);
 }
 
@@ -213,7 +203,6 @@ TEST_CASE("logger_off_makes_no_file")
     }
     CHECK_FALSE(fs::exists(dir.path() / "layer.log"));
 
-    // A quiet level makes no file until something is written at it.
     {
         dvl::Logger logger(quiet_config(dir, dvl::Level::Warn));
         logger.write(dvl::Level::Info, "dropped");
@@ -228,7 +217,6 @@ TEST_CASE("logger_starts_a_new_file_for_each_process")
         dvl::Logger logger(quiet_config(dir));
         logger.write(dvl::Level::Info, "process " + std::to_string(process));
     }
-    // The newest is layer.log, then layer.1.log ... layer.4.log; processes 1 and 2 are gone.
     for (int i = 0; i <= 4; i++) {
         const fs::path p = dir.path() / (i == 0 ? "layer.log" : "layer." + std::to_string(i) + ".log");
         INFO(p.string());
@@ -240,7 +228,6 @@ TEST_CASE("logger_starts_a_new_file_for_each_process")
 
 TEST_CASE("logger_append_leaves_the_newest_file_in_place")
 {
-    // A process the guard declines must not push real logs out.
     TempDir dir;
     {
         dvl::Logger first(quiet_config(dir));
@@ -248,7 +235,7 @@ TEST_CASE("logger_append_leaves_the_newest_file_in_place")
     }
     {
         dvl::Logger stray(quiet_config(dir));
-        stray.write(dvl::Level::Warn, "from a declined process", /*rotate=*/false);
+        stray.write(dvl::Level::Warn, "from a declined process", false);
     }
     const std::string text = read_file(dir.path() / "layer.log");
     CHECK(text.find("from the real run") != std::string::npos);
@@ -281,7 +268,6 @@ TEST_CASE("logger_names_its_folder")
 
 TEST_CASE("logger_without_a_folder_still_works")
 {
-    // No %LOCALAPPDATA%: no file, no failure.
     dvl::LoggerConfig c;
     c.threshold = dvl::Level::Info;
     c.to_stderr = false;

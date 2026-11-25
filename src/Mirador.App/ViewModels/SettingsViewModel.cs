@@ -8,7 +8,6 @@ using Mirador.Ipc;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>App settings: start at sign-in, close to the tray and the update check; and About. The base stations' settings are on the Lighthouse page.</summary>
 public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly AppHost host;
@@ -43,11 +42,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         loading = false;
     }
 
-    /// <summary>Whether Windows starts Mirador at sign-in (read from the registry when the page opens).</summary>
     [ObservableProperty]
     public partial bool StartAtSignIn { get; set; }
 
-    /// <summary>Whether a start at sign-in stays in the notification area (or minimized) instead of showing the window.</summary>
     [ObservableProperty]
     public partial bool StartMinimized { get; set; }
 
@@ -60,15 +57,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
 
-    /// <summary>"Start Mirador when a game needs Monado": the stand-in starts Mirador for a game; off, games find Monado only while Mirador is open.</summary>
     [ObservableProperty]
     public partial bool StartMiradorForGames { get; set; }
 
-    /// <summary>"Home environment": the floor grid in the headset while no game runs.</summary>
     [ObservableProperty]
     public partial bool HomeEnvironment { get; set; }
 
-    /// <summary>"Dashboard": the bar the system button opens in the headset.</summary>
     [ObservableProperty]
     public partial bool Dashboard { get; set; }
 
@@ -80,38 +74,31 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public string Version => $"Mirador {AppInfo.Version}";
 
-    /// <summary>The "Updates" card's description: the last check's report.</summary>
     [ObservableProperty]
     public partial string UpdatesText { get; set; } = "Not checked yet.";
 
-    /// <summary>Mirador's release page, for the "Updates" card when a newer Mirador is out.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMiradorRelease))]
     public partial Uri? MiradorReleaseUrl { get; set; }
 
     public bool HasMiradorRelease => MiradorReleaseUrl is not null;
 
-    /// <summary>Whether "Update OpenLamina" shows: a newer OpenLamina is out and Mirador can update it.</summary>
     [ObservableProperty]
     public partial bool CanUpdateOpenComposite { get; set; }
 
-    /// <summary>Whether a check is running: the ring shows and "Check now" waits.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckNowCommand))]
     public partial bool Checking { get; set; }
 
-    /// <summary>About's "Bundled Monado" line: the full version installed, for bug reports.</summary>
     public string BundledMonadoVersion =>
         MiradorMonado.Read(host.Locator.MiradorRoot).Current is { } current ? $"Bundled Monado: {current}" : "Bundled Monado: not installed yet";
 
-    /// <summary>The "OpenLamina" card of About: the version and commit.</summary>
     public string OpenCompositeDescription =>
         host.OpenComposite.Source is { } source
             ? source.Describe()
             : host.OpenComposite.IsInstalled ? "Version unknown"
             : "Not installed";
 
-    /// <summary>"today at 09:10" or "yesterday at 14:02", else "on 3 Nov at 14:02".</summary>
     internal static string DescribeLastCheck(DateTime last, DateTime now)
     {
         var time = last.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
@@ -131,10 +118,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public void Dispose() => App.Current.Updates.Changed -= OnUpdatesChanged;
 
-    /// <summary>
-    /// Reads Mirador's settings for a page whose settings save at once. When they can't be read, gives the defaults and
-    /// says why in <paramref name="problem"/>; null otherwise.
-    /// </summary>
     internal static AppSettings Read(AppHost host, out string? problem)
     {
         try
@@ -149,7 +132,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Applies <paramref name="change"/> to the settings as saved now and saves them: null when saved, else why not.</summary>
     internal static string? Write(AppHost host, Func<AppSettings, AppSettings> change)
     {
         try
@@ -186,9 +168,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     private bool CanCheckNow() => !Checking;
 
-    // The last Update/Use-bundled outcome. The re-check inside those queues ShowReport, which may run before or after
-    // the outcome is known; ShowReport puts the outcome in front of the report, and ShowOutcome sets the same text, so
-    // either order ends with the same line.
     private string? outcome;
 
     private async Task ShowOutcome(Task<string> operation)
@@ -198,7 +177,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ShowReport();
     }
 
-    /// <summary>An update check, daily or asked for, finished on whichever thread.</summary>
     private void OnUpdatesChanged() => ui.TryEnqueue(ShowReport);
 
     private void ShowReport()
@@ -206,7 +184,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         var updates = App.Current.Updates;
         if (updates.Last is not { } report)
         {
-            // No report from this run: the daily check may have been skipped because one already ran.
             if (Read(host, out _).LastUpdateCheck is { } last)
             {
                 UpdatesText = $"Last checked {DescribeLastCheck(last.LocalDateTime, DateTime.Now)}.";
@@ -256,7 +233,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         SwitchesChanged();
     }
 
-    /// <summary>A running Monado gets the home or the dashboard now, or loses it; off the UI thread, since it reads the settings file.</summary>
     private void SwitchesChanged()
     {
         if (!loading)
@@ -292,7 +268,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         {
             Problem = e.Message;
 
-            // The switch goes back to what Windows has.
             loading = true;
             try
             {

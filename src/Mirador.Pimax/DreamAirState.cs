@@ -3,22 +3,14 @@ using Mirador.Core;
 
 namespace Mirador.Pimax;
 
-/// <summary>What Mirador remembers about the Dream Air between runs, in <c>dreamair.json</c>.</summary>
-/// <param name="BlobVariant">The eye geometry variant this headset needs, once known.</param>
-/// <param name="BlobTrackerSerial">The eye tracker the variant belongs to.</param>
 public sealed record DreamAirState(
     string? BlobVariant = null,
     string? BlobTrackerSerial = null);
 
-/// <summary>Keeps the <see cref="DreamAirState"/> in one JSON file. Safe to use from several threads.</summary>
 public sealed class DreamAirStateStore(string path)
 {
     private readonly object gate = new();
 
-    /// <summary>
-    /// The saved state. A missing file gives an empty state; a file that can't be read is kept as <c>.bad</c> next to
-    /// it and an empty state is returned. A variant Mirador doesn't know is dropped, so it never reaches a path.
-    /// </summary>
     public DreamAirState Load()
     {
         lock (gate)
@@ -38,7 +30,6 @@ public sealed class DreamAirStateStore(string path)
         }
     }
 
-    /// <summary>Loads, changes and saves the state in one step, so that two changes at once don't undo each other.</summary>
     public DreamAirState Update(Func<DreamAirState, DreamAirState> change)
     {
         lock (gate)

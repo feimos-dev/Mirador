@@ -28,7 +28,6 @@ public sealed class RoomSetupStoreTests : IDisposable
         Assert.Equal(setup, Store().Get("steamvr_lh", "1500000001"));
         Assert.False(System.IO.File.Exists(File + ".tmp"));
 
-        // Set again for the same origin and universe: replaced, not added.
         var again = setup with { Offset = MonadoPose.Identity, Taken = Taken.AddMinutes(5) };
         Store().Set(again);
         Assert.Equal(again, Store().Get("steamvr_lh", "1500000001"));
@@ -38,7 +37,6 @@ public sealed class RoomSetupStoreTests : IDisposable
         Assert.Null(Store().Get("steamvr_lh", "1500000001"));
         Assert.Empty(Store().All());
 
-        // Clearing what isn't there does nothing.
         Store().Clear("steamvr_lh", "1500000001");
     }
 

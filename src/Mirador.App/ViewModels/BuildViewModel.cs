@@ -7,10 +7,6 @@ using Mirador.Core.Profiles;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// The Profiles page's build card for a branch profile: what was built last (the commit,
-/// the compiler, the checks), "Build" or "Pull and rebuild", Cancel, and the build's log as it runs.
-/// </summary>
 public sealed partial class BuildViewModel : ObservableObject
 {
     private readonly AppHost host;
@@ -23,7 +19,6 @@ public sealed partial class BuildViewModel : ObservableObject
         this.ui = ui;
     }
 
-    /// <summary>Whether the card shows: the saved profile builds a branch.</summary>
     [ObservableProperty]
     public partial bool IsVisible { get; set; }
 
@@ -31,23 +26,19 @@ public sealed partial class BuildViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(BuildCommand), nameof(CancelCommand))]
     public partial bool IsBuilding { get; set; }
 
-    /// <summary>The last build: its commit and checks, or that there is none yet.</summary>
     [ObservableProperty]
     public partial string Status { get; set; } = "";
 
     [ObservableProperty]
     public partial string BuildLabel { get; set; } = "Build";
 
-    /// <summary>The running or last build's newest line.</summary>
     [ObservableProperty]
     public partial string Log { get; set; } = "";
 
-    /// <summary>Whether the new build's approval prompt is open: Build waits for it.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     public partial bool IsApproving { get; set; }
 
-    /// <summary>Whether the profile has unsaved changes: it is built as saved, so Build waits for Save.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     public partial bool Unsaved { get; set; }
@@ -60,7 +51,6 @@ public sealed partial class BuildViewModel : ObservableObject
 
     public void Detach() => host.Builds.Changed -= OnChanged;
 
-    /// <summary>Shows the saved <paramref name="saved"/> profile (null: none).</summary>
     public void Show(Profile? saved)
     {
         profile = saved?.Monado.Kind == SourceKind.Branch ? saved : null;

@@ -33,12 +33,12 @@ public class ElevatedVariablesTests
     public void Only_plain_ascii_names_are_allowed(string name) => Assert.True(ElevatedVariables.IsRefused(name));
 
     [Theory]
-    [InlineData("IPC_RELAXED_CONNECT\uFF29ON_SECUR\uFF29TY")] // fullwidth I
+    [InlineData("IPC_RELAXED_CONNECT\uFF29ON_SECUR\uFF29TY")]
     [InlineData("ZZFOLD_\uFF29_X")]
-    [InlineData("LH_\u212AEEP")] // Kelvin sign
+    [InlineData("LH_\u212AEEP")]
     [InlineData("STEAMVR_PATH\u212A")]
-    [InlineData("P\u0130MAX_LOG")] // dotted capital I
-    [InlineData("P\u0131MAX_LOG")] // dotless small i
+    [InlineData("P\u0130MAX_LOG")]
+    [InlineData("P\u0131MAX_LOG")]
     public void Look_alike_letters_are_refused(string name) => Assert.True(ElevatedVariables.IsRefused(name));
 
     [Theory]
@@ -76,10 +76,6 @@ public class ElevatedVariablesTests
         }
     }
 
-    /// <summary>
-    /// Every name the helper sets itself, in any start it builds: with and without a module, headless, with every
-    /// setting on and without the elevation fix (so the relaxed connection security is there too).
-    /// </summary>
     [Fact]
     public void Every_name_the_helper_sets_itself_is_refused()
     {

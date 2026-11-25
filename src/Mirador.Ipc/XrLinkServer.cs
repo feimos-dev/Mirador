@@ -3,16 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// Mirador's end of the <see cref="XrLink"/> pipe: takes the connections of the home and the dashboard and hands each
-/// to <see cref="Connected"/> once it has said which it is. Only this user's processes can open the pipe, and
-/// <paramref name="allow"/> can narrow that to the processes Mirador started.
-/// </summary>
-/// <param name="name">The pipe's name (<see cref="XrLink.CurrentName"/>).</param>
-/// <param name="allow">Whether the process with this id may connect as this role; null: any of this user's may.</param>
 public sealed class XrLinkServer(string name, Func<int?, string, bool>? allow = null) : IAsyncDisposable
 {
-    /// <summary>How many programs are served at once; a further one waits.</summary>
     public const int MaxServed = 4;
 
     private const int BufferBytes = 2 * (AppPipe.MaxLineBytes + 1);
@@ -22,28 +14,18 @@ public sealed class XrLinkServer(string name, Func<int?, string, bool>? allow = 
     private readonly List<Task> serving = [];
     private Task? loop;
 
-    /// <summary>How long a program has to send its first line.</summary>
     internal TimeSpan HelloLimit { get; init; } = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// Raised on a background thread for each program that connected and said which it is. The handler adds its own
-    /// handlers to the connection and returns; lines are read only after that. A handler that throws loses the connection.
-    /// </summary>
     public event Action<XrLinkConnection>? Connected;
 
-    /// <summary>Raised when the pipe can't be listened on any more.</summary>
     public event Action<Exception>? Failed;
 
-    /// <summary>Begins listening.</summary>
-    /// <exception cref="IOException">Another process holds the pipe's name.</exception>
-    /// <exception cref="UnauthorizedAccessException">Another process holds the pipe's name.</exception>
     public void Start()
     {
         var first = CreatePipe(firstInstance: true);
         loop = Task.Run(() => ListenAsync(first, stopping.Token));
     }
 
-    /// <summary>Stops listening and ends every connection.</summary>
     public async ValueTask DisposeAsync()
     {
         await stopping.CancelAsync().ConfigureAwait(false);
@@ -69,7 +51,6 @@ public sealed class XrLinkServer(string name, Func<int?, string, bool>? allow = 
             ? NamedPipeServerStreamAcl.Create(
                 name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
                 options, BufferBytes, BufferBytes, AppPipeServer.CreatePipeSecurity())
-            // Elsewhere only for the tests: .NET's pipes there have no permissions or first instances.
             : new NamedPipeServerStream(
                 name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous, BufferBytes, BufferBytes);
@@ -91,7 +72,6 @@ public sealed class XrLinkServer(string name, Func<int?, string, bool>? allow = 
                 }
                 catch (IOException)
                 {
-                    // The caller went away before it was accepted.
                     slots.Release();
                     await connected.DisposeAsync().ConfigureAwait(false);
                     continue;
@@ -170,7 +150,6 @@ public sealed class XrLinkServer(string name, Func<int?, string, bool>? allow = 
         }
         catch (Exception)
         {
-            // A Connected handler threw: the program is dropped and connects again when it is started again.
         }
         finally
         {

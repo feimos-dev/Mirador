@@ -7,7 +7,7 @@ public class StandInTests
     [Fact]
     public void A_program_that_says_something_else_is_not_the_stand_in()
     {
-        Assert.False(StandIn.IsStandIn(Environment.ProcessPath!)); // the test host
+        Assert.False(StandIn.IsStandIn(Environment.ProcessPath!));
         Assert.False(StandIn.IsStandIn(Path.Combine(Environment.SystemDirectory, "ping.exe")));
     }
 
@@ -51,7 +51,7 @@ public class StandInTests
         }
 
         Assert.False(StandIn.BelongsTo(dir.File("a", "service", StandIn.FileName), InstallIn(dir.File("b"))));
-        Assert.False(StandIn.BelongsTo(dir.File("a", "service", StandIn.FileName), InstallIn(dir.File("c")))); // nothing there
+        Assert.False(StandIn.BelongsTo(dir.File("a", "service", StandIn.FileName), InstallIn(dir.File("c"))));
     }
 
     [Fact]

@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The built DLL driven the way the loader drives a layer: negotiation, then vkCreateInstance and vkCreateDevice down a
-// chain of one fake "next layer" (a driver stand-in). No GPU, no loader.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -15,7 +12,6 @@
 
 namespace {
 
-// A dispatchable handle as the loader makes them: the first word points at a dispatch table.
 struct FakeHandle {
     void* dispatch;
 };
@@ -25,7 +21,6 @@ FakeHandle g_instance{&g_instance_table};
 FakeHandle g_physical{&g_instance_table};
 FakeHandle g_device{&g_device_table};
 
-// What the fake next layer saw.
 struct NextLayer {
     std::vector<std::string> instance_extensions;
     std::vector<std::string> device_extensions;
@@ -111,7 +106,7 @@ bool contains(const std::vector<std::string>& v, const char* s)
     return std::find(v.begin(), v.end(), s) != v.end();
 }
 
-} // namespace
+}
 
 TEST_CASE("layer_chains_instance_and_device_creation")
 {
@@ -125,13 +120,11 @@ TEST_CASE("layer_chains_instance_and_device_creation")
     PFN_vkGetInstanceProcAddr gipa = n.iface.pfnGetInstanceProcAddr;
     PFN_vkGetDeviceProcAddr gdpa = n.iface.pfnGetDeviceProcAddr;
 
-    // The names the layer answers itself, and the ones it passes on.
     {
         auto self = reinterpret_cast<PFN_vkVoidFunction>(gipa);
         CHECK(gipa(VK_NULL_HANDLE, "vkGetInstanceProcAddr") == self);
         CHECK(gipa(VK_NULL_HANDLE, "vkCreateInstance") != nullptr);
         CHECK(gipa(VK_NULL_HANDLE, "vkCreateInstance") != reinterpret_cast<PFN_vkVoidFunction>(&next_CreateInstance));
-        // Without an instance there is nothing to pass a name on to.
         CHECK(gipa(VK_NULL_HANDLE, "vkNotOurs") == nullptr);
         CHECK(gipa(VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties") == nullptr);
         CHECK(gdpa(VK_NULL_HANDLE, "vkNotOurs") == nullptr);
@@ -157,28 +150,21 @@ TEST_CASE("layer_chains_instance_and_device_creation")
     REQUIRE(create_instance(&ci, nullptr, &instance) == VK_SUCCESS);
     CHECK(instance == reinterpret_cast<VkInstance>(&g_instance));
     CHECK(g_next.create_instance_calls == 1);
-    // It loaded the next layer's functions for the instance.
     CHECK(contains(g_next.gipa_asked, "vkDestroyInstance"));
     CHECK(contains(g_next.gipa_asked, "vkGetPhysicalDeviceProperties"));
 
-    // The layer took its link out of the chain (the next layer must find its own), and the extension that the driver
-    // lacks did not go down.
     CHECK(chain.u.pLayerInfo == nullptr);
     CHECK(g_next.instance_extensions == std::vector<std::string>{"VK_KHR_surface", "VK_KHR_display"});
-    // The caller's create info is unchanged.
     CHECK(ci.enabledExtensionCount == 3);
     CHECK(ci.ppEnabledExtensionNames == extensions);
 
-    // Names go to the next layer once the instance exists, and ours are answered first.
     CHECK(gipa(instance, "vkNotOurs") == reinterpret_cast<PFN_vkVoidFunction>(&next_Marker));
     CHECK(gipa(instance, "vkDestroyInstance") != nullptr);
     CHECK(gipa(instance, "vkDestroyInstance") != reinterpret_cast<PFN_vkVoidFunction>(&next_DestroyInstance));
     CHECK(gipa(instance, "vkDoesNotExist") == nullptr);
-    // A physical device has the instance's dispatch key.
     CHECK(gipa(reinterpret_cast<VkInstance>(&g_physical), "vkNotOurs") ==
           reinterpret_cast<PFN_vkVoidFunction>(&next_Marker));
 
-    // The device: the same walk down.
     VkLayerDeviceLink dlink{nullptr, next_GetInstanceProcAddr, next_GetDeviceProcAddr};
     VkLayerDeviceCreateInfo dchain{};
     dchain.sType = VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO;
@@ -200,25 +186,23 @@ TEST_CASE("layer_chains_instance_and_device_creation")
     CHECK(contains(g_next.gdpa_asked, "vkQueueSubmit"));
     CHECK(dchain.u.pLayerInfo == nullptr);
     CHECK(g_next.device_extensions == std::vector<std::string>{"VK_KHR_swapchain"});
-    CHECK(g_next.device_create_pnext == &dchain); // the chain went down as it came
+    CHECK(g_next.device_create_pnext == &dchain);
 
     CHECK(gdpa(device, "vkNotOurs") == reinterpret_cast<PFN_vkVoidFunction>(&next_DeviceMarker));
     CHECK(gdpa(device, "vkDoesNotExist") == nullptr);
     CHECK(gdpa(device, "vkDestroyDevice") != nullptr);
     CHECK(gdpa(device, "vkDestroyDevice") != reinterpret_cast<PFN_vkVoidFunction>(&next_DestroyDevice));
-    // The instance level also answers device commands, with the same functions.
     CHECK(gipa(instance, "vkDestroyDevice") == gdpa(device, "vkDestroyDevice"));
 
-    // Teardown, in the loader's order.
     auto destroy_device = reinterpret_cast<PFN_vkDestroyDevice>(gdpa(device, "vkDestroyDevice"));
     destroy_device(device, nullptr);
     CHECK(g_next.device_destroyed);
-    CHECK(gdpa(device, "vkNotOurs") == nullptr); // forgotten
+    CHECK(gdpa(device, "vkNotOurs") == nullptr);
 
     auto destroy_instance = reinterpret_cast<PFN_vkDestroyInstance>(gipa(instance, "vkDestroyInstance"));
     destroy_instance(instance, nullptr);
     CHECK(g_next.instance_destroyed);
-    CHECK(gipa(instance, "vkNotOurs") == nullptr); // forgotten
+    CHECK(gipa(instance, "vkNotOurs") == nullptr);
 }
 
 TEST_CASE("layer_create_instance_without_link_info_fails")
@@ -243,8 +227,6 @@ TEST_CASE("layer_create_instance_without_link_info_fails")
 
 TEST_CASE("only_the_test_build_exports_the_display_session_seam")
 {
-    // The tests put a display session on a fake NVAPI into the layer through an export of the DLL's test build; the
-    // shipped DLL has no such entry point.
     dvl_test::LayerDll shipped;
     REQUIRE(shipped.loaded());
     CHECK(shipped.proc<void (*)()>("dvl_test_set_display_session") == nullptr);

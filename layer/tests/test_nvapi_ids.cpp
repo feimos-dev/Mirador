@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The NVAPI declarations: ids, constants and the three structs whose layout the driver sees.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -73,7 +71,6 @@ TEST_CASE("NVAPI ids")
     CHECK(nvdm::Present == 0x8c84a92au);
     CHECK(nvdm::GetPresentStats == 0xace116bcu);
     CHECK(nvdm::GetDriverAndBranchVersion == 0x2926aaadu);
-    // The public calls of the EDID route.
     CHECK(nvdm::GetGpuAndOutputIdFromDisplayId == 0x112ba1a5u);
     CHECK(nvdm::GetEDID == 0x37d32e69u);
 }
@@ -105,7 +102,6 @@ TEST_CASE("The id table lists every id once, with a name, in call order")
     CHECK(names.size() == std::size(nvdm::kAllIds));
     CHECK(std::size(nvdm::kAllIds) == 13);
 
-    // The seven calls only the direct-mode path uses; first_missing_id() names the first of these that is missing.
     CHECK(private_ids ==
           "Enumerate EnableDirectMode BindDevice CreateBackBuffer SetDisplayMode Present GetPresentStats ");
 }

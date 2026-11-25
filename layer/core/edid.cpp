@@ -13,8 +13,8 @@ namespace {
 constexpr size_t kBlock = 128;
 constexpr uint8_t kCtaTag = 0x02;
 constexpr uint8_t kDisplayIdTag = 0x70;
-constexpr uint8_t kTypeITiming = 0x03;   // DisplayID 1.x detailed timing, pixel clock in 10 kHz
-constexpr uint8_t kTypeVIITiming = 0x22; // DisplayID 2.x detailed timing, pixel clock in 1 kHz
+constexpr uint8_t kTypeITiming = 0x03;
+constexpr uint8_t kTypeVIITiming = 0x22;
 constexpr size_t kTimingSize = 20;
 constexpr uint32_t kMicrosoftOui = 0xca125c;
 
@@ -24,14 +24,11 @@ bool has_header(const std::vector<uint8_t>& edid)
     return edid.size() >= kBlock && std::equal(std::begin(kHeader), std::end(kHeader), edid.begin());
 }
 
-// The extension blocks there are bytes for.
 size_t block_count(const std::vector<uint8_t>& edid)
 {
     return edid.size() / kBlock;
 }
 
-// A mode no display drives (a size past what the GPU can scan out, a rate outside 24 to 500 Hz) is a malformed EDID's,
-// and no mode: SetDisplayMode would be handed nonsense.
 constexpr uint32_t kMaxSide = 16384;
 constexpr uint64_t kMinRefreshMhz = 24'000;
 constexpr uint64_t kMaxRefreshMhz = 500'000;
@@ -43,14 +40,13 @@ std::optional<EdidMode> mode_of(uint64_t clock_hz, uint32_t width, uint32_t heig
         return std::nullopt;
     }
     const uint64_t pixels = static_cast<uint64_t>(h_total) * v_total;
-    const uint64_t refresh_mhz = (clock_hz * 1000 + pixels / 2) / pixels; // clock_hz * 1000 stays below 2^48
+    const uint64_t refresh_mhz = (clock_hz * 1000 + pixels / 2) / pixels;
     if (refresh_mhz < kMinRefreshMhz || refresh_mhz > kMaxRefreshMhz) {
         return std::nullopt;
     }
     return EdidMode{width, height, static_cast<uint32_t>(refresh_mhz)};
 }
 
-// The base block's first detailed timing descriptor (offset 54), when it is a timing (a pixel clock other than 0).
 std::optional<EdidMode> base_timing(const std::vector<uint8_t>& edid)
 {
     const uint8_t* d = edid.data() + 54;
@@ -70,7 +66,6 @@ struct DisplayIdTiming {
     bool preferred;
 };
 
-// Every Type I and Type VII timing of the DisplayID extension blocks, in order.
 std::vector<DisplayIdTiming> displayid_timings(const std::vector<uint8_t>& edid)
 {
     std::vector<DisplayIdTiming> timings;
@@ -79,17 +74,16 @@ std::vector<DisplayIdTiming> displayid_timings(const std::vector<uint8_t>& edid)
         if (block[0] != kDisplayIdTag) {
             continue;
         }
-        // Byte 2 is the length of the data blocks, which start at byte 5; the last byte is the checksum.
         const size_t end = std::min<size_t>(5 + block[2], kBlock - 1);
         size_t off = 5;
         while (off + 3 <= end) {
             const uint8_t tag = block[off];
             const size_t length = block[off + 2];
             if (tag == 0 && length == 0) {
-                break; // padding
+                break;
             }
             if (off + 3 + length > end) {
-                break; // a length past the section: nothing more of this block is trusted
+                break;
             }
             if ((tag == kTypeITiming || tag == kTypeVIITiming) && length % kTimingSize == 0) {
                 const uint64_t clock_unit = tag == kTypeITiming ? 10'000 : 1'000;
@@ -111,7 +105,7 @@ std::vector<DisplayIdTiming> displayid_timings(const std::vector<uint8_t>& edid)
     return timings;
 }
 
-} // namespace
+}
 
 std::optional<EdidMode> preferred_mode(const std::vector<uint8_t>& edid)
 {
@@ -143,7 +137,6 @@ bool has_microsoft_hmd_block(const std::vector<uint8_t>& edid)
         if (block[0] != kCtaTag) {
             continue;
         }
-        // Data blocks run from byte 4 to the offset of the first detailed timing (byte 2).
         const size_t end = std::min<size_t>(block[2], kBlock - 1);
         size_t off = 4;
         while (off < end) {
@@ -164,4 +157,4 @@ bool has_microsoft_hmd_block(const std::vector<uint8_t>& edid)
     return false;
 }
 
-} // namespace nvdm
+}

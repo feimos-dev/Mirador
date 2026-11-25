@@ -32,8 +32,6 @@ uintptr_t arg(T* pointer)
     return reinterpret_cast<uintptr_t>(pointer);
 }
 
-// --- EDID ------------------------------------------------------------------------------------------------------
-
 constexpr size_t kEdidBlock = 128;
 
 bool looks_like_edid(const std::vector<uint8_t>& edid)
@@ -42,15 +40,13 @@ bool looks_like_edid(const std::vector<uint8_t>& edid)
     return edid.size() >= kEdidBlock && std::equal(std::begin(kHeader), std::end(kHeader), edid.begin());
 }
 
-// NvAPI_GPU_GetEDID takes one 256-byte page at a time. Our declaration of its version-3 struct; the version value
-// carries the struct's size, so a driver that disagrees with this layout refuses the call instead of writing into it.
 constexpr uint32_t kEdidPage = 256;
 struct EdidPage {
     uint32_t version;
     uint8_t data[kEdidPage];
-    uint32_t size;   // Of the whole EDID.
-    uint32_t id;     // Changes when the display's EDID does; the same for every page of one read.
-    uint32_t offset; // Of this page in the EDID, a multiple of 256.
+    uint32_t size;
+    uint32_t id;
+    uint32_t offset;
 };
 static_assert(sizeof(EdidPage) == 272, "NV_EDID version 3 is 272 bytes");
 constexpr uint32_t kEdidPageVersion = sizeof(EdidPage) | (3u << 16);
@@ -61,9 +57,7 @@ struct EdidBuffer {
     uint8_t spare[256];
 };
 
-constexpr uint32_t kEdidMaxPages = 16; // 4 KiB, far more than the headset has.
-
-// --- Registry --------------------------------------------------------------------------------------------------
+constexpr uint32_t kEdidMaxPages = 16;
 
 struct RegKey {
     HKEY key = nullptr;
@@ -95,8 +89,6 @@ std::vector<uint8_t> read_binary_value(HKEY parent, const wchar_t* subkey, const
     return data;
 }
 
-// --- The port --------------------------------------------------------------------------------------------------
-
 class NvapiApi final : public Api {
 public:
     NvapiApi()
@@ -112,8 +104,6 @@ public:
             return 0;
         }
         if (dll_ == nullptr) {
-            // nvapi64.dll sits in System32. Searching only there keeps a layer that is injected into any process
-            // from loading a copy planted next to the executable.
             dll_ = LoadLibraryExW(L"nvapi64.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
             if (dll_ == nullptr) {
                 return kNoNvapi;
@@ -158,7 +148,7 @@ public:
     std::string driver_version() override
     {
         uint32_t version = 0;
-        char branch[256] = {}; // NvAPI_ShortString is 64 chars, leave room.
+        char branch[256] = {};
         if (call(GetDriverAndBranchVersion, arg(&version), arg(branch)) != 0 || version == 0) {
             return {};
         }
@@ -170,7 +160,7 @@ public:
     int enumerate(uint32_t vendor, std::vector<uint32_t>& ids) override
     {
         ids.clear();
-        uint32_t count = 8; // In: room for this many; out: how many there are.
+        uint32_t count = 8;
         uint32_t buffer[32] = {};
         const int ret = call(Enumerate, vendor, arg(&count), arg(buffer), 1);
         if (ret != 0) {
@@ -193,7 +183,7 @@ public:
             return ret;
         }
         if (gpu == nullptr) {
-            return kBadOutput; // NVAPI said OK but named no GPU; the next call would be given NULL.
+            return kBadOutput;
         }
         LUID luid{};
         ret = call(GetAdapterIdFromPhysicalGpu, arg(gpu), arg(&luid));
@@ -223,7 +213,7 @@ public:
     int bind_device(uint32_t display_id, IUnknown* d3d11, uint32_t vendor) override
     {
         if (d3d11 == nullptr) {
-            return kBadArgument; // No driver call, and an earlier bind stays as it is.
+            return kBadArgument;
         }
         bound_ = false;
         handle_ = Handle{};
@@ -244,7 +234,7 @@ public:
         if (!bound_) {
             return kNotBound;
         }
-        Mode request = mode; // The call takes a pointer to a writable mode.
+        Mode request = mode;
         // Only the first dword of each output is known; Pimax passes room for more, so do we.
         uint64_t tag[4] = {};
         uint64_t shared[4] = {};
@@ -282,7 +272,7 @@ public:
         if (!bound_) {
             return kNotBound;
         }
-        RawStats stats; // Version set, and room for what the driver writes past its 24 bytes.
+        RawStats stats;
         const int ret = call(GetPresentStats, arg(&handle_), arg(&stats));
         if (ret != 0) {
             return ret;
@@ -312,9 +302,6 @@ private:
         return fn != nullptr ? fn(a, b, c, d, e, f) : kNoEntry;
     }
 
-    // The first route: NvAPI_GPU_GetEDID on the display's GPU with the display id itself as its output. It answers for
-    // the direct-mode display: the probe of 2026-10-31 read the Dream Air's 384-byte EDID this way (versions 3 and 2 of
-    // the struct; version 1 gave zeroes), with no registry value needed.
     bool read_edid_of_display(uint32_t display_id, std::vector<uint8_t>& out)
     {
         void* gpu = nullptr;
@@ -324,8 +311,6 @@ private:
         return read_edid_pages(gpu, display_id, out);
     }
 
-    // The second route: the GPU's output id for the display id. In direct mode GetEDID answers it with
-    // NVAPI_DATA_NOT_FOUND (-121, M1 and the probe); kept for drivers that answer it.
     bool read_edid_of_output(uint32_t display_id, std::vector<uint8_t>& out)
     {
         void* gpu = nullptr;
@@ -336,8 +321,6 @@ private:
         return read_edid_pages(gpu, output_id, out);
     }
 
-    // The EDID page by page, from GetEDID with `output` (an output id, or a display id). Any surprise is a plain
-    // failure, and the next route takes over.
     bool read_edid_pages(void* gpu, uint32_t output, std::vector<uint8_t>& out)
     {
         uint32_t total = 0;
@@ -356,7 +339,7 @@ private:
                     return false;
                 }
             } else if (buffer.page.size != total || buffer.page.id != edid_id) {
-                return false; // The EDID changed while it was being read.
+                return false;
             }
             const uint32_t take = std::min(kEdidPage, total - buffer.page.offset);
             out.insert(out.end(), buffer.page.data, buffer.page.data + take);
@@ -370,16 +353,15 @@ private:
     HMODULE dll_ = nullptr;
     QueryInterfaceFn query_ = nullptr;
     bool initialized_ = false;
-    void* fns_[std::size(kAllIds)] = {}; // nvapi_QueryInterface's answer for each id of kAllIds, NULL if missing.
+    void* fns_[std::size(kAllIds)] = {};
 
-    // Filled by bind_device; the driver keeps pointing into the calls that take it, so it stays in place.
     Handle handle_;
     bool bound_ = false;
 
     int64_t qpc_frequency_ = 1;
 };
 
-} // namespace
+}
 
 std::unique_ptr<Api> make_nvapi()
 {
@@ -388,10 +370,8 @@ std::unique_ptr<Api> make_nvapi()
 
 namespace {
 
-// The Dream Air's model key: manufacturer "PVR", product 0x1019.
 constexpr wchar_t kDreamAirModelKey[] = L"PVR1019";
 
-// The first instance under `model_name` (a key of Enum\DISPLAY) that has a valid EDID.
 bool edid_from_model(HKEY display, const wchar_t* model_name, std::vector<uint8_t>& out)
 {
     RegKey model;
@@ -404,10 +384,10 @@ bool edid_from_model(HKEY display, const wchar_t* model_name, std::vector<uint8_
         const LONG status =
             RegEnumKeyExW(model.key, i, instance_name, &instance_length, nullptr, nullptr, nullptr, nullptr);
         if (status == ERROR_MORE_DATA) {
-            continue; // A name that does not fit the buffer is no instance id; the next key may be fine.
+            continue;
         }
         if (status != ERROR_SUCCESS) {
-            break; // ERROR_NO_MORE_ITEMS, or something that makes going on pointless.
+            break;
         }
         const std::wstring subkey = std::wstring(instance_name) + L"\\Device Parameters";
         std::vector<uint8_t> edid = read_binary_value(model.key, subkey.c_str(), L"EDID");
@@ -419,13 +399,12 @@ bool edid_from_model(HKEY display, const wchar_t* model_name, std::vector<uint8_
     return false;
 }
 
-} // namespace
+}
 
 bool read_edid_from_display_key(HKEY display, std::vector<uint8_t>& out)
 {
     out.clear();
 
-    // The Dream Air's own key first: it is the one that is right, whatever else Pimax ships under the manufacturer id.
     if (edid_from_model(display, kDreamAirModelKey, out)) {
         return true;
     }
@@ -440,7 +419,6 @@ bool read_edid_from_display_key(HKEY display, std::vector<uint8_t>& out)
         if (status != ERROR_SUCCESS) {
             break;
         }
-        // Any other monitor of manufacturer "PVR".
         if (_wcsnicmp(model_name, L"PVR", 3) != 0 || _wcsicmp(model_name, kDreamAirModelKey) == 0) {
             continue;
         }
@@ -462,4 +440,4 @@ bool read_edid_from_registry(std::vector<uint8_t>& out)
     return read_edid_from_display_key(display.key, out);
 }
 
-} // namespace nvdm
+}

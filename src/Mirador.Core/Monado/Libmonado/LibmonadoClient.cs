@@ -4,25 +4,14 @@ using Mirador.Core.Native;
 
 namespace Mirador.Core.Monado.Libmonado;
 
-/// <summary>What <see cref="Libmonado.Open"/> gave: a connected client, or the problem that stopped it (one of them is null).</summary>
 public sealed record LibmonadoOpen(IMonadoClient? Client, string? Problem);
 
-/// <summary>
-/// Libmonado, Monado's client library, loaded from a Monado install's <c>bin</c> folder. Mirador never ships its own
-/// copy: the library must speak the same protocol as the service it connects to.
-/// </summary>
 public static class Libmonado
 {
-    /// <summary>The problem when the install has no libmonado, or one without the functions Mirador needs.</summary>
     public const string NotOffered = "This Monado doesn't offer libmonado.";
 
-    /// <summary>Libmonado's file name in a Monado install's <c>bin</c> folder.</summary>
     public const string FileName = "monado.dll";
 
-    /// <summary>
-    /// Loads <see cref="FileName"/> from <paramref name="binDir"/> and connects to Monado through it. Call it only when
-    /// Monado is known to run: when Monado's pipe is missing, libmonado starts Monado itself.
-    /// </summary>
     public static unsafe LibmonadoOpen Open(string binDir)
     {
         var path = Path.GetFullPath(Path.Combine(binDir, FileName));
@@ -31,7 +20,6 @@ public static class Libmonado
             return new(null, NotOffered);
         }
 
-        // Its dependencies come from bin and System32 only, never from the current folder.
         var module = Win32.WithoutErrorBoxes(() =>
             LibmonadoNative.LoadLibraryExW(path, IntPtr.Zero, LibmonadoNative.SearchDllLoadDir | LibmonadoNative.SearchSystem32));
         if (module == IntPtr.Zero)
@@ -73,10 +61,8 @@ public static class Libmonado
     }
 }
 
-/// <summary>An open libmonado connection: <c>mnd_root_t</c> and the library it came from. Calls are serialised.</summary>
 internal sealed unsafe class LibmonadoClient : IMonadoClient
 {
-    /// <summary>The roles asked for, in this order; a device gets the first one it has.</summary>
     private static readonly (string Name, byte[] Native)[] Roles =
         [.. new[] { "head", "eyes", "left", "right", "gamepad", "hand-tracking-unobstructed-left", "hand-tracking-unobstructed-right" }
             .Select(role => (role, Encoding.ASCII.GetBytes(role + "\0")))];
@@ -96,10 +82,8 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
     public bool OffersOriginOffsets => exports.OffersOriginOffsets;
 
-    /// <summary>The problem when a libmonado call returns <paramref name="result"/>.</summary>
     public static string NoAnswer(int result) => $"Monado didn't answer libmonado (error {result}).";
 
-    /// <summary>More devices than Monado can hold (its system has 32 at most): a count over this is a broken answer.</summary>
     private const uint MaxDevices = 64;
 
     public IReadOnlyList<MonadoDevice> Devices()
@@ -121,7 +105,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                 int index;
                 fixed (byte* role = native)
                 {
-                    // A role this libmonado doesn't know, or that no device has, is skipped.
                     if (exports.GetDeviceFromRole(root, role, &index) >= 0 && index >= 0)
                     {
                         roles.TryAdd(index, name);
@@ -135,7 +118,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                 var name = DeviceString(i, LibmonadoExports.PropertyNameString) ?? "";
                 var serial = DeviceString(i, LibmonadoExports.PropertySerialString) is { Length: > 0 } text ? text : null;
 
-                // A libmonado older than 1.4 doesn't know this property; its devices count as on origin 0.
                 uint origin = 0;
                 var originResult = exports.GetDeviceInfoU32(root, i, LibmonadoExports.PropertyTrackingOriginU32, &origin);
                 if (originResult != LibmonadoExports.ErrorInvalidProperty)
@@ -143,7 +125,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                     Check(originResult);
                 }
 
-                // Fails for a device without battery status.
                 byte present = 0, charging = 0;
                 float charge = 0;
                 var hasBattery = exports.GetDeviceBatteryStatus(root, i, &present, &charging, &charge) >= 0 && present != 0;
@@ -209,7 +190,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
 
     public bool OffersLocalRecentre => exports.OffersLocalRecentre;
 
-    /// <summary>More apps than Monado serves at once (its client table has 8 places): a count over this is a broken answer.</summary>
     private const uint MaxApps = 64;
 
     public IReadOnlyList<MonadoApp> Apps()
@@ -233,7 +213,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
             var apps = new List<MonadoApp>((int)count);
             for (uint i = 0; i < count; i++)
             {
-                // An app that left since the list was read fails these calls: it is skipped.
                 uint id, flags;
                 byte* name = null;
                 if (exports.GetClientIdAtIndex(root, i, &id) < 0 || exports.GetClientName(root, id, &name) < 0)
@@ -241,7 +220,6 @@ internal sealed unsafe class LibmonadoClient : IMonadoClient
                     continue;
                 }
 
-                // The name lives in libmonado's one buffer, which the next call overwrites.
                 var text = Marshal.PtrToStringUTF8((IntPtr)name) ?? "";
                 if (exports.GetClientState(root, id, &flags) < 0)
                 {

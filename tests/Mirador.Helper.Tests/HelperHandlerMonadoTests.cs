@@ -3,7 +3,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>Records what the handler asks of Mirador's Monado.</summary>
 internal sealed class FakeMonadoInstaller : IMonadoInstaller
 {
     public string? Current { get; set; }
@@ -39,7 +38,6 @@ public sealed class HelperHandlerMonadoTests : IDisposable
 
     private string InstallDir => temp.File("Mirador");
 
-    /// <summary>The installed Mirador.exe asking.</summary>
     private CallerInfo Caller => new(new SecurityIdentifier("S-1-5-21-1-2-3-1001"), 1, 1234, Path.Combine(InstallDir, "Mirador.exe"));
 
     private HelperHandler Handler(IMonadoInstaller? installer) =>
@@ -66,7 +64,6 @@ public sealed class HelperHandlerMonadoTests : IDisposable
     [Fact]
     public async Task Install_and_roll_back_from_another_program_change_nothing()
     {
-        // Any signed-in user's program reaches the pipe: it mustn't pick which Monado runs as administrator.
         var other = Caller with { ImagePath = temp.File("Downloads", "Mirador.exe") };
 
         Assert.False((await Handler(monado).HandleAsync(new HelperRequest(HelperCommand.InstallMonado, Version: "monado-2026.11.10-1a2b3c4d5e"), other)).Ok);
@@ -104,7 +101,6 @@ public sealed class HelperHandlerMonadoTests : IDisposable
         Assert.Equal(current, registry.Active);
         Assert.Equal(@"C:\Pimax\openxr.json", registry.Recorded);
 
-        // Again after an update: the record stays the runtime Mirador replaced, not Mirador's own older version.
         monado.Current = temp.File("monado", "monado-2026.11.11-2b3c4d5e6f", "openxr_monado.json");
         Directory.CreateDirectory(Path.GetDirectoryName(monado.Current)!);
         File.WriteAllText(monado.Current, "{}");

@@ -6,7 +6,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>GitHub, answering from a table of URLs; anything else is a 404.</summary>
 internal sealed class FakeGitHub : HttpMessageHandler
 {
     public Dictionary<string, Func<HttpResponseMessage>> Answers { get; } = [];
@@ -50,7 +49,6 @@ public class MonadoInstallerTests : IDisposable
     private string ListJson() => "[" + string.Join(",", listed.Select(r =>
         $$"""{"tag_name":"{{r.Version}}","prerelease":true,"draft":false,"published_at":"2026-11-{{r.Version[15..17]}}T03:40:00Z","assets":[{"name":"{{r.Version}}.zip","browser_download_url":"https://github.com/feimos-dev/Mirador/releases/download/{{r.Version}}/{{r.Version}}.zip","digest":"sha256:{{r.Sha}}"}]}""")) + "]";
 
-    /// <summary>Publishes a build: a zip with Monado's install layout (or <paramref name="entries"/>), listed with its hash.</summary>
     private void Publish(string version, Dictionary<string, string>? entries = null, string? listedSha = null)
     {
         entries ??= new()

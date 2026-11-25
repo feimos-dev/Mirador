@@ -3,23 +3,10 @@ using System.Security.Cryptography;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// The one way Mirador fetches and unpacks a file from the internet (the bundled Monado, OpenLamina, the build tools):
-/// a size cap while it streams, the SHA-256 checked before anything uses it, a timeout that restarts with every bit of
-/// the body, and every zip entry checked to stay in its folder before anything is written. A failure's message is meant
-/// for the user as it is; <c>fail</c> makes the caller's own exception from it.
-/// </summary>
 public static class CheckedDownload
 {
-    /// <summary>How long the server may say nothing before a download is given up.</summary>
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(60);
 
-    /// <summary>
-    /// Downloads <paramref name="url"/> to <paramref name="file"/>, at most <paramref name="maxBytes"/>, and checks its
-    /// SHA-256 when one is given; any failure deletes the file.
-    /// </summary>
-    /// <param name="what">What is downloaded, as a sentence names it: "the bundled Monado", "CMake".</param>
-    /// <param name="hashFrom">Where <paramref name="sha256"/> comes from, as the mismatch's message says it.</param>
     public static async Task ToFileAsync(
         HttpClient http, Uri url, string file, long maxBytes, string? sha256, string what, Func<string, Exception> fail,
         CancellationToken userCt, TimeSpan? idle = null, string hashFrom = "GitHub lists for it")
@@ -81,14 +68,6 @@ public static class CheckedDownload
         }
     }
 
-    /// <summary>
-    /// Unpacks <paramref name="zipFile"/> into <paramref name="folder"/>: every entry's path is checked to stay inside it,
-    /// and the sizes added up to at most <paramref name="maxBytes"/>, before anything is written.
-    /// </summary>
-    /// <param name="stripTopFolderHolding">
-    /// A file (relative, such as <c>bin\cmake.exe</c>): when every entry is in one top folder that holds it (CMake's zips),
-    /// that folder is left out.
-    /// </param>
     public static void Unpack(string zipFile, string folder, long maxBytes, string what, Func<string, Exception> fail, string? stripTopFolderHolding = null)
     {
         var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -146,11 +125,9 @@ public static class CheckedDownload
         }
     }
 
-    /// <summary>"The bundled Monado's", "CMake's": <paramref name="what"/> as a sentence starts with it.</summary>
     private static string Its(string what) => char.ToUpperInvariant(what[0]) + what[1..] + "'s";
 }
 
-/// <summary>Deletes what Mirador made for itself when it can; what a program still holds goes at a later try.</summary>
 public static class Cleanup
 {
     public static void TryDelete(string file)

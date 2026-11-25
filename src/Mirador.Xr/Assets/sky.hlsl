@@ -1,9 +1,5 @@
 #include <stereokit.hlsli>
 
-//--name = mirador/sky
-
-// The home's sky, drawn on the inside of a sphere around the head: the horizon's colour rising into a darker zenith.
-// horizon_color is the grid's (grid.hlsl), so the floor fades into it without a seam.
 float4 horizon_color = { 0.065, 0.075, 0.095, 1 };
 float4 zenith_color  = { 0.008, 0.009, 0.013, 1 };
 

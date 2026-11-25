@@ -3,22 +3,12 @@ using Mirador.Core.Monado.Libmonado;
 
 namespace Mirador.Core.Playspace;
 
-/// <summary>The shape of <c>roomsetup.json</c>.</summary>
 public sealed record RoomSetupList(IReadOnlyList<RoomSetup> Setups);
 
-/// <summary>
-/// Keeps Mirador's room setups in one JSON file, one per tracking origin and Lighthouse universe. Each change writes
-/// the whole file aside and then moves it over the old one. Calls from several threads go one after the other.
-/// </summary>
 public sealed class RoomSetupStore(string path)
 {
     private readonly object _lock = new();
 
-    /// <summary>
-    /// Every saved setup. A missing file gives none; one that can't be read is set aside as <c>.bad</c> and gives none.
-    /// Entries without an origin name, or whose orientation isn't a rotation (a unit quaternion), are left out, and then
-    /// a copy of the file is kept as <c>.bad</c>.
-    /// </summary>
     public IReadOnlyList<RoomSetup> All()
     {
         lock (_lock)
@@ -27,7 +17,6 @@ public sealed class RoomSetupStore(string path)
         }
     }
 
-    /// <summary>The setup of origin <paramref name="originName"/> in <paramref name="universe"/>; null when there is none.</summary>
     public RoomSetup? Get(string originName, string? universe)
     {
         lock (_lock)
@@ -36,7 +25,6 @@ public sealed class RoomSetupStore(string path)
         }
     }
 
-    /// <summary>Saves <paramref name="setup"/>, replacing the one of the same origin and universe.</summary>
     public void Set(RoomSetup setup)
     {
         lock (_lock)
@@ -46,7 +34,6 @@ public sealed class RoomSetupStore(string path)
         }
     }
 
-    /// <summary>Removes the setup of origin <paramref name="originName"/> in <paramref name="universe"/>, if there is one.</summary>
     public void Clear(string originName, string? universe)
     {
         lock (_lock)
@@ -81,7 +68,6 @@ public sealed class RoomSetupStore(string path)
         return list.Setups;
     }
 
-    /// <summary>Finite numbers, and an orientation of length 1 (give or take what float rounding leaves).</summary>
     private static bool IsPose(MonadoPose p)
     {
         float[] all = [p.Qx, p.Qy, p.Qz, p.Qw, p.X, p.Y, p.Z];

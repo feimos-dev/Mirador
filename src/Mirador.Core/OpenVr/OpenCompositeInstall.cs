@@ -5,74 +5,46 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.OpenVr;
 
-/// <summary>What <see cref="OpenCompositeInstall.InstallAsync"/> did.</summary>
 public enum InstallOutcome
 {
-    /// <summary>The release is installed.</summary>
     Installed,
 
-    /// <summary>A game holds OpenLamina's DLL: nothing was changed, and a later try may succeed.</summary>
     InUse,
 }
 
-/// <summary>
-/// OpenLamina as its own installer puts it for this user: <see cref="DefaultFolder"/>, with <c>bin\vrclient_x64.dll</c>
-/// and a <c>SOURCE.txt</c> whose first line names the release. Mirador gets and updates it by running the fork's
-/// <c>OpenLamina-Windows-Installer.exe</c> silently; OpenLamina's own uninstall entry removes it. Mirador keeps no copy.
-/// </summary>
-/// <param name="folder">The installer's folder.</param>
-/// <param name="runner">Runs the installer; null: <see cref="CommandRunner"/>.</param>
-/// <param name="releaseKey">The key a release's checksums must be signed with: <see cref="SignedSums.PublicKey"/>.</param>
 public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? runner = null, string releaseKey = SignedSums.PublicKey)
 {
     private readonly ICommandRunner runner = runner ?? new CommandRunner();
 
-    /// <summary>The most the installer may be.</summary>
     public const long MaxSetupBytes = 64 * 1024 * 1024;
 
-    /// <summary>How long the installer may run.</summary>
     public static readonly TimeSpan SetupLimit = TimeSpan.FromMinutes(5);
 
     private const string Dll = "vrclient_x64.dll";
 
-    // What games load: the 64-bit DLL, and the 32-bit one beside it.
     private static readonly string[] Dlls = [Dll, "vrclient.dll"];
     private const string Host = "github.com";
 
     private int installing;
 
-    /// <summary>
-    /// Where the installer puts OpenLamina, always: <c>%LOCALAPPDATA%\Programs\OpenLamina</c>. The OpenVR paths file
-    /// names it once OpenLamina is in front.
-    /// </summary>
     public static string DefaultFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenLamina");
 
-    /// <summary>
-    /// Where the OpenComposite before OpenLamina was installed: <c>%LOCALAPPDATA%\Programs\OpenComposite</c>. A different
-    /// app with its own uninstall entry, which Mirador never changes; Home says so when OpenVR games still go to it.
-    /// </summary>
     public static string LegacyFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenComposite");
 
-    /// <summary>OpenLamina's own log: <c>%LOCALAPPDATA%\OpenLamina\logs\openlamina.log</c>.</summary>
     public static string NewLogFile { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenLamina", "logs", "openlamina.log");
 
-    /// <summary>The log the OpenComposite before OpenLamina wrote: <c>%LOCALAPPDATA%\OpenComposite\logs\opencomposite.log</c>.</summary>
     public static string LegacyLogFile { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenComposite", "logs", "opencomposite.log");
 
-    /// <summary>The log to give with a bug report: OpenLamina's, or, if it has written none, the older OpenComposite's.</summary>
     public static string LogFile => !File.Exists(NewLogFile) && File.Exists(LegacyLogFile) ? LegacyLogFile : NewLogFile;
 
-    /// <summary>The installer's folder.</summary>
     public string Folder => folder;
 
-    /// <summary>Whether OpenLamina is installed: its DLL is there.</summary>
     public bool IsInstalled => File.Exists(DllPath);
 
-    /// <summary>The installed release, from its <c>SOURCE.txt</c>; null when there is none or it can't be read.</summary>
     public OpenCompositeSource? Source
     {
         get
@@ -89,7 +61,6 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         }
     }
 
-    /// <summary>Whether a game holds one of OpenLamina's DLLs now (they can't be replaced then).</summary>
     public bool InUse => Dlls.Any(name => Held(Path.Combine(folder, "bin", name)));
 
     private static bool Held(string dll)
@@ -110,26 +81,15 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         }
         catch (UnauthorizedAccessException)
         {
-            return false; // read-only, say: the installer says so if it matters
+            return false;
         }
     }
 
-    /// <summary>The line for <c>versions.txt</c> and Diagnostics.</summary>
     public string VersionLine() =>
         Source is { } source ? $"OpenLamina: {source.Describe()}" : IsInstalled ? "OpenLamina: installed, version unknown" : "OpenLamina: not installed";
 
     private string DllPath => Path.Combine(folder, "bin", Dll);
 
-    /// <summary>
-    /// Downloads <paramref name="release"/>'s installer into <paramref name="downloadDir"/>, checks it against the SHA-256
-    /// its signed checksums list (<see cref="SignedSums"/>) and GitHub's digest agrees with, runs it silently
-    /// (<c>/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS</c>: it never closes a game, nor switches OpenVR
-    /// games by itself) and checks that the release it names is installed. While a game holds OpenLamina nothing is
-    /// downloaded or run.
-    /// </summary>
-    /// <exception cref="MiradorException">
-    /// The release can't be trusted, fetched or installed, or another install is running; the message says why.
-    /// </exception>
     public async Task<InstallOutcome> InstallAsync(HttpClient http, Release release, string downloadDir, CancellationToken ct)
     {
         if (Interlocked.Exchange(ref installing, 1) == 1)
@@ -226,8 +186,6 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         }
     }
 
-    /// <summary>The installer's SHA-256 from the release's checksums, once their signature is checked.</summary>
-    /// <exception cref="MiradorException">The checksums can't be fetched, or the release is refused: the message says why.</exception>
     private async Task<string> SignedSha256Async(HttpClient http, Release release, Uri sumsUrl, Uri signatureUrl, string downloadDir, CancellationToken ct)
     {
         var sums = await SmallFileAsync(http, sumsUrl, Path.Combine(downloadDir, SignedSums.SumsName + ".tmp"), SignedSums.SumsName, ct).ConfigureAwait(false);
@@ -256,10 +214,6 @@ public sealed partial class OpenCompositeInstall(string folder, ICommandRunner? 
         }
     }
 
-    /// <summary>
-    /// <paramref name="address"/> when it is on github.com over https; null otherwise. The requested address, not wherever
-    /// GitHub redirects to: GitHub serves its release files from its own file host.
-    /// </summary>
     private static Uri? OnGitHub(string? address) =>
         Uri.TryCreate(address, UriKind.Absolute, out var url)
         && url.Scheme == Uri.UriSchemeHttps

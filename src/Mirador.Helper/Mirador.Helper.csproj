@@ -1,6 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
   <PropertyGroup>
-    <!-- No Windows Runtime APIs here: without the Windows SDK version, the helper ships without its 25 MB projection. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <TargetPlatformMinVersion></TargetPlatformMinVersion>
     <OutputType>Exe</OutputType>

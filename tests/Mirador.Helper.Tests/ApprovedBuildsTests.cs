@@ -248,7 +248,6 @@ public sealed class ApprovedBuildsTests : IDisposable
     [Fact]
     public void A_copy_whose_manifest_names_its_dll_with_forward_slashes_must_be_approved_again()
     {
-        // What an older Mirador wrote: the loader can't load the DLL from that path (its DLLs beside it aren't found).
         var build = ApprovedBuilds.Approve(Finn, "p1", Commit, MakeInstall(), App, store);
         File.WriteAllText(build.Manifest, """{"runtime":{"library_path":"./bin/openxr_monado.dll"}}""");
         var rehashed = build with { Files = new Dictionary<string, string>(build.Files) { ["openxr_monado.json"] = ApprovedBuilds.HashOf(build.Manifest) } };
@@ -258,11 +257,6 @@ public sealed class ApprovedBuildsTests : IDisposable
         Assert.True(ApprovedBuilds.NamesOwnDll(ApprovedBuilds.Approve(Finn, "p2", Commit, MakeInstall("other"), App, store)));
     }
 
-    /// <summary>
-    /// A real Monado install, approved, then its runtime DLL loaded from the copy's manifest the way the OpenXR loader
-    /// loads it. Runs when <c>MIRADOR_TEST_MONADO_INSTALL</c> names an install (Monado's layout: <c>openxr_monado.json</c>
-    /// and <c>bin\</c>, as Mirador's branch builds are); skipped otherwise.
-    /// </summary>
     [MonadoInstallFact]
     public void The_copys_manifest_loads_its_dll_as_the_openxr_loader_does()
     {
@@ -270,8 +264,6 @@ public sealed class ApprovedBuildsTests : IDisposable
 
         var build = ApprovedBuilds.Approve(Finn, "p1", Commit, source, App, store);
 
-        // The loader joins a relative library_path to the manifest's folder, tries LoadLibraryW, and on a missing
-        // module tries again with the DLL's own folder searched (OpenXR-SDK-Source, loader_platform.hpp).
         var path = Path.GetDirectoryName(build.Manifest) + "\\" + LibraryPathOf(build.Manifest);
         var handle = NativeLoad.LoadLibraryW(path);
         if (handle == IntPtr.Zero && System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == NativeLoad.ModNotFound)
@@ -331,7 +323,6 @@ public sealed class ApprovedBuildsTests : IDisposable
         Assert.Equal(Variables, read.Variables);
         Assert.Equal(build.Files, read.Files);
 
-        // A record from before variables were approved has no Variables value: it holds none.
         using (var hkcu = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64))
         using (var key = hkcu.OpenSubKey($@"{scratch}\{Finn}\p1", writable: true)!)
         {
@@ -353,7 +344,7 @@ public sealed class ApprovedBuildsTests : IDisposable
         Assert.Equal(Variables, build.Variables);
         Assert.Same(build, store.Get(Finn, "p1"));
         Assert.False(Directory.Exists(ApprovedBuilds.ProfileRoot(App, Finn, "p1")));
-        Assert.NotNull(ApprovedBuilds.Verify(build, App)); // never a build to run
+        Assert.NotNull(ApprovedBuilds.Verify(build, App));
     }
 
     [Fact]
@@ -707,7 +698,6 @@ public sealed class ApprovedBuildsTests : IDisposable
     public void Only_hex_is_a_git_commit(string commit, bool isCommit) => Assert.Equal(isCommit, ApprovedBuilds.IsGitCommit(commit));
 }
 
-/// <summary>The calls the OpenXR loader makes to load a runtime DLL.</summary>
 internal static class NativeLoad
 {
     public const int ModNotFound = 126;

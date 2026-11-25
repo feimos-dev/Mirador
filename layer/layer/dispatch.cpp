@@ -11,8 +11,6 @@
 namespace dvl {
 namespace {
 
-// The one destroy function every instance (device) added so far had below it, for fallback_destroy_*(). Once two
-// differ there is none, for good.
 template <class Fn>
 struct Fallback {
     Fn fn = nullptr;
@@ -40,15 +38,13 @@ struct Registry {
     Fallback<PFN_vkDestroyDevice> destroy_device;
 };
 
-// Made at first use and never destroyed: a static would run its destructor at process exit, when a killed thread may
-// hold the lock.
 Registry& registry()
 {
     static Registry* const r = new Registry;
     return *r;
 }
 
-} // namespace
+}
 
 std::vector<VkPhysicalDevice> InstanceData::physical_devices()
 {
@@ -99,7 +95,6 @@ InstanceData& add_instance(std::unique_ptr<InstanceData> data)
     Registry& r = registry();
     std::unique_lock<std::shared_mutex> lock(r.mutex);
     r.destroy_instance.note(ref.DestroyInstance);
-    // A key still in the table belongs to an instance that was destroyed without the layer seeing it: replaced.
     r.instances[dispatch_key(ref.handle)] = std::move(data);
     return ref;
 }
@@ -216,4 +211,4 @@ PFN_vkDestroyDevice fallback_destroy_device()
     return r.destroy_device.fn;
 }
 
-} // namespace dvl
+}

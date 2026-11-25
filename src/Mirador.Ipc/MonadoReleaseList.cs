@@ -3,33 +3,17 @@ using System.Text.Json;
 
 namespace Mirador.Ipc;
 
-/// <summary>One of Mirador's Monado builds on GitHub: a weekly prerelease and its zip.</summary>
-/// <param name="Version">The tag, which is the version: <c>monado-&lt;yyyy.mm.dd&gt;-&lt;sha&gt;</c>.</param>
-/// <param name="ZipUrl">The zip's download, on github.com under Mirador's releases.</param>
-/// <param name="ZipSha256">The zip's SHA-256 from GitHub's <c>digest</c>, lower case.</param>
-/// <param name="PublishedAt">When it was published, as GitHub says.</param>
 public sealed record MonadoRelease(string Version, string ZipUrl, string ZipSha256, DateTimeOffset PublishedAt);
 
-/// <summary>
-/// Mirador's Monado builds as GitHub lists them: the app reads the list for "Update Monado",
-/// and the helper reads it again itself before installing one, never trusting a URL or hash the app hands over.
-/// </summary>
 public static class MonadoReleaseList
 {
-    /// <summary>Mirador's repository, where the weekly build is published.</summary>
     public const string Repository = "feimos-dev/Mirador";
 
-    /// <summary>The releases list, newest first.</summary>
     public const string ApiUrl = $"https://api.github.com/repos/{Repository}/releases?per_page=100";
 
     private const string DownloadPrefix = $"https://github.com/{Repository}/releases/download/";
     private const string DigestPrefix = "sha256:";
 
-    /// <summary>
-    /// The usable Monado builds in GitHub's releases list, newest first: prereleases tagged with a version, not drafts,
-    /// with a <c>&lt;version&gt;.zip</c> under Mirador's own download address and its SHA-256 digest. Anything else is
-    /// left out; text that isn't the list gives none.
-    /// </summary>
     public static IReadOnlyList<MonadoRelease> Parse(string json)
     {
         var found = new List<MonadoRelease>();
@@ -80,9 +64,6 @@ public static class MonadoReleaseList
         return [.. found.OrderByDescending(r => r.PublishedAt).ThenByDescending(r => r.Version, StringComparer.Ordinal)];
     }
 
-    /// <summary>
-    /// Fetches the list. Null when GitHub didn't answer or answered with an error; an empty list when there is no build.
-    /// </summary>
     public static async Task<IReadOnlyList<MonadoRelease>?> FetchAsync(HttpClient http, string userAgentVersion, CancellationToken ct)
     {
         try

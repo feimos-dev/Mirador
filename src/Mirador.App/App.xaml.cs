@@ -33,11 +33,9 @@ public partial class App : Application
         this.args = args;
         InitializeComponent();
 
-        // Mirador lives in the tray: only Quit ends it, never the window closing (nor a close during Quit).
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         UnhandledException += (_, e) =>
         {
-            // A crash would take Monado down with it (and leave the headset's software stopped): log and go on.
             AppLog.Write("Unhandled", e.Exception);
             e.Handled = true;
         };
@@ -51,30 +49,22 @@ public partial class App : Application
 
     public static new App Current => (App)Application.Current;
 
-    /// <summary>Everything Mirador is made of; set before the window opens.</summary>
     public AppHost Host => host ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
     public MainWindow MainWindow => window ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
-    /// <summary>Home's view model, made at start so that nothing that happens before Home opens is lost.</summary>
     public HomeViewModel Home => home ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
-    /// <summary>Home once Mirador has started; null before (a window event can come that early).</summary>
     public HomeViewModel? HomeIfStarted => home;
 
-    /// <summary>The check for newer releases, daily and on request.</summary>
     public Updates Updates => updates ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
-    /// <summary>The UI thread's queue, for handing work from background threads to it.</summary>
     public DispatcherQueue Ui => ui ?? throw new InvalidOperationException("Mirador hasn't started yet.");
 
-    /// <summary>Whether Mirador is on its way out.</summary>
     public bool Quitting => quitting;
 
-    /// <summary>Whether the window may really close: set only once Quit has stopped everything.</summary>
     public bool ClosingForGood => closingForGood;
 
-    /// <summary>Raised on the UI thread when the last Start failed, with its message (null once a Start worked).</summary>
     public event Action<string?>? StartFailed;
 
     protected override async void OnLaunched(LaunchActivatedEventArgs e)
@@ -122,9 +112,6 @@ public partial class App : Application
 
         ShowFirstWindow();
 
-        // The pipe opens before recovery has finished, without waiting for it: a game's Start waits for recovery
-        // inside the session (it never replaces session.json that still holds steps to undo), and a stand-in that
-        // started Mirador gets connected at once instead of timing out while recovery runs.
         var recovery = Host.Session.RecoverAsync(CancellationToken.None);
         try
         {
@@ -145,10 +132,6 @@ public partial class App : Application
         await CheckForUpdateAsync();
     }
 
-    /// <summary>
-    /// The window at launch: none for <c>--background</c>; for <c>--sign-in</c> with "Start minimized" none when Mirador
-    /// closes to the tray (the tray icon is there), else minimized on the taskbar; otherwise shown.
-    /// </summary>
     private void ShowFirstWindow()
     {
         if (args.Background)
@@ -173,12 +156,10 @@ public partial class App : Application
         MainWindow.ShowAndActivate();
     }
 
-    /// <summary>At most once a day, when on: a newer release of Mirador or of OpenLamina shows on Home.</summary>
     private async Task CheckForUpdateAsync()
     {
         try
         {
-            // On the first run, only once the user said where Monado comes from, and only for "Bundled Monado".
             if (await Host.FirstRunAnswered && await Host.InstallMiradorsMonadoIfNeededAsync() is { } installed)
             {
                 Ui.TryEnqueue(() => Home.ShowMonadoNotice(installed.Message, installed.Ok));
@@ -199,10 +180,8 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Starts Monado for the window or the tray, keeping what went wrong for Home and the tray.</summary>
     public async Task<StartOutcome> StartAsync(StartReason reason)
     {
-        // A profile that runs as administrator but changed since its approval asks Windows once, here; declined, it runs as you.
         if (Host.Approving)
         {
             return new StartOutcome(false, "Answer Windows' prompt first.");
@@ -210,7 +189,6 @@ public partial class App : Application
 
         try
         {
-            // Off the UI thread: telling whether the build is the approved one hashes it.
             if (Host.Session.State == SessionState.Stopped
                 && await Task.Run(() => Host.ApproveIfNeededAsync(Host.Profiles.Load().Selected)) is { } problem)
             {
@@ -227,7 +205,6 @@ public partial class App : Application
         return outcome;
     }
 
-    /// <summary>Copies Monado's folder at launch when it changed since the last copy; a copy that can't be taken goes to the log.</summary>
     private void BackUpMonadoFolder()
     {
         try
@@ -244,10 +221,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>
-    /// Quits Mirador. While Monado runs it asks first ("Stop Monado and quit?"), then stops it, which puts the
-    /// headset's software back.
-    /// </summary>
     public async Task QuitAsync()
     {
         if (quitting)
@@ -264,7 +237,6 @@ public partial class App : Application
         AppLog.Write("Quitting");
         try
         {
-            // A display check or recovery under way finishes first.
             await Host.Session.WhenSettledAsync();
             await Host.DisposeAsync();
         }
@@ -281,7 +253,6 @@ public partial class App : Application
         Exit();
     }
 
-    /// <summary>"Stop Monado and quit?" in the window (shown first, and loaded, which a window started hidden isn't yet).</summary>
     private async Task<bool> AskToStopAsync()
     {
         MainWindow.ShowAndActivate();
@@ -301,7 +272,6 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            // Most likely another dialog is open: the user is busy in the window, so Mirador stays.
             AppLog.Write("Couldn't ask whether to stop Monado and quit", ex);
             return false;
         }
@@ -319,7 +289,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>Answers the stand-in (START) and a second Mirador (SHOW, START); <paramref name="caller"/> is the asking process.</summary>
     private async Task<string> AnswerPipeAsync(string request, int? caller, CancellationToken ct)
     {
         switch (request)
@@ -329,7 +298,6 @@ public partial class App : Application
                 return AppPipe.Ok;
 
             case AppPipe.Start:
-                // A stand-in sits beside the Monado runtime the game loaded: only that Monado may start for it.
                 var standIn = StandIn.ProgramOf(caller, Host.Processes.ImagePathOf);
                 if (await Host.TryAnswerStandInAsync(standIn, ct) is { } verifying)
                 {
@@ -372,7 +340,6 @@ public partial class App : Application
         UpdateTray();
     }
 
-    /// <summary>Monado ended: an ending that is a problem (it stopped by itself, or Mirador stopped it because something failed) shows in the tray, and as a toast when the window isn't in front.</summary>
     private void OnEnded(SessionEnd end)
     {
         if (end.Problem)
@@ -384,7 +351,6 @@ public partial class App : Application
         UpdateTray();
     }
 
-    /// <summary>A toast, unless Mirador's window is in front, where the user sees it anyway.</summary>
     private void NotifyUnlessSeen(string title, string text)
     {
         if (window is null || !window.IsInForeground)
@@ -393,11 +359,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>
-    /// The tray's two base-station items: On, or Off (what <see cref="StationManager.OffCommand"/> says) for any other
-    /// command. Only the selected stations are switched. A problem in the summary afterwards reaches the user in a
-    /// notification when the window is hidden (in the window, Home shows it).
-    /// </summary>
     private async Task SwitchStationsAsync(StationCommand command)
     {
         try
@@ -429,7 +390,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>On whichever thread the manager is on: updates the tray's station items on the UI thread, once for a burst.</summary>
     private void OnStationsChanged()
     {
         if (Interlocked.Exchange(ref stationItemsQueued, 1) == 0 && !Ui.TryEnqueue(() =>
@@ -442,7 +402,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>The station items are there while Bluetooth is ready and a station is selected.</summary>
     private void UpdateStationItems()
     {
         if (tray is null || host is null || quitting)

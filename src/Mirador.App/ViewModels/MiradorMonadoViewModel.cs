@@ -5,11 +5,6 @@ using Mirador.Ipc;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// The Profiles page's card for Mirador's Monado: which weekly build is installed and the
-/// one kept for "Roll back", the newest on GitHub, and Install or "Update Monado". The helper does the installing; this
-/// only names the version.
-/// </summary>
 public sealed partial class MiradorMonadoViewModel(AppHost host) : ObservableObject
 {
     private string? newest;
@@ -39,7 +34,6 @@ public sealed partial class MiradorMonadoViewModel(AppHost host) : ObservableObj
     [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(RollBackCommand))]
     public partial bool MonadoRuns { get; set; }
 
-    /// <summary>Shows the card when the profile in the editor runs Mirador's Monado; asks GitHub the first time.</summary>
     public void Show(bool visible)
     {
         IsVisible = visible;
@@ -124,7 +118,6 @@ public sealed partial class MiradorMonadoViewModel(AppHost host) : ObservableObj
         Status = problem is null ? installed + latest : $"{problem} {installed}";
     }
 
-    /// <summary>A weekly build as its build date, in the user's short date format; the full version when it has none.</summary>
     private static string Date(string version) =>
         MiradorMonado.DateOf(version) is { } date ? date.ToString("d", System.Globalization.CultureInfo.CurrentCulture) : version;
 }

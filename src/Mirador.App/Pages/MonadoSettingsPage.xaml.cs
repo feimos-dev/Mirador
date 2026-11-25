@@ -13,7 +13,6 @@ public sealed partial class MonadoSettingsPage : Page
         ViewModel = new MonadoSettingsViewModel(App.Current.Host, App.Current.Ui);
         InitializeComponent();
 
-        // A slider saves when it is let go: its thumb holds the pointer while dragged, so these come after the drag.
         foreach (var slider in new[] { LighthouseSlider, ScaleSlider, BudgetSlider })
         {
             slider.AddHandler(PointerCaptureLostEvent, new PointerEventHandler((_, _) => ViewModel.Save()), handledEventsToo: true);

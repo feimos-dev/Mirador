@@ -13,7 +13,6 @@ public class TrayClickTests
     [Fact]
     public void Hides_when_deactivated_by_the_click()
     {
-        // The click on the tray icon took the focus first, so the window is no longer in front.
         Assert.True(TrayClick.ShouldHide(visible: true, minimized: false, foreground: false, TimeSpan.FromSeconds(0.2)));
     }
 

@@ -5,37 +5,23 @@ using Mirador.Core.Monado;
 
 namespace Mirador.Core.Native;
 
-/// <summary>
-/// A console program Mirador runs for a moment and talks to through its standard input: a headset module's own tools
-/// (an eye tracker's geometry upload), the layer's display check. The seam that lets those be tested without the programs.
-/// </summary>
 public interface IConsoleProcess : IDisposable
 {
-    /// <summary>
-    /// Raised on a background thread for each line the program writes, standard output and error alike. Lines
-    /// written before the first handler was added are delivered to it as it is added.
-    /// </summary>
     event Action<string>? Line;
 
     bool HasExited { get; }
 
-    /// <summary>Completes with the exit code once the program has ended and its output has been read.</summary>
     Task<int> Exited { get; }
 
-    /// <summary>Writes a line to the program's standard input.</summary>
     void WriteLine(string s);
 
-    /// <summary>Closes the program's standard input.</summary>
     void CloseInput();
 
-    /// <summary>Waits up to <paramref name="t"/> for the program to end; whether it did.</summary>
     bool WaitForExit(TimeSpan t);
 
-    /// <summary>Ends the program and anything it started. Does nothing when it has ended already.</summary>
     void Kill();
 }
 
-/// <summary>A console program run through <see cref="Process"/>, with its input and output redirected and no window.</summary>
 public sealed class ConsoleProcess : IConsoleProcess
 {
     private readonly Process process;
@@ -43,7 +29,6 @@ public sealed class ConsoleProcess : IConsoleProcess
     private Action<string>? listeners;
     private List<string>? early = [];
 
-    /// <summary>How long the output may stay open after the program ended (a program it started may hold it).</summary>
     private static readonly TimeSpan DrainGrace = TimeSpan.FromSeconds(2);
 
     private readonly TaskCompletionSource ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -101,11 +86,6 @@ public sealed class ConsoleProcess : IConsoleProcess
 
     public Task<int> Exited { get; }
 
-    /// <summary>
-    /// Starts <paramref name="spec"/>'s program with exactly its environment, standard input, output and error
-    /// redirected, and no window. Matches <c>Func&lt;ProcessSpec, IConsoleProcess&gt;</c>.
-    /// </summary>
-    /// <exception cref="MiradorException">The program couldn't be started; the message says which and why.</exception>
     public static IConsoleProcess Start(ProcessSpec spec)
     {
         var info = new ProcessStartInfo(spec.FileName, spec.Arguments)
@@ -135,7 +115,6 @@ public sealed class ConsoleProcess : IConsoleProcess
         }
     }
 
-    /// <summary>Mirador's own environment, for a <see cref="ProcessSpec"/> that should get what Mirador has.</summary>
     public static IReadOnlyDictionary<string, string> CurrentEnvironment()
     {
         var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -159,7 +138,6 @@ public sealed class ConsoleProcess : IConsoleProcess
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
         {
-            // The program has ended or closed its input; there is no one left to tell.
         }
     }
 
@@ -184,16 +162,11 @@ public sealed class ConsoleProcess : IConsoleProcess
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException or AggregateException)
         {
-            // It ended on its own in the meantime, or Windows wouldn't let it (or a program it started) be ended.
         }
     }
 
     public void Dispose() => process.Dispose();
 
-    /// <summary>
-    /// The exit code once the program has ended, and its output has been read to the end or <see cref="DrainGrace"/>
-    /// has passed: a program it started that kept the output open doesn't hold this up.
-    /// </summary>
     private async Task<int> WaitAsync()
     {
         await ended.Task.ConfigureAwait(false);
@@ -211,7 +184,7 @@ public sealed class ConsoleProcess : IConsoleProcess
         }
         catch (InvalidOperationException)
         {
-            return -1; // disposed before it could be read
+            return -1;
         }
     }
 

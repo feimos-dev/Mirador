@@ -4,7 +4,6 @@ namespace Mirador.Core.Tests.Xr;
 
 public class LaserClickTests
 {
-    // A panel 1.4 m wide and 0.7875 m high (16:9): 0.01 across is 14 mm.
     private const float W = 1.4f;
     private const float H = 0.7875f;
 
@@ -23,12 +22,10 @@ public class LaserClickTests
         var click = new LaserClick();
         click.Pointer((0.5f, 0.5f), 0, false, W, H);
 
-        // The pull turns the controller: the laser drops 2 cm, then the button goes down and up.
         Assert.Equal((0.5f, 0.5f), click.Pointer((0.5f, 0.51f), 0.4f, false, W, H));
         Assert.Equal((0.5f, 0.5f), click.Pointer((0.505f, 0.525f), 0.9f, true, W, H));
         Assert.Equal((0.5f, 0.5f), click.Pointer((0.505f, 0.52f), 0.3f, false, W, H));
 
-        // Let go: it follows again.
         Assert.Equal((0.505f, 0.52f), click.Pointer((0.505f, 0.52f), 0, false, W, H));
     }
 
@@ -39,7 +36,6 @@ public class LaserClickTests
         click.Pointer((0.5f, 0.5f), 0, false, W, H);
         click.Pointer((0.5f, 0.5f), 1, true, W, H);
 
-        // 5.6 cm to the right: past the 4 cm hold, and followed from then on, back towards the start too.
         Assert.Equal((0.54f, 0.5f), click.Pointer((0.54f, 0.5f), 1, true, W, H));
         Assert.Equal((0.51f, 0.5f), click.Pointer((0.51f, 0.5f), 1, true, W, H));
     }

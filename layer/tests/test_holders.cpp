@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The holder lists: who can hold the display, the board, the Lighthouse receiver.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -27,17 +25,15 @@ std::string lower(std::string text)
     return text;
 }
 
-} // namespace
+}
 
 TEST_CASE("holders_match_case_insensitively")
 {
-    // The answer is the table's spelling, not the process list's.
     CHECK(nvdm::running_holders(Held::Display, {"PI_SERVER.EXE", "notepad.exe"}) == Names{"pi_server.exe"});
     CHECK(nvdm::running_holders(Held::Display, {"Pi_Server.Exe"}) == Names{"pi_server.exe"});
     CHECK(nvdm::running_holders(Held::Display, {"VRCOMPOSITOR.exe", "pi_server.exe"}) ==
           Names{"pi_server.exe", "vrcompositor.exe"});
 
-    // Nothing running, nothing held; a program that only looks similar is not a holder.
     CHECK(nvdm::running_holders(Held::Display, {}).empty());
     CHECK(nvdm::running_holders(Held::Display, {"notepad.exe", "pi_server", "xpi_server.exe", "pi_server.exe.bak"})
               .empty());
@@ -71,7 +67,6 @@ TEST_CASE("the board is held by the launcher's six Pimax programs")
                        "PiPlatformService_64.exe", "pi_overlay.exe", "vrss_gaze_provider.exe"};
     CHECK(nvdm::running_holders(Held::Board, six) == six);
 
-    // In any spelling, and with others around them.
     Names shouted;
     for (const std::string& name : six) {
         std::string upper = name;
@@ -100,7 +95,7 @@ TEST_CASE("list_processes sees this test program")
     const std::wstring wide_name = wide.substr(wide.find_last_of(L"\\/") + 1);
     std::string name;
     for (wchar_t c : wide_name) {
-        name.push_back(static_cast<char>(c)); // The test executable's name is ASCII.
+        name.push_back(static_cast<char>(c));
     }
 
     const Names processes = nvdm::list_processes();

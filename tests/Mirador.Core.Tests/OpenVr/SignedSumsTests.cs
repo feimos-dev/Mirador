@@ -5,7 +5,6 @@ using Mirador.Core.OpenVr;
 
 namespace Mirador.Core.Tests.OpenVr;
 
-/// <summary>The same cases as OpenLamina's own SignedSumsTests, with keys made for the test.</summary>
 public class SignedSumsTests
 {
     private static readonly byte[] Sums = Encoding.UTF8.GetBytes(
@@ -16,14 +15,12 @@ public class SignedSumsTests
     private const string Setup = "OpenLamina-Windows-Installer.exe";
     private const string SetupSha = "2222222222222222222222222222222222222222222222222222222222222222";
 
-    /// <summary>A key made for the test, given as the release key is: its SubjectPublicKeyInfo in base64.</summary>
     internal static (ECDsa Key, string PublicKey) NewKey()
     {
         var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         return (key, Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()));
     }
 
-    /// <summary>A DER signature, as <c>openssl dgst -sha256 -sign</c> writes it.</summary>
     internal static byte[] Sign(ECDsa key, byte[] data) =>
         key.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
 
@@ -66,15 +63,10 @@ public class SignedSumsTests
             var e = Assert.Throws<InvalidDataException>(() => SignedSums.Expected(Tag, Sums, older, Setup, null, publicKey));
             Assert.Equal("OpenLamina 9.0.0 was refused: its SHA256SUMS.txt isn't signed for v9.0.0 with OpenLamina's release key.", e.Message);
 
-            // The bare checksums, unsigned for any tag
             Assert.Throws<InvalidDataException>(() => SignedSums.Expected(Tag, Sums, Sign(key, Sums), Setup, null, publicKey));
         }
     }
 
-    /// <summary>
-    /// openssl's signatures, as the release job makes them, with a key made for the test; skipped (with a message) where
-    /// there's no openssl to run.
-    /// </summary>
     [Fact]
     public void Openssl_signatures_are_accepted()
     {
@@ -90,7 +82,6 @@ public class SignedSumsTests
         File.WriteAllBytes(message, SignedSums.SignedMessage(Tag, Sums));
         var publicKey = string.Concat(File.ReadAllLines(pub).Where(l => !l.StartsWith("-----", StringComparison.Ordinal)));
 
-        // Signatures are 70 to 72 bytes, as r and s need a leading zero byte or not: several cover them
         for (var i = 0; i < 12; i++)
         {
             Assert.True(Openssl($"dgst -sha256 -sign \"{key}\" -out \"{sig}\" \"{message}\""));
@@ -139,7 +130,6 @@ public class SignedSumsTests
     }
 
     [Theory]
-    // A P-384 key, a P-256 key cut short, and text
     [InlineData("MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE")]
     [InlineData("MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE")]
     [InlineData("not base64!")]
@@ -169,14 +159,12 @@ public class SignedSumsTests
     [Fact]
     public void Der_signatures_become_r_and_s()
     {
-        // r with its high bit set (a leading zero byte in DER), s of 31 bytes
         byte[] r = Enumerable.Repeat((byte)0x81, 32).ToArray(), s = Enumerable.Repeat((byte)0x05, 31).ToArray();
         byte[] der = [0x30, 2 + 33 + 2 + 31, 0x02, 33, 0x00, .. r, 0x02, 31, .. s];
         var raw = SignedSums.DerToP1363(der)!;
         Assert.Equal(r, raw[..32]);
         Assert.Equal([0, .. s], raw[32..]);
 
-        // A negative number, a needless leading zero, a byte after the sequence, a number of 33 bytes
         Assert.Null(SignedSums.DerToP1363([0x30, 6, 0x02, 1, 0x81, 0x02, 1, 0x01]));
         Assert.Null(SignedSums.DerToP1363([0x30, 7, 0x02, 2, 0x00, 0x01, 0x02, 1, 0x01]));
         Assert.Null(SignedSums.DerToP1363([0x30, 6, 0x02, 1, 0x01, 0x02, 1, 0x01, 0x00]));

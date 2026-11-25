@@ -32,17 +32,14 @@ public class OpenVrGamesTests
             Games = new OpenVrGames(Paths, new OpenCompositeInstall(InstallDir, new Build.FakeCommandRunner()));
         }
 
-        /// <summary>OpenLamina as its installer puts it.</summary>
         public string InstallDir => dir.File("Programs", "OpenLamina");
 
         public string PathsFile => dir.File("openvr", "openvrpaths.vrpath");
 
-        /// <summary>The same file as another program sees it.</summary>
         public OpenVrPaths Paths => new(PathsFile, InstallDir);
 
         public OpenVrGames Games { get; }
 
-        /// <summary>OpenLamina set, then SteamVR putting itself first again, as it does when it starts.</summary>
         public void SetThenSteamVrInFront()
         {
             Assert.Null(Games.UseMonado());
@@ -111,7 +108,7 @@ public class OpenVrGamesTests
         Assert.Contains("still go to the old OpenComposite", view.Warning);
         Assert.Contains(OpenVrGames.SetOpenCompositeLabel, view.Warning);
         Assert.Null(view.Problem);
-        Assert.Null(w.Games.UseMonado()); // and pressing it puts OpenLamina first, the old one after
+        Assert.Null(w.Games.UseMonado());
         Assert.Equal(OpenVrTarget.Monado, w.Paths.Read().Target);
     }
 
@@ -177,7 +174,7 @@ public class OpenVrGamesTests
     {
         using var w = new World();
         w.Games.UseMonado();
-        Directory.Delete(w.InstallDir, recursive: true); // uninstalled through Windows' Settings
+        Directory.Delete(w.InstallDir, recursive: true);
 
         var view = w.Games.View(true, null);
 

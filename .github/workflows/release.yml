@@ -1,17 +1,5 @@
 name: Installer
 
-# Builds Mirador's installer on every push, so a broken installer shows before a release. The tests run in build.yml,
-# for tags too. The installer has no Monado and no OpenLamina: each profile gets its Monado from Mirador, and Home
-# offers "Get OpenLamina".
-#
-# A v* tag also signs (Azure Artifact Signing: Mirador's own programs and DLLs, the uninstaller and the installer) and
-# puts the installer on its release: a pushed tag gets a new draft release, to check and publish by hand; a tag made by
-# publishing a release on GitHub's release page, or one with a draft saved there, gets the installer added to that
-# release. Only the sign job can sign: it runs in the "release" environment, which takes v* tags
-# only and waits for an approval, and Azure takes a token from no other job. It builds none of Mirador's code and
-# restores none of its packages: it signs the bundle the installer job built, with the pinned signing library and
-# Inno Setup.
-
 on:
   push:
     branches: ['**']
@@ -41,14 +29,12 @@ jobs:
         shell: pwsh
         run: tools\get-inno-setup.ps1
 
-      # Unsigned, for a tag too: an installer that doesn't build shows here, before anyone is asked to approve.
       - name: The bundle and the installer
         shell: pwsh
         run: |
           tools\build-bundle.ps1
           tools\build-installer.ps1
 
-      # Before anything is signed for it: the tag must name the version the app was built with.
       - name: The tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -74,7 +60,6 @@ jobs:
           if-no-files-found: error
           path: artifacts/bundle
 
-  # The only job that can sign.
   sign:
     name: Sign
     needs: installer
@@ -93,7 +78,6 @@ jobs:
           name: bundle
           path: artifacts/bundle
 
-      # The signing library runs on it.
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: '10.0.x'
@@ -112,7 +96,6 @@ jobs:
           tools\get-signing-library.ps1 -Out (Join-Path $env:RUNNER_TEMP 'signing')
           -Endpoint $env:ENDPOINT -Account $env:ACCOUNT -CertificateProfile $env:CERTIFICATE_PROFILE
 
-      # No secret: Azure takes GitHub's token for this job, in this environment, of this repository.
       - name: Azure
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -123,8 +106,6 @@ jobs:
       - name: Sign the programs, then build and sign the installer
         shell: pwsh
         run: |
-          # GitHub's token behind the login lasts minutes, and without it the Azure CLI can't get a token for another
-          # service. So the signing service's token is taken now: the installer, signed last, gets the cached one.
           az account get-access-token --resource https://codesigning.azure.net --query expiresOn --output tsv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           tools\sign-bundle.ps1
@@ -143,7 +124,6 @@ jobs:
           if-no-files-found: error
           path: artifacts/Mirador-*-setup.exe
 
-  # The signature again, on a machine that never had the signing tools.
   signed-check:
     name: Signed installer
     needs: sign
@@ -166,7 +146,6 @@ jobs:
         shell: pwsh
         run: tools\check-signatures.ps1 (Get-Item artifacts\Mirador-*-setup.exe).FullName
 
-  # Only a v* tag gets write access, and only here.
   release:
     name: Release files
     needs: signed-check
@@ -186,8 +165,6 @@ jobs:
           TAG: ${{ github.ref_name }}
           SIGNER: ${{ needs.signed-check.outputs.signer }}
         run: |
-          # The tag must name the version the app was built with (<Version> in Directory.Build.props), so the
-          # installer's name and the release agree.
           version="${TAG#v}"
           installer="Mirador-$version-setup.exe"
           if [ ! -f "$installer" ]; then
@@ -195,7 +172,6 @@ jobs:
             exit 1
           fi
           if gh release view "$TAG" > /dev/null 2>&1; then
-            # Made on GitHub's release page: add the installer, and keep its title and notes.
             gh release upload "$TAG" "$installer" --clobber
           else
             hash=$(sha256sum "$installer" | cut -d' ' -f1)

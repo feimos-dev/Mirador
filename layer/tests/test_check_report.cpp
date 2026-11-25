@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The check tool's pure parts: its arguments, the holder findings, the verdict, the lines it prints for the
-// display session's result, and the advice for a failed step. Nothing here touches NVAPI, the board or Vulkan.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -33,9 +30,7 @@ bool any_line_contains(const std::vector<std::string>& lines, const std::string&
     return std::any_of(lines.begin(), lines.end(), [&](const std::string& l) { return contains(l, part); });
 }
 
-} // namespace
-
-// --- Arguments -------------------------------------------------------------------------------------------------------
+}
 
 TEST_CASE("options_default_to_the_nvapi_check_of_20_seconds")
 {
@@ -75,7 +70,6 @@ TEST_CASE("options_reject_what_they_do_not_know")
         CHECK_FALSE(parsed.ok());
         CHECK_FALSE(parsed.error.empty());
     }
-    // The message names the argument.
     CHECK(contains(dvl::parse_options({"--bogus"}).error, "--bogus"));
 }
 
@@ -101,7 +95,6 @@ TEST_CASE("options_help_is_recognised_and_wins_over_nothing_else")
         CHECK(parsed.ok());
         CHECK(parsed.options.help);
     }
-    // A usage error is still an error beside --help.
     CHECK_FALSE(dvl::parse_options({"--help", "--bogus"}).ok());
 }
 
@@ -117,21 +110,17 @@ TEST_CASE("the usage text names every option and the exit codes")
     CHECK(dvl::kExitUsage == 2);
 }
 
-// --- The environment the modes set ----------------------------------------------------------------------------------
-
 TEST_CASE("the environment sets the holder switch only when asked")
 {
     dvl_test::ScopedEnv layer(L"MIRADOR_DIRECT_MODE", nullptr);
     dvl_test::ScopedEnv rtss(L"DISABLE_RTSS_LAYER", nullptr);
-    dvl_test::ScopedEnv ignore(L"MIRADOR_DIRECT_MODE_IGNORE_HOLDERS", L"1"); // left over from somewhere else
+    dvl_test::ScopedEnv ignore(L"MIRADOR_DIRECT_MODE_IGNORE_HOLDERS", L"1");
     auto get = [](const wchar_t* name) {
         wchar_t buffer[8];
         const DWORD n = GetEnvironmentVariableW(name, buffer, 8);
         return n == 0 ? std::wstring(L"<unset>") : std::wstring(buffer, n);
     };
 
-    // NVAPI mode: only the holder switch matters, and it is off unless asked for (a stray variable must not skip the
-    // session's own check behind the user's back).
     dvl::Options nvapi;
     dvl::apply_environment(nvapi);
     CHECK(get(L"MIRADOR_DIRECT_MODE_IGNORE_HOLDERS") == L"<unset>");
@@ -144,8 +133,6 @@ TEST_CASE("the environment sets the holder switch only when asked")
     CHECK(get(L"MIRADOR_DIRECT_MODE_IGNORE_HOLDERS") == L"1");
     CHECK(get(L"MIRADOR_DIRECT_MODE") == L"<unset>");
 }
-
-// --- Holder checks ---------------------------------------------------------------------------------------------------
 
 TEST_CASE("nothing running means nothing held")
 {
@@ -161,11 +148,10 @@ TEST_CASE("pi_server holds the display and the board, and both are named")
     const dvl::HolderFindings f = dvl::holder_findings({"explorer.exe", "PI_SERVER.EXE", "vrss_gaze_provider.exe"});
     CHECK(f.blocked());
     REQUIRE(f.blockers.size() == 2);
-    // The display line and the board line (the launcher's six).
     CHECK(any_line_contains(f.blockers, "display"));
     CHECK(any_line_contains(f.blockers, "board"));
     for (const std::string& line : f.blockers) {
-        CHECK(contains(line, "pi_server.exe")); // the table's spelling
+        CHECK(contains(line, "pi_server.exe"));
     }
     CHECK(any_line_contains(f.blockers, "vrss_gaze_provider.exe"));
 }
@@ -225,7 +211,6 @@ TEST_CASE("Monado holds all three")
 
 TEST_CASE("the Lighthouse receiver's holders do not block this tool")
 {
-    // Only the start script needs the receiver.
     CHECK_FALSE(dvl::holder_findings({"vrserver.exe", "vrmonitor.exe", "OVRLighthouseManager.exe"}).blocked());
 }
 
@@ -253,8 +238,6 @@ TEST_CASE("RTSS only warns")
     CHECK(dvl::holder_findings({"RTSSHooksLoader64.exe", "explorer.exe"}).warnings.empty());
 }
 
-// --- The verdict -----------------------------------------------------------------------------------------------------
-
 namespace {
 
 dvl::RunCounts counts(uint64_t presents, uint64_t flips, double seconds = 20.0, double requested = 20.0)
@@ -267,7 +250,7 @@ dvl::RunCounts counts(uint64_t presents, uint64_t flips, double seconds = 20.0, 
     return c;
 }
 
-} // namespace
+}
 
 TEST_CASE("verdict_passes_1800_presents_and_1800_flips_in_20_seconds")
 {
@@ -282,14 +265,12 @@ TEST_CASE("verdict_passes_1800_presents_and_1800_flips_in_20_seconds")
 
 TEST_CASE("verdict_counts_on_the_rate_of_the_mode_that_was_opened")
 {
-    // An untested headset at 64 Hz (its EDID's mode): 1280 flips in 20 s is all of them, not a miss against 90 Hz.
     dvl::RunCounts c = counts(1280, 1280);
     c.refresh_hz = 64.0;
     const dvl::Verdict v = dvl::judge(true, "", c);
     CHECK(v.pass);
     CHECK(dvl::expected_flips(20.0, 64.0) == 1280);
 
-    // Without a rate the Dream Air's 90 Hz stands.
     CHECK(dvl::RunCounts{}.refresh_hz == 90.0);
     CHECK_FALSE(dvl::judge(true, "", counts(1280, 1280)).pass);
 }
@@ -298,7 +279,6 @@ TEST_CASE("verdict_tolerates_the_run_starting_and_ending_between_two_refreshes")
 {
     CHECK(dvl::judge(true, "", counts(1799, 1801)).pass);
     CHECK(dvl::judge(true, "", counts(1797, 1803)).pass);
-    // Measured time, not the request: 20.05 s is 1804.5 refreshes.
     CHECK(dvl::judge(true, "", counts(1804, 1805, 20.05)).pass);
 }
 
@@ -310,11 +290,10 @@ TEST_CASE("verdict_fails_missed_flips_and_missed_presents")
     CHECK(contains(v.line, "flips"));
     CHECK(contains(v.line, "1700"));
 
-    v = dvl::judge(true, "", counts(1500, 1800)); // the loop could not keep up with the refreshes
+    v = dvl::judge(true, "", counts(1500, 1800));
     CHECK_FALSE(v.pass);
     CHECK(contains(v.line, "presents"));
 
-    // More than the display can show is wrong too (a miscounted counter).
     CHECK_FALSE(dvl::judge(true, "", counts(1800, 2000)).pass);
     CHECK_FALSE(dvl::judge(true, "", counts(2000, 1800)).pass);
     CHECK_FALSE(dvl::judge(true, "", counts(0, 0)).pass);
@@ -350,7 +329,6 @@ TEST_CASE("verdict_of_a_headset_left_to_windows_is_neither_a_pass_nor_a_fail")
     CHECK(v.not_used);
     CHECK(v.line.rfind("NOT USED: ", 0) == 0);
 
-    // Any other failing step is a fail.
     CHECK_FALSE(dvl::judge(false, "Product: unknown display product PVR 0x1020", counts(0, 0)).not_used);
 }
 
@@ -368,18 +346,15 @@ TEST_CASE("verdict_scales_with_the_requested_time")
     CHECK(dvl::expected_flips(5.0) == 450);
     CHECK(dvl::judge(true, "", counts(450, 450, 5.0, 5.0)).pass);
     CHECK_FALSE(dvl::judge(true, "", counts(450, 400, 5.0, 5.0)).pass);
-    // A one-second run is judged on 90 +- 3.
     CHECK(dvl::judge(true, "", counts(88, 91, 1.0, 1.0)).pass);
     CHECK_FALSE(dvl::judge(true, "", counts(80, 91, 1.0, 1.0)).pass);
 }
-
-// --- The display session's result ------------------------------------------------------------------------------------
 
 TEST_CASE("an open session prints every step as ok")
 {
     const nvdm::OpenResult ok{true, nvdm::OpenStep::Done, 0, "display session open: Pimax Dream Air"};
     const std::vector<std::string> lines = dvl::describe_open_result(ok);
-    REQUIRE(lines.size() == 11); // Holders through SetDisplayMode
+    REQUIRE(lines.size() == 11);
     for (const std::string& line : lines) {
         CHECK(contains(line, "ok"));
         CHECK_FALSE(contains(line, "FAILED"));
@@ -393,7 +368,7 @@ TEST_CASE("a failed step is named with its message, and later steps are left out
     const nvdm::OpenResult failed{false, nvdm::OpenStep::BindDevice, -5,
                                   "BindDevice: NVAPI would not bind the display (is another program using it?) (code -5)"};
     const std::vector<std::string> lines = dvl::describe_open_result(failed);
-    REQUIRE(lines.size() == 9); // Holders, LoadNvapi, CheckIds, Enumerate, Luid, Product, EnableDirectMode, D3D11, BindDevice
+    REQUIRE(lines.size() == 9);
     CHECK(contains(lines[7], "D3D11"));
     CHECK(contains(lines[7], "ok"));
     CHECK(contains(lines[8], "BindDevice"));

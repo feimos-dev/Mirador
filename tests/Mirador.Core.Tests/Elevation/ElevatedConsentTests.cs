@@ -93,17 +93,15 @@ public class ElevatedConsentTests
         consent.Allow(Alice, new Dictionary<string, string> { ["ArcturusPerception.dll"] = HashA, ["AitH264Capture.dll"] = HashB });
         consent.Allow(Bob, NoFiles);
 
-        // One line per file, "<file name>=<sha256>", in a value named after the SID.
         Assert.Equal(["AitH264Capture.dll=" + HashB, "ArcturusPerception.dll=" + HashA], values.FileLines[Alice.Value]);
         Assert.False(values.FileLines.ContainsKey(Bob.Value));
 
         var alices = consent.ApprovedFiles(Alice);
         Assert.Equal(2, alices.Count);
         Assert.Equal(HashA, alices["ArcturusPerception.dll"]);
-        Assert.Equal(HashB, alices["aith264capture.dll"]); // file names compare as Windows does
+        Assert.Equal(HashB, alices["aith264capture.dll"]);
         Assert.Empty(consent.ApprovedFiles(Bob));
 
-        // Allowing again replaces the list.
         consent.Allow(Alice, new Dictionary<string, string> { ["ArcturusPerception.dll"] = HashB });
         Assert.Equal(["ArcturusPerception.dll=" + HashB], values.FileLines[Alice.Value]);
         consent.Allow(Alice, NoFiles);
@@ -128,12 +126,12 @@ public class ElevatedConsentTests
 
     [Theory]
     [InlineData("no equals sign")]
-    [InlineData("=" + HashA)]                                     // no name
-    [InlineData("ArcturusPerception.dll=")]                       // no hash
-    [InlineData("ArcturusPerception.dll=ABCDEF")]                 // not a SHA-256
-    [InlineData("ArcturusPerception.dll=" + HashA + "00")]        // too long
-    [InlineData("ArcturusPerception.dll=0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef")] // upper case
-    [InlineData(@"..\ArcturusPerception.dll=" + HashA)]           // a path, not a name
+    [InlineData("=" + HashA)]
+    [InlineData("ArcturusPerception.dll=")]
+    [InlineData("ArcturusPerception.dll=ABCDEF")]
+    [InlineData("ArcturusPerception.dll=" + HashA + "00")]
+    [InlineData("ArcturusPerception.dll=0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef")]
+    [InlineData(@"..\ArcturusPerception.dll=" + HashA)]
     public void A_line_that_isnt_a_name_and_a_hash_approves_nothing(string line)
     {
         var values = new FakeValues();
@@ -258,7 +256,6 @@ public class ElevatedConsentTests
         values.FileLines[Alice.Value] = ["ArcturusPerception.dll=" + HashA];
         var errors = new List<string>();
 
-        // Steam writing one of the files: the approval would be incomplete, so none is recorded and the step fails.
         int code;
         using (File.Open(Path.Combine(win64, "AitH264Capture.dll"), FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
         {
@@ -270,7 +267,7 @@ public class ElevatedConsentTests
         }
 
         Assert.Equal(1, code);
-        Assert.Equal(["ArcturusPerception.dll=" + HashA], values.FileLines[Alice.Value]); // the earlier list stays as it was
+        Assert.Equal(["ArcturusPerception.dll=" + HashA], values.FileLines[Alice.Value]);
         var error = Assert.Single(errors);
         Assert.Contains("AitH264Capture.dll", error);
         Assert.Contains("not allowed", error);
@@ -279,7 +276,6 @@ public class ElevatedConsentTests
     [Fact]
     public void Revoking_the_last_consent_removes_the_empty_keys()
     {
-        // The real registry code, under HKCU (a test can't write HKLM), in a key of its own that is removed again.
         var root = @"Software\Mirador.Tests\" + Guid.NewGuid().ToString("N");
         var keyPath = root + @"\ElevatedMonado";
         var filesPath = root + @"\ElevatedMonadoFiles";
@@ -289,7 +285,6 @@ public class ElevatedConsentTests
             consent.Allow(Alice, new Dictionary<string, string> { ["ArcturusPerception.dll"] = HashA });
             consent.Allow(Bob, new Dictionary<string, string> { ["ArcturusPerception.dll"] = HashB });
 
-            // Another user's consent is still there: the keys stay, with only that user's values.
             consent.Revoke(Alice);
             Assert.False(consent.IsAllowed(Alice));
             Assert.True(consent.IsAllowed(Bob));
@@ -303,7 +298,6 @@ public class ElevatedConsentTests
                 Assert.Equal([Bob.Value], files!.GetValueNames());
             }
 
-            // The last one goes: neither key is left behind, and the parent (where AppPath lives) stays.
             consent.Revoke(Bob);
             Assert.Null(Microsoft.Win32.Registry.CurrentUser.OpenSubKey(keyPath));
             Assert.Null(Microsoft.Win32.Registry.CurrentUser.OpenSubKey(filesPath));
@@ -312,7 +306,6 @@ public class ElevatedConsentTests
                 Assert.NotNull(parent);
             }
 
-            // Revoking again, with nothing there, is fine.
             consent.Revoke(Bob);
             Assert.False(consent.IsAllowed(Bob));
         }

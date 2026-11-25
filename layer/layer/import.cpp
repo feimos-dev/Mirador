@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The back-buffer import and the trial import. See import.hpp.
-
 #include "layer/import.hpp"
 
 #include <cstdio>
@@ -18,7 +16,6 @@
 namespace dvl {
 namespace {
 
-// "R8G8B8A8_UNORM usage 0x2f", for log lines.
 std::string describe(const ImportConfig& config)
 {
     char usage[32];
@@ -36,7 +33,6 @@ std::string joined(const std::vector<const char*>& names)
     return text;
 }
 
-// The back-buffers' extent, from the open display session; nullopt while it is not open.
 std::optional<VkExtent2D> back_buffer_extent()
 {
     nvdm::DisplaySession& session = display_session();
@@ -46,8 +42,6 @@ std::optional<VkExtent2D> back_buffer_extent()
     return VkExtent2D{session.product().width, session.product().height};
 }
 
-// Design 6.4's first check: the format query with the back-buffers' handle type, for an image made as step 2 makes
-// it. `result` is the driver's code (VK_ERROR_EXTENSION_NOT_PRESENT if the layer below lacks the command).
 ImportSupport query_support(InstanceData& instance, VkPhysicalDevice physical_device, const ImportConfig& config,
                             const std::vector<VkFormat>& views, VkExtent2D extent, VkResult& result)
 {
@@ -80,7 +74,6 @@ ImportSupport query_support(InstanceData& instance, VkPhysicalDevice physical_de
                           extent);
 }
 
-// The commands the import calls, all there.
 bool has_import_commands(const DeviceData& device)
 {
     return device.CreateImage != nullptr && device.DestroyImage != nullptr &&
@@ -89,7 +82,6 @@ bool has_import_commands(const DeviceData& device)
            device.instance != nullptr && device.instance->GetPhysicalDeviceMemoryProperties != nullptr;
 }
 
-// The format queries of both trial configurations: the usage of those that allow the import, and whether all do.
 struct FormatAnswers {
     VkImageUsageFlags usage = 0;
     bool all = true;
@@ -152,7 +144,7 @@ bool run_trial(DeviceData& device)
     return true;
 }
 
-} // namespace
+}
 
 VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent, const ImportConfig& config,
                             ImportedImage& out)
@@ -175,7 +167,6 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
     }
     InstanceData& instance = *device.instance;
 
-    // 1. The format query.
     VkResult result = VK_SUCCESS;
     const ImportSupport support = query_support(instance, device.physical_device, config, *views, extent, result);
     if (!support.ok) {
@@ -184,7 +175,6 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
         return result != VK_SUCCESS ? result : VK_ERROR_FORMAT_NOT_SUPPORTED;
     }
 
-    // 2. The image.
     VkImageFormatListCreateInfoKHR list{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR};
     list.viewFormatCount = static_cast<uint32_t>(views->size());
     list.pViewFormats = views->data();
@@ -212,7 +202,6 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
         return result;
     }
 
-    // 3. The memory type: one both the handle and the image allow.
     VkMemoryRequirements requirements{};
     device.GetImageMemoryRequirements(device.handle, made.image, &requirements);
     VkMemoryWin32HandlePropertiesKHR handle_properties{VK_STRUCTURE_TYPE_MEMORY_WIN32_HANDLE_PROPERTIES_KHR};
@@ -226,7 +215,6 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
     instance.GetPhysicalDeviceMemoryProperties(device.physical_device, &memory_properties);
     const MemoryPick pick = pick_memory_type(handle_bits, requirements.memoryTypeBits, memory_properties);
     if (pick.fallback && !device.memory_fallback_logged.exchange(true)) {
-        // Design 8's memory-type fallback warning, once per device.
         log(Level::Warn,
             "import on device %p: vkGetMemoryWin32HandlePropertiesKHR %s for back-buffer %p, so the memory type comes "
             "from the image's memoryTypeBits (0x%x) alone, as Monado's target did",
@@ -243,7 +231,6 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
     }
 
-    // 4. The dedicated import, and the bind.
     VkImportMemoryWin32HandleInfoKHR import{VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR};
     import.handleType = kBackBufferHandleType;
     import.handle = shared;
@@ -254,7 +241,7 @@ VkResult import_back_buffer(DeviceData& device, HANDLE shared, VkExtent2D extent
     dedicated.buffer = VK_NULL_HANDLE;
     VkMemoryAllocateInfo allocate{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     allocate.pNext = &dedicated;
-    allocate.allocationSize = requirements.size; // ignored for D3D11 handles: the driver takes it from the handle
+    allocate.allocationSize = requirements.size;
     allocate.memoryTypeIndex = *pick.index;
     result = device.AllocateMemory(device.handle, &allocate, nullptr, &made.memory);
     if (result != VK_SUCCESS) {
@@ -357,4 +344,4 @@ ImportVerdict import_verdict(InstanceData& instance, VkPhysicalDevice physical_d
     return verdict;
 }
 
-} // namespace dvl
+}

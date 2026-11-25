@@ -19,7 +19,7 @@ public class BranchOfferTests
         var offer = new BranchOffer(() => "git", runner);
 
         Assert.Equal(["main", "pimax-p3c-windows"], await offer.ListAsync(Url, CancellationToken.None));
-        Assert.Null(await offer.ListAsync(Url, CancellationToken.None)); // tabbing through the link: nothing to do
+        Assert.Null(await offer.ListAsync(Url, CancellationToken.None));
 
         Assert.Single(runner.Commands);
     }
@@ -51,9 +51,9 @@ public class BranchOfferTests
     }
 
     [Theory]
-    [InlineData("pimax-p3c-windows", false, "pimax-p3c-windows")] // the profile's branch, listed
-    [InlineData("gone", false, "main")] // not listed: main
-    [InlineData("gone", true, "gone")] // a saved profile's: kept, listed first
+    [InlineData("pimax-p3c-windows", false, "pimax-p3c-windows")]
+    [InlineData("gone", false, "main")]
+    [InlineData("gone", true, "gone")]
     [InlineData("", true, "main")]
     public void The_pick_is_the_profiles_branch_else_main_else_the_first(string current, bool keepCurrent, string pick)
     {
@@ -76,7 +76,7 @@ public class BranchOfferTests
         var offer = new BranchOffer(() => git, runner);
 
         await offer.ListAsync(Url, CancellationToken.None);
-        git = @"C:\Users\you\AppData\Local\Mirador\tools\git\cmd\git.exe"; // a build installed Mirador's git meanwhile
+        git = @"C:\Users\you\AppData\Local\Mirador\tools\git\cmd\git.exe";
         await offer.ListAsync(Other, CancellationToken.None);
 
         Assert.Equal(["git", git], runner.Commands.Select(c => c.FileName));

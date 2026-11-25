@@ -3,40 +3,23 @@ using Mirador.Core.Monado;
 
 namespace Mirador.Core.Build;
 
-/// <summary>How one check went.</summary>
 public enum CheckOutcome
 {
     Passed,
     Failed,
 
-    /// <summary>Not run here, for the reason in <see cref="BuildCheck.Detail"/> (no build folder, no ctest).</summary>
     Skipped,
 }
 
-/// <summary>One check of a Monado build and what it found.</summary>
-/// <param name="Name">What was checked, in plain words.</param>
-/// <param name="Outcome">How it went.</param>
-/// <param name="Detail">What was found: the missing files or DLLs, the failed tests, why it was skipped.</param>
 public sealed record BuildCheck(string Name, CheckOutcome Outcome, string Detail);
 
-/// <summary>
-/// The checks of one build, kept as <c>checks.json</c> in the install folder by commit. CI's
-/// <c>tools\check-monado-build.ps1</c> writes the same file into the weekly build's zip.
-/// </summary>
-/// <param name="Format">1.</param>
-/// <param name="Commit">The commit the build came from, when known.</param>
-/// <param name="CheckedAt">When the checks ran.</param>
-/// <param name="Checks">Each check, in the order run.</param>
 public sealed record BuildCheckResult(int Format, string? Commit, DateTimeOffset CheckedAt, IReadOnlyList<BuildCheck> Checks)
 {
-    /// <summary>The file name, in the install folder.</summary>
     public const string FileName = "checks.json";
 
-    /// <summary>Whether no check failed (skipped ones don't count).</summary>
     [JsonIgnore]
     public bool AllPassed => Checks.All(c => c.Outcome != CheckOutcome.Failed);
 
-    /// <summary>One line for the profile: all passed, or which failed.</summary>
     public string Summary()
     {
         var failed = Checks.Where(c => c.Outcome == CheckOutcome.Failed).Select(c => c.Name).ToList();
@@ -45,11 +28,9 @@ public sealed record BuildCheckResult(int Format, string? Commit, DateTimeOffset
             : $"Failed: {string.Join(", ", failed)}. The build may still work; see the build log.";
     }
 
-    /// <summary>Saves the result into <paramref name="installDir"/>.</summary>
     public void Save(string installDir) =>
         JsonFile.Save(Path.Combine(installDir, FileName), this, BuildJsonContext.Default.BuildCheckResult);
 
-    /// <summary>The result kept in <paramref name="installDir"/>, or null when there is none or it can't be read.</summary>
     public static BuildCheckResult? Load(string installDir)
     {
         var path = Path.Combine(installDir, FileName);
@@ -66,33 +47,16 @@ public sealed record BuildCheckResult(int Format, string? Commit, DateTimeOffset
     }
 }
 
-/// <summary>
-/// The checks that run after every Monado build, with no window opened: the install's files
-/// and runtime manifest, every DLL they need found, the service setting in the configure cache, and Monado's unit tests
-/// (<c>ctest</c>). A failure warns; it doesn't block (upstream <c>main</c> is sometimes red).
-/// </summary>
-/// <param name="runner">Runs <c>ctest</c>.</param>
-/// <param name="systemDir">Where Windows' own DLLs are (<c>System32</c>).</param>
-/// <param name="time">The clock, for <see cref="BuildCheckResult.CheckedAt"/>.</param>
 public sealed class BuildChecks(ICommandRunner runner, string systemDir, TimeProvider time)
 {
-    /// <summary>The install's runtime manifest, relative to its folder (Monado's Windows install layout).</summary>
     public const string ManifestFile = "openxr_monado.json";
 
-    /// <summary>The install's runtime DLL, relative to its folder.</summary>
     public static readonly string RuntimeDllFile = Path.Combine("bin", "openxr_monado.dll");
 
-    /// <summary>The install's service, relative to its folder.</summary>
     public static readonly string ServiceFile = Path.Combine("bin", "monado-service.exe");
 
-    /// <summary>How long Monado's unit tests may take in all.</summary>
     public static readonly TimeSpan TestTimeout = TimeSpan.FromMinutes(10);
 
-    /// <summary>
-    /// Runs the checks on the install in <paramref name="installDir"/>. With <paramref name="buildDir"/> (the CMake build
-    /// folder) also the service setting and, with <paramref name="ctest"/>, the unit tests; without them those are
-    /// skipped. Nothing is saved: see <see cref="BuildCheckResult.Save"/>.
-    /// </summary>
     public async Task<BuildCheckResult> RunAsync(
         string installDir, string? buildDir, string? ctest, string? commit, Action<string> log, CancellationToken ct)
     {
@@ -139,10 +103,6 @@ public sealed class BuildChecks(ICommandRunner runner, string systemDir, TimePro
             : new BuildCheck(name, CheckOutcome.Failed, $"It names {library}, not the install's {RuntimeDllFile}.");
     }
 
-    /// <summary>
-    /// Every DLL the runtime and the service import, and the DLLs those import in turn, found in the install's
-    /// <c>bin</c> folder or Windows' own folder. API sets (<c>api-ms-win-*</c>, <c>ext-ms-*</c>) are Windows' too.
-    /// </summary>
     private BuildCheck Dlls(string installDir)
     {
         const string name = "DLLs";
@@ -254,10 +214,8 @@ public sealed class BuildChecks(ICommandRunner runner, string systemDir, TimePro
                 {
                     log(line);
 
-                    // ctest exits 0 when the build has no tests at all (a fork without them, BUILD_TESTING off).
                     noTests |= line.Contains("No tests were found", StringComparison.Ordinal);
 
-                    // ctest's summary: "  3 - tests_foo (Failed)".
                     if (line.TrimStart().Length > 0 && char.IsDigit(line.TrimStart()[0]) && line.Contains(" - ", StringComparison.Ordinal)
                         && (line.EndsWith("(Failed)", StringComparison.Ordinal) || line.EndsWith("(Timeout)", StringComparison.Ordinal)
                             || line.Contains("(SEGFAULT)", StringComparison.Ordinal) || line.Contains("(Exception)", StringComparison.Ordinal)))
@@ -288,10 +246,8 @@ public sealed class BuildChecks(ICommandRunner runner, string systemDir, TimePro
     }
 }
 
-/// <summary>Reading one entry of a CMake configure cache (<c>CMakeCache.txt</c>).</summary>
 public static class CMakeCache
 {
-    /// <summary>The value of <paramref name="key"/> (any type), or null when it isn't there.</summary>
     public static string? Read(string cacheFile, string key)
     {
         foreach (var line in File.ReadLines(cacheFile))

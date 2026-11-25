@@ -4,23 +4,8 @@ using Mirador.Core.Native;
 
 namespace Mirador.DirectMode;
 
-/// <summary>
-/// The re-check after an NVIDIA driver update: when the driver isn't the last one direct mode passed with, the layer's
-/// display check runs before Monado starts, and a fail refuses the Start with what the check says to do. The layer runs
-/// it once the headset's module has freed the headset, and keeps which driver passed.
-/// </summary>
-/// <param name="driverNow">The NVIDIA driver now (<see cref="NvidiaDriver"/>), or null when there is none.</param>
-/// <param name="startConsole">Starts the display check (<see cref="ConsoleProcess.Start"/>).</param>
 public sealed class DirectModeCheck(Func<string?> driverNow, Func<ProcessSpec, IConsoleProcess> startConsole)
 {
-    /// <summary>
-    /// Runs the display check when the driver changed since <paramref name="lastGoodDriver"/>; on a pass hands the
-    /// driver to <paramref name="remember"/>. The check's output, pass or fail, goes to <paramref name="saveOutput"/>.
-    /// Returns null, or Home's warning when the layer leaves the headset to Windows (<see cref="DisplayCheckResult.NotUsed"/>):
-    /// the Start goes on, since a Monado with Windows' own headset route may drive it, and the driver isn't kept as
-    /// passed, since nothing showed that direct mode works with it.
-    /// </summary>
-    /// <exception cref="MiradorException">Direct mode didn't pass the check with this driver, or it couldn't be checked.</exception>
     public async Task<string?> EnsureAsync(
         LayerFiles layer,
         string? lastGoodDriver,
@@ -54,7 +39,6 @@ public sealed class DirectModeCheck(Func<string?> driverNow, Func<ProcessSpec, I
         return null;
     }
 
-    /// <summary>Home's warning for a headset the layer leaves to Windows.</summary>
     internal static string NotUsedWarning(string checkMessage) =>
         $"Direct mode isn't used for this headset: {Sentence(checkMessage)} Monado shows an image on it only through " +
         "Windows' own headset route (WinRT/WDDC, upstream merge request !2811), which upstream Monado doesn't have yet.";

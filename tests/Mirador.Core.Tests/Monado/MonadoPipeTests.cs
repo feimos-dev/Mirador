@@ -35,7 +35,6 @@ public class MonadoPipeTests
     [Fact]
     public void A_folder_outside_ascii_goes_through_the_ansi_code_page_as_in_monado()
     {
-        // As on a Western Windows (code page 1252), which has no Ł and gives its best fit, L.
         var pipe = new MonadoPipe(folder => folder.Replace('\u0141', 'L'));
 
         Assert.Equal(@"\\.\pipe\C:\Users\Lukasz\AppData\Local\Temp\/monado_comp_ipc",
@@ -62,7 +61,6 @@ public class MonadoPipeTests
         Assert.Equal("", Mirador.Ipc.AnsiCodePage.RoundTrip(""));
         if (GetACP() != 65001)
         {
-            // No ANSI code page but UTF-8 has an emoji.
             Assert.DoesNotContain("\U0001F600", Mirador.Ipc.AnsiCodePage.RoundTrip("C:\\Users\\\U0001F600\\Temp\\"));
         }
     }
@@ -142,13 +140,10 @@ public class MonadoPipeTests
     [Fact]
     public void A_pipe_created_under_the_literal_name_monado_uses_is_found()
     {
-        // The usual case: no XDG variable, so the name has the temp path's trailing backslash followed by "/".
         var pipe = new MonadoPipe();
         var literal = pipe.NameFor(Env(("TMP", @"C:\mirador-test-" + Guid.NewGuid().ToString("N"))));
         Assert.Contains(@"\/monado_comp_ipc", literal);
 
-        // Monado calls CreateNamedPipe with that string as it is. Windows files the pipe under the normalized name
-        // (the "/" becomes "\" and the doubled backslash collapses), and a wait on the literal string would not find it.
         using var server = CreateNamedPipe(literal);
         Assert.False(server.IsInvalid, "CreateNamedPipe failed: " + Marshal.GetLastWin32Error());
 
@@ -163,9 +158,8 @@ public class MonadoPipeTests
         Assert.False(pipe.Exists(pipe.NameFor(Env(("TMP", @"C:\mirador-test-" + Guid.NewGuid().ToString("N"))))));
     }
 
-    /// <summary>What Monado does to open its pipe: the plain Win32 call, with the name untouched.</summary>
     private static SafeFileHandle CreateNamedPipe(string name) =>
-        CreateNamedPipeW(name, 0x3 /* PIPE_ACCESS_DUPLEX */, 0 /* byte stream, blocking */, 1, 4096, 4096, 0, IntPtr.Zero);
+        CreateNamedPipeW(name, 0x3, 0, 1, 4096, 4096, 0, IntPtr.Zero);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeFileHandle CreateNamedPipeW(

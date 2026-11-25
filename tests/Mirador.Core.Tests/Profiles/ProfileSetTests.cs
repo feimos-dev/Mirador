@@ -42,7 +42,7 @@ public class ProfileSetTests
         Assert.Equal(original.ExtraEnvironment, copy.ExtraEnvironment);
         Assert.Equal(original.ModuleOptions, copy.ModuleOptions);
         Assert.Equal("dreamair", result.SelectedId);
-        Assert.Equal(2, set.Profiles.Count); // the original set is untouched
+        Assert.Equal(2, set.Profiles.Count);
     }
 
     [Fact]

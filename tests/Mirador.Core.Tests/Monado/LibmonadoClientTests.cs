@@ -29,10 +29,6 @@ public unsafe class LibmonadoClientTests
         Assert.Equal(Libmonado.NotOffered, opened.Problem);
     }
 
-    /// <summary>
-    /// Needs Monado started by hand from the install <c>MIRADOR_TEST_MONADO_INSTALL</c> names, built with libmonado.
-    /// Without Monado running, libmonado's connection would start it.
-    /// </summary>
     [MonadoInstallFact]
     public void Devices_of_a_running_monado_include_the_head()
     {
@@ -45,7 +41,6 @@ public unsafe class LibmonadoClientTests
         Assert.Single(client.Devices(), device => device.Role == "head");
     }
 
-    // A libmonado that says it has more devices than Monado can have.
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int HugeCount(IntPtr root, uint* count)
     {
@@ -77,7 +72,6 @@ public unsafe class LibmonadoClientTests
         Assert.Contains("4294967295", e.Message);
     }
 
-    // A libmonado with three apps: a game (shown), an overlay, and one that leaves before its name is read.
     private static readonly IntPtr[] AppNames =
         [Marshal.StringToCoTaskMemUTF8("Game"), Marshal.StringToCoTaskMemUTF8("Bar"), Marshal.StringToCoTaskMemUTF8("Gone")];
 
@@ -118,7 +112,6 @@ public unsafe class LibmonadoClientTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int StateOf(IntPtr root, uint id, uint* flags)
     {
-        // The game: shown, session running, inputs blocked. The bar: session running, overlay.
         *flags = id == 10 ? (1u << 0) | (1u << 1) | (1u << 8) : (1u << 1) | (1u << 4);
         return 0;
     }
@@ -213,7 +206,6 @@ public unsafe class LibmonadoClientTests
         Assert.Equal(new MonadoPose(0, 0, 0, 1, 1, 2, 3), offset);
     }
 
-    // MND_ERROR_RECENTERING_NOT_SUPPORTED
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int CannotRecentre(IntPtr root) => -5;
 

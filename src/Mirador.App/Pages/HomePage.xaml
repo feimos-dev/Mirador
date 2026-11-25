@@ -7,7 +7,6 @@
     NavigationCacheMode="Required">
 
     <Page.Resources>
-        <!-- The cards: Monado's status and the runtimes. -->
         <Style x:Key="HomeCard" TargetType="Border">
             <Setter Property="Padding" Value="16,8" />
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
@@ -17,11 +16,6 @@
         </Style>
     </Page.Resources>
 
-    <!--
-        Spacing from Microsoft's "Content layout and spacing": 12 between content areas, 8 between controls of one
-        group. Every message (InfoBar) is in one group under the cards, so a message coming or going never moves the
-        controls above it, and a closed bar takes no room.
-    -->
     <ScrollViewer>
         <c:PageColumn>
         <StackPanel Padding="36,24,36,36" Spacing="12">
@@ -79,7 +73,6 @@
                 </ItemsControl>
             </Border>
 
-            <!-- The controllers and trackers Monado found: their hand and battery, else their serial. -->
             <Border Style="{StaticResource HomeCard}" Visibility="{x:Bind ViewModel.ShowDevices, Mode=OneWay}">
                 <StackPanel Padding="0,4" Spacing="8">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Controllers and trackers" />
@@ -120,7 +113,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- The runtimes games use. Each row is as tall with its button as without it. -->
             <Border Style="{StaticResource HomeCard}">
                 <StackPanel>
                     <Grid MinHeight="36" ColumnSpacing="12">
@@ -197,10 +189,6 @@
                 </StackPanel>
             </Border>
 
-            <!--
-                The base stations of the selected profile, switched together. While they change state (a command being
-                sent, one waking up) a spinner takes the icon's place.
-            -->
             <Border Style="{StaticResource HomeCard}" Visibility="{x:Bind ViewModel.ShowStations, Mode=OneWay}">
                 <Grid MinHeight="36" ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
@@ -250,10 +238,6 @@
                 </Grid>
             </Border>
 
-            <!--
-                Messages: each bar takes room only while open. Only something that happened once can be closed; a
-                condition stays until it no longer holds (a failed Start until the next Start or profile).
-            -->
             <StackPanel Spacing="8">
                 <InfoBar
                     Title="Monado didn't start"
@@ -286,7 +270,6 @@
                     Message="{x:Bind ViewModel.RunsAsYouNotice, Mode=OneWay}"
                     Severity="Informational"
                     Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}">
-                    <!-- When the consent isn't recorded, or SteamVR's Lighthouse driver changed since it was: the consent's UAC step, with today's files. -->
                     <InfoBar.ActionButton>
                         <Button
                             Command="{x:Bind ViewModel.AllowAgainCommand}"
@@ -303,7 +286,6 @@
                     Message="{x:Bind ViewModel.DirectModeNotice, Mode=OneWay}"
                     Severity="Warning"
                     Visibility="{Binding IsOpen, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource VisibleWhenTrue}}">
-                    <!-- The headset is on the desktop as a monitor: Pimax's software is stopped and direct mode turned on again. -->
                     <InfoBar.ActionButton>
                         <Button
                             Command="{x:Bind ViewModel.FixDirectModeCommand}"
@@ -367,7 +349,6 @@
                     </InfoBar.ActionButton>
                 </InfoBar>
 
-                <!-- Last, so that an empty list only adds room below everything. -->
                 <ItemsControl ItemsSource="{x:Bind ViewModel.Notices}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>

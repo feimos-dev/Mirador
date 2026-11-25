@@ -3,28 +3,14 @@ using System.Runtime.InteropServices;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// Ends <c>monado-service</c> cleanly. On Windows it has no other way to be asked: its main loop ends when a key is
-/// waiting in its console's input, and it then tears down its devices (the Lighthouse driver's standby on exit, for
-/// one). A kill skips all that. Mirador and the helper start Monado with a console of its own, without a window, so a
-/// key can be written there: by a short-lived process that attaches to that console (<see cref="Send"/>), never by
-/// Mirador or the helper itself, since a process attached to a console ends with it.
-/// </summary>
 public static class ConsoleExitKey
 {
-    /// <summary>The argument that makes Mirador.exe or Mirador.Helper.exe write the key and exit: <c>--send-exit-key &lt;pid&gt;</c>.</summary>
     public const string Flag = "--send-exit-key";
 
-    /// <summary>How long a sender may take before it is given up.</summary>
     public static readonly TimeSpan SenderLimit = TimeSpan.FromSeconds(3);
 
-    /// <summary>How long Monado has to end by itself after the key before it is killed (it takes well under a second).</summary>
     public static readonly TimeSpan StopLimit = TimeSpan.FromSeconds(3);
 
-    /// <summary>
-    /// For the sender process only (it gives up its own console): attaches to the console of <paramref name="processId"/>
-    /// and writes one key press into its input. Null when it was written, else why not.
-    /// </summary>
     public static string? Send(int processId)
     {
         FreeConsole();
@@ -47,7 +33,7 @@ public static class ConsoleExitKey
                 records[i].EventType = KeyEvent;
                 records[i].Key.KeyDown = i == 0 ? 1 : 0;
                 records[i].Key.RepeatCount = 1;
-                records[i].Key.VirtualKeyCode = 0x51; // Q
+                records[i].Key.VirtualKeyCode = 0x51;
                 records[i].Key.UnicodeChar = 'q';
             }
 
@@ -61,12 +47,6 @@ public static class ConsoleExitKey
         }
     }
 
-    /// <summary>
-    /// Runs <paramref name="senderExe"/> <c>--send-exit-key</c> for <paramref name="processId"/>, without a window, and
-    /// waits for it at most <see cref="SenderLimit"/>. True when it wrote the key, or may have (it was still running at
-    /// the limit: a slow start), so that the caller waits for the process to end before killing it; false when it surely
-    /// didn't (it couldn't start, or said it couldn't write).
-    /// </summary>
     public static bool RunSender(string senderExe, int processId)
     {
         try
@@ -94,7 +74,6 @@ public static class ConsoleExitKey
         }
     }
 
-    /// <summary>The process id in <c>--send-exit-key &lt;pid&gt;</c>, or null when <paramref name="args"/> isn't that.</summary>
     public static int? Requested(string[] args) =>
         args is [Flag, var pid] && int.TryParse(pid, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) && id > 0
             ? id

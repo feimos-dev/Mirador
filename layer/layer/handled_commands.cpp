@@ -1,14 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// What the layer does with each command of build/generated/handle_commands.inc (tools/gen_handle_commands.py): every
-// command in vk.xml, in all extensions, that can be handed one of the layer's own VkDisplayKHR, VkDisplayModeKHR,
-// VkSurfaceKHR or VkSwapchainKHR. Each is one of
-//   - intercepted (kIntercepted), or
-//   - not applicable, with the reason (kNotApplicable).
-// The test every_handle_command_is_classified fails for a command that is neither, and the runtime guard
-// (check_command_coverage) logs an error when an application enables an extension that has such a command.
-
 #include "layer/handled_commands.hpp"
 
 #include <algorithm>
@@ -22,84 +14,43 @@
 namespace dvl {
 namespace {
 
-// Intercepted now: the entries of the layer's proc-address tables (layer_main.cpp, and the lists in intercepts.hpp). A
-// task adds the commands it intercepts, also the ones the generated list does not have because they take none of our
-// objects (vkCreateInstance, vkDeviceWaitIdle, vkRegisterDeviceEventEXT, the fence commands).
 const std::initializer_list<std::string_view> kIntercepted = {
     "vkGetInstanceProcAddr", "vkGetDeviceProcAddr", "vkCreateInstance", "vkDestroyInstance", "vkCreateDevice",
     "vkDestroyDevice",
-    // The private queue's mutex.
     "vkDeviceWaitIdle",
-    // The display, plane and mode queries (display_intercepts.cpp). The layer lists its own display first and
-    // answers for it; a call on a display, mode or plane that is not its goes down.
     "vkGetPhysicalDeviceDisplayPropertiesKHR", "vkGetPhysicalDeviceDisplayProperties2KHR",
     "vkGetPhysicalDeviceDisplayPlanePropertiesKHR", "vkGetPhysicalDeviceDisplayPlaneProperties2KHR",
     "vkGetDisplayPlaneSupportedDisplaysKHR", "vkGetDisplayModePropertiesKHR", "vkGetDisplayModeProperties2KHR",
     "vkCreateDisplayModeKHR", "vkGetDisplayPlaneCapabilitiesKHR", "vkGetDisplayPlaneCapabilities2KHR",
-    // VK_EXT_direct_mode_display: nothing is acquired from the layer's display, so releasing it does nothing; another
-    // display goes down.
     "vkReleaseDisplayEXT",
-    // VK_NV_acquire_winrt_display, which NVIDIA's Windows driver offers: refused for the layer's display, any other
-    // goes down. vkGetWinrtDisplayNV only ever returns the driver's display, so it always goes down.
     "vkAcquireWinrtDisplayNV", "vkGetWinrtDisplayNV",
-    // The surface (surface_intercepts.cpp), and every surface query. None fails on the layer's
-    // surface; a surface that is not its goes down (vkGetPhysicalDeviceSurfaceCapabilities2EXT included: the loader
-    // emulates it).
     "vkCreateDisplayPlaneSurfaceKHR", "vkDestroySurfaceKHR", "vkGetPhysicalDeviceSurfaceSupportKHR",
     "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", "vkGetPhysicalDeviceSurfaceFormatsKHR",
     "vkGetPhysicalDeviceSurfacePresentModesKHR", "vkGetPhysicalDeviceSurfaceCapabilities2KHR",
     "vkGetPhysicalDeviceSurfaceFormats2KHR", "vkGetPhysicalDeviceSurfaceCapabilities2EXT",
     "vkGetPhysicalDevicePresentRectanglesKHR", "vkGetDeviceGroupSurfacePresentModesKHR",
-    // VK_EXT_full_screen_exclusive's two queries are surface queries too (present modes with a
-    // VkPhysicalDeviceSurfaceInfo2KHR, as ...Formats2KHR has); acquire and release are below.
     "vkGetPhysicalDeviceSurfacePresentModes2EXT", "vkGetDeviceGroupSurfacePresentModes2EXT",
-    // The swapchain (swapchain.cpp), acquire, present and present-wait (present.cpp). A swapchain of the
-    // layer's is never shared presentable (vkGetSwapchainStatusKHR: VK_SUCCESS).
     "vkCreateSwapchainKHR", "vkDestroySwapchainKHR", "vkGetSwapchainImagesKHR", "vkGetSwapchainStatusKHR",
     "vkAcquireNextImageKHR", "vkAcquireNextImage2KHR", "vkQueuePresentKHR", "vkWaitForPresentKHR",
-    // VK_EXT_display_control (events.cpp), the layer's own extension, and the fence commands that answer for
-    // its display events (vkRegisterDeviceEventEXT and the fence commands take none of our objects: not in the
-    // generated list).
     "vkRegisterDisplayEventEXT", "vkDisplayPowerControlEXT", "vkGetSwapchainCounterEXT", "vkRegisterDeviceEventEXT",
     "vkWaitForFences", "vkGetFenceStatus", "vkResetFences", "vkDestroyFence",
-    // The rest of the display commands (misc_intercepts.cpp): accepted and answered, or refused with a log line
-    // (vkCreateSharedSwapchainsKHR), for the layer's own handles; anything else goes down.
     "vkSetHdrMetadataEXT", "vkCreateSharedSwapchainsKHR", "vkAcquireFullScreenExclusiveModeEXT",
     "vkReleaseFullScreenExclusiveModeEXT", "vkReleaseSwapchainImagesEXT", "vkGetRefreshCycleDurationGOOGLE",
     "vkGetPastPresentationTimingGOOGLE", "vkSetDebugUtilsObjectNameEXT", "vkSetDebugUtilsObjectTagEXT",
     "vkDebugMarkerSetObjectNameEXT", "vkDebugMarkerSetObjectTagEXT",
-    //  - Private data on a swapchain, surface, display or mode of the layer: the layer stores it itself; the private
-    //    data of any other object goes down.
     "vkSetPrivateData", "vkGetPrivateData", "vkSetPrivateDataEXT", "vkGetPrivateDataEXT",
-    //  - VK_NV_low_latency2 (NVIDIA's driver offers it) and VK_AMD_display_native_hdr: accepted and ignored on the
-    //    layer's swapchain (vkGetLatencyTimingsNV: no timings; vkLatencySleepNV signals its semaphore at once).
     "vkSetLatencySleepModeNV", "vkLatencySleepNV", "vkSetLatencyMarkerNV", "vkGetLatencyTimingsNV",
     "vkSetLocalDimmingAMD",
-    //  - An image made for a swapchain (VkImageSwapchainCreateInfoKHR in the pNext of vkCreateImage's create info or of
-    //    the create info of the vkGetDeviceImage* queries; VkBindImageMemorySwapchainInfoKHR in vkBindImageMemory2's):
-    //    one pNext check shared by all of them. They go down unless the chain names the layer's swapchain; then they
-    //    are refused with a log line. (The spec forbids the swapchain struct in the create info of the memory-
-    //    requirements queries, VUID-VkDeviceImageMemoryRequirements-pCreateInfo-06416, but the layer does not rely on
-    //    an application obeying it.)
     "vkCreateImage", "vkBindImageMemory2", "vkBindImageMemory2KHR", "vkGetDeviceImageMemoryRequirements",
     "vkGetDeviceImageMemoryRequirementsKHR", "vkGetDeviceImageSparseMemoryRequirements",
     "vkGetDeviceImageSparseMemoryRequirementsKHR", "vkGetDeviceImageSubresourceLayout",
     "vkGetDeviceImageSubresourceLayoutKHR",
-    // Present timing, from the 1.4.363 registry on; NVIDIA's driver offers all of these.
-    //  - VK_KHR_present_wait2 waits as vkWaitForPresentKHR does (present.cpp), and VK_KHR_swapchain_maintenance1's KHR
-    //    name of vkReleaseSwapchainImagesEXT releases as it does (misc_intercepts.cpp).
     "vkWaitForPresent2KHR", "vkReleaseSwapchainImagesKHR",
-    //  - VK_EXT_present_timing (present_timing_intercepts.cpp): answered from the flips for the layer's swapchain.
     "vkSetSwapchainPresentTimingQueueSizeEXT", "vkGetSwapchainTimingPropertiesEXT",
     "vkGetSwapchainTimeDomainPropertiesEXT", "vkGetPastPresentationTimingEXT",
-    //  - Calibrated timestamps, whose VkSwapchainCalibratedTimestampInfoEXT can name the layer's swapchain: its local
-    //    domains are answered from the layer below's QPC reading, without the handle.
     "vkGetCalibratedTimestampsKHR", "vkGetCalibratedTimestampsEXT",
 };
 
-// Commands that cannot do anything to the layer's objects here, with the reason: they cannot be handed one (another
-// platform), or only pass it on as a number. Surface creators only return a surface of the driver or the loader, never
-// the layer's, which comes from vkCreateDisplayPlaneSurfaceKHR alone.
 const std::initializer_list<NotApplicableCommand> kNotApplicable = {
     {"vkCreateAndroidSurfaceKHR", "Android window surface: Android only, and it returns the driver's surface, not the layer's"},
     {"vkCreateDirectFBSurfaceEXT", "DirectFB surface: Linux only, and it returns the driver's surface, not the layer's"},
@@ -125,12 +76,10 @@ const std::initializer_list<NotApplicableCommand> kNotApplicable = {
 
     {"vkSetBufferCollectionImageConstraintsFUCHSIA", "Fuchsia sysmem buffer collections (VK_FUCHSIA_buffer_collection): Fuchsia only"},
 
-    // A message about an object: the object is only a number in the text.
     {"vkDebugReportMessageEXT", "object handles are only forwarded as values to message callbacks, never dereferenced by the loader or driver"},
     {"vkSubmitDebugUtilsMessageEXT", "object handles are only forwarded as values to message callbacks, never dereferenced by the loader or driver"},
 };
 
-// The generated file has three kinds of line; each use defines the three macros.
 const HandleCommand kGenerated[] = {
 #define DVL_HANDLE_COMMAND(name, extension) {name, extension},
 #define DVL_KNOWN_EXTENSION(name)
@@ -166,11 +115,10 @@ bool classified_command(std::string_view name)
     return handled_command(name) || not_applicable(name) != nullptr;
 }
 
-} // namespace
+}
 
 const std::vector<HandleCommand>& handle_commands()
 {
-    // Made at first use and never destroyed, like the other process-wide state.
     static const std::vector<HandleCommand>* const list =
         new std::vector<HandleCommand>(std::begin(kGenerated), std::end(kGenerated));
     return *list;
@@ -268,7 +216,6 @@ std::vector<std::string> unknown_extension_warnings(const std::vector<std::strin
 void check_command_coverage(const char* const* extensions, uint32_t count, const char* where) noexcept
 {
     try {
-        // A process creates several instances; the lines are about the layer, so each is written once.
         static std::mutex* const mutex = new std::mutex;
         static std::set<std::string>* const written = new std::set<std::string>;
         const auto write_once = [](Level level, const std::string& line) {
@@ -293,4 +240,4 @@ void check_command_coverage(const char* const* extensions, uint32_t count, const
     }
 }
 
-} // namespace dvl
+}

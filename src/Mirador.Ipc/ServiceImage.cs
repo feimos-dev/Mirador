@@ -1,12 +1,7 @@
 namespace Mirador.Ipc;
 
-/// <summary>Reads a Windows service's <c>ImagePath</c>, the command line its program is started with.</summary>
 public static class ServiceImage
 {
-    /// <summary>
-    /// The program an <c>ImagePath</c> runs, without its quotes and arguments: <c>"C:\…\x.exe" -k</c>, or unquoted up
-    /// to the first <c>.exe</c>; <c>\??\</c> in front is dropped. Null for an empty value.
-    /// </summary>
     public static string? ProgramOf(string? imagePath)
     {
         var text = imagePath?.Trim();

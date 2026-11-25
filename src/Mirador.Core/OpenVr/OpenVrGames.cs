@@ -2,29 +2,14 @@ using Mirador.Core.Runtime;
 
 namespace Mirador.Core.OpenVr;
 
-/// <summary>What Home shows for OpenVR games.</summary>
-/// <param name="Runtime">The active OpenVR runtime, in plain words.</param>
-/// <param name="OffersOpenComposite">Whether Home offers "Set OpenLamina".</param>
-/// <param name="Warning">Something to know: the OpenXR runtime isn't Monado while OpenLamina is in front.</param>
-/// <param name="Problem">The paths file can't be read, or OpenLamina was uninstalled while OpenVR games still go to it.</param>
 public sealed record OpenVrView(string Runtime, bool OffersOpenComposite, string? Warning, string? Problem);
 
-/// <summary>
-/// Home's "OpenVR runtime" row: OpenLamina as its installer put it, or whatever the paths file names. One way, like
-/// the OpenXR runtime: "Set OpenLamina" puts it first, and nothing in Mirador switches
-/// it back or forth by itself. SteamVR puts itself first again whenever it starts.
-/// </summary>
 public sealed class OpenVrGames(OpenVrPaths paths, OpenCompositeInstall install)
 {
-    /// <summary>Home's button for <see cref="UseMonado"/>.</summary>
     public const string SetOpenCompositeLabel = "Set OpenLamina";
 
-    /// <summary>Whether OpenLamina is installed. Without it, Home offers "Get OpenLamina".</summary>
     public bool Available => install.IsInstalled;
 
-    /// <summary>Home's "OpenVR runtime" row, from the paths file as it is now.</summary>
-    /// <param name="openXrIsMonado">Whether the profile's Monado is the active OpenXR runtime.</param>
-    /// <param name="activeOpenXr">The active OpenXR runtime's manifest; null when none is set.</param>
     public OpenVrView View(bool openXrIsMonado, string? activeOpenXr)
     {
         var state = paths.Read();
@@ -53,7 +38,6 @@ public sealed class OpenVrGames(OpenVrPaths paths, OpenCompositeInstall install)
                 null);
         }
 
-        // The OpenComposite before OpenLamina is another app; OpenVR games going to it get what they got before, so say it
         if (state.Target == OpenVrTarget.Other && state.First is { } first && OpenVrPaths.SamePath(first, OpenCompositeInstall.LegacyFolder))
         {
             return new OpenVrView(
@@ -72,11 +56,6 @@ public sealed class OpenVrGames(OpenVrPaths paths, OpenCompositeInstall install)
         return new OpenVrView(runtime, true, null, null);
     }
 
-    /// <summary>
-    /// "Set OpenLamina": puts the installed OpenLamina first in the paths file, which never names a DLL that
-    /// isn't there.
-    /// </summary>
-    /// <returns>Null when done, else why nothing changed.</returns>
     public string? UseMonado() =>
         install.IsInstalled ? paths.UseMonado() : "OpenLamina isn't installed yet: press \"Get OpenLamina\" first.";
 }

@@ -11,7 +11,7 @@ public class UsbDevicesTests
         [
             @"USB\VID_045E&PID_028E\5&2B3C1F0&0&1",
             @"USB\VID_1D6B&PID_0102&MI_00\6&1A2B3C4D&0&0000",
-            @"USB\VID_1D6B&PID_0102&MI_01\6&1A2B3C4D&0&0001", // the same device's second interface
+            @"USB\VID_1D6B&PID_0102&MI_01\6&1A2B3C4D&0&0001",
             @"usb\vid_28de&pid_2300\7&abc&0&2",
             @"USB\ROOT_HUB30\4&1234&0&0",
             @"USB\VID_ZZZZ&PID_0001\1",

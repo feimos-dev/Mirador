@@ -1,9 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The clock, the QPC conversion, the registry EDID route, and the test fakes (FakeClock, FakeApi) that Tasks 4 to 6
-// rely on. The real NVAPI port (make_nvapi) is not exercised here: it needs the headset.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
@@ -31,17 +28,15 @@ nvdm::RefreshStats poll(FakeApi& api)
     return stats;
 }
 
-} // namespace
+}
 
 TEST_CASE("qpc_ticks_to_ns converts without overflowing")
 {
     CHECK(nvdm::qpc_ticks_to_ns(10'000'000, 10'000'000) == 1'000'000'000);
     CHECK(nvdm::qpc_ticks_to_ns(1, 10'000'000) == 100);
     CHECK(nvdm::qpc_ticks_to_ns(0, 10'000'000) == 0);
-    // A frequency that does not divide 1e9: the remainder is converted, not dropped.
     CHECK(nvdm::qpc_ticks_to_ns(1, 3) == 333'333'333);
     CHECK(nvdm::qpc_ticks_to_ns(4, 3) == 1'333'333'333);
-    // ticks * 1e9 would overflow 64 bits here (1e15 ticks are 3 years at 10 MHz).
     CHECK(nvdm::qpc_ticks_to_ns(1'000'000'000'000'000, 10'000'000) == 100'000'000'000'000'000);
     CHECK(nvdm::qpc_ticks_to_ns(5, 0) == 0);
 }
@@ -65,8 +60,6 @@ TEST_CASE("QpcClock is on the timebase of QueryPerformanceCounter, like present_
 
 TEST_CASE("read_edid_from_registry returns a base-block EDID or nothing")
 {
-    // Whether a PVR monitor is known to Windows depends on the machine, so both outcomes are valid;
-    // what must hold is that a result is an EDID and a failure leaves nothing behind.
     std::vector<uint8_t> edid{0xaa, 0xbb};
     if (nvdm::read_edid_from_registry(edid)) {
         REQUIRE(edid.size() >= 128);
@@ -108,13 +101,11 @@ TEST_CASE("FakeApi counter advances once per refresh_ns of fake time")
     CHECK(stats.counter == 1);
     CHECK(stats.qpc_ns == kRefreshNs);
 
-    // qpc_ns is the time of the last flip, not of the poll.
     clock.advance(4 * kRefreshNs + 5000);
     stats = poll(api);
     CHECK(stats.counter == 5);
     CHECK(stats.qpc_ns == 5 * kRefreshNs);
 
-    // Polling does not move it; only the clock does.
     CHECK(poll(api).counter == 5);
     CHECK(poll(api).counter == 5);
 }
@@ -146,7 +137,6 @@ TEST_CASE("FakeApi counter can be stopped and started again")
     CHECK(stats.counter == 3);
     CHECK(stats.qpc_ns == 3 * kRefreshNs);
 
-    // Flips resume from the value it stopped at; the first new one is a period after the start.
     const int64_t restart_ns = clock.now_ns();
     api.start_counter();
     stats = poll(api);
@@ -172,7 +162,6 @@ TEST_CASE("FakeApi reset_counter models a link drop: back to 0, then counting on
     nvdm::RefreshStats stats = poll(api);
     CHECK(stats.counter == 0);
     CHECK(stats.qpc_ns == drop_ns);
-    // The display keeps its mode, so the refresh rate is still reported.
     CHECK(stats.refresh_num == 90000);
 
     clock.advance(2 * kRefreshNs);
@@ -180,7 +169,6 @@ TEST_CASE("FakeApi reset_counter models a link drop: back to 0, then counting on
     CHECK(stats.counter == 2);
     CHECK(stats.qpc_ns == drop_ns + 2 * kRefreshNs);
 
-    // A reset while stopped stays at 0 until started.
     api.stop_counter();
     api.reset_counter();
     clock.advance(5 * kRefreshNs);
@@ -237,7 +225,6 @@ TEST_CASE("FakeApi records calls in order, with arguments and fake time")
         "enable_direct_mode", "bind_device", "present", "custom",
     };
     CHECK(api.names() == expected);
-    // The task 4 order check leaves driver_version out of its list.
     CHECK(api.names({"driver_version"}).size() == expected.size() - 1);
     CHECK(api.count("present") == 1);
     CHECK(api.count("present_stats") == 0);
@@ -266,7 +253,6 @@ TEST_CASE("FakeApi returns queued results once each, then its defaults")
     CHECK(api.bind_device(1, device, nvdm::kVendorPvr) == 0);
     CHECK(api.count("bind_device") == 3);
 
-    // SetDisplayMode succeeds with -208; the queue can say otherwise a number of times.
     nvdm::Mode mode;
     CHECK(api.set_display_mode(mode) == nvdm::kSetModeOk);
     api.queue(Fn::SetDisplayMode, 7, 2);
@@ -274,7 +260,6 @@ TEST_CASE("FakeApi returns queued results once each, then its defaults")
     CHECK(api.set_display_mode(mode) == 7);
     CHECK(api.set_display_mode(mode) == nvdm::kSetModeOk);
 
-    // A default for every call that has no queued result.
     api.set_default_status(Fn::Present, 3);
     CHECK(api.present(1) == 3);
     api.queue(Fn::Present, 0);
@@ -349,7 +334,6 @@ TEST_CASE("FakeApi hands out its back-buffers in order and records the modes")
     CHECK(api.modes_created.size() == 4);
     CHECK(api.modes_created[0].width == 7104);
 
-    // The tags are distinct, or a test could not tell the buffers apart.
     CHECK(api.back_buffers[0].tag != api.back_buffers[1].tag);
     CHECK(api.back_buffers[1].tag != api.back_buffers[2].tag);
 
@@ -389,7 +373,6 @@ TEST_CASE("FakeApi default EDID is a base block for a Pimax Dream Air")
     REQUIRE(api.edid.size() == 128);
     const uint8_t header[8] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00};
     CHECK(std::vector<uint8_t>(api.edid.begin(), api.edid.begin() + 8) == std::vector<uint8_t>(header, header + 8));
-    // Manufacturer "PVR" (0x42d2, big-endian), product 0x1019 (little-endian).
     CHECK(api.edid[8] == 0x42);
     CHECK(api.edid[9] == 0xd2);
     CHECK(api.edid[10] == 0x19);
@@ -420,8 +403,6 @@ TEST_CASE("FakeApi calls the on_call hook at entry, before the call is recorded"
     CHECK(recorded_when_seen == std::vector<size_t>{0, 1});
 }
 
-// --- Fixes folded in later -------------------------------------------------------------------------------------------
-
 TEST_CASE("FakeApi strict_bind refuses the calls that need the bound display until bind_device succeeds")
 {
     FakeClock clock;
@@ -430,7 +411,6 @@ TEST_CASE("FakeApi strict_bind refuses the calls that need the bound display unt
     nvdm::BackBuffer buffer{};
     nvdm::RefreshStats stats{};
 
-    // Off by default: the fake lets a test call these without a bind.
     FakeApi lenient(clock);
     CHECK_FALSE(lenient.strict_bind);
     CHECK(lenient.create_back_buffer(mode, buffer) == 0);
@@ -442,23 +422,20 @@ TEST_CASE("FakeApi strict_bind refuses the calls that need the bound display unt
     CHECK(api.set_display_mode(mode) == nvdm::kNotBound);
     CHECK(api.present(1) == nvdm::kNotBound);
     CHECK(api.present_stats(stats) == nvdm::kNotBound);
-    // The real port makes no driver call here, so nothing is recorded as created or set, and no queued result is used.
     CHECK(api.modes_created.empty());
     CHECK(api.modes_set.empty());
     api.queue(Fn::Present, 9);
     CHECK(api.present(1) == nvdm::kNotBound);
 
-    // A refused bind leaves it unbound; a good one binds.
     api.queue(Fn::BindDevice, -5);
     CHECK(api.bind_device(1, device, nvdm::kVendorPvr) == -5);
     CHECK(api.present(1) == nvdm::kNotBound);
     CHECK(api.bind_device(1, device, nvdm::kVendorPvr) == 0);
-    CHECK(api.present(1) == 9); // The queued result was still there.
+    CHECK(api.present(1) == 9);
     CHECK(api.create_back_buffer(mode, buffer) == 0);
     CHECK(api.set_display_mode(mode) == nvdm::kSetModeOk);
     CHECK(api.present_stats(stats) == 0);
 
-    // As with the real port, a bind that fails after a good one leaves the display unbound.
     api.queue(Fn::BindDevice, -5);
     CHECK(api.bind_device(1, device, nvdm::kVendorPvr) == -5);
     CHECK(api.present(1) == nvdm::kNotBound);
@@ -474,11 +451,8 @@ TEST_CASE("bind_device refuses a NULL device without calling the driver")
     api.queue(Fn::BindDevice, -5);
     CHECK(api.bind_device(1, nullptr, nvdm::kVendorPvr) == nvdm::kBadArgument);
     CHECK(api.bound_device == nullptr);
-    // The refusal did not use up the queued result.
     CHECK(api.bind_device(1, device, nvdm::kVendorPvr) == -5);
 
-    // The real port, which has made no NVAPI call yet, says the same: the check comes before any lookup (without it
-    // the answer would be kNoEntry).
     const std::unique_ptr<nvdm::Api> real = nvdm::make_nvapi();
     CHECK(real->bind_device(1, nullptr, nvdm::kVendorPvr) == nvdm::kBadArgument);
 }
@@ -506,7 +480,6 @@ TEST_CASE("FakeApi read_edid says which route answered")
 
 namespace {
 
-// A scratch copy of Enum\DISPLAY under HKCU, so the registry scan can be tested without touching HKLM.
 class ScratchDisplayKey {
 public:
     ScratchDisplayKey()
@@ -524,7 +497,7 @@ public:
             RegCloseKey(root_);
         }
         RegDeleteTreeW(HKEY_CURRENT_USER, path_.c_str());
-        RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\MiradorDirectModeTests"); // Only if nothing else is in it.
+        RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\MiradorDirectModeTests");
     }
 
     HKEY key() const { return root_; }
@@ -553,13 +526,12 @@ uint16_t product_of(const std::vector<uint8_t>& edid)
     return static_cast<uint16_t>(edid[10] | edid[11] << 8);
 }
 
-} // namespace
+}
 
 TEST_CASE("the registry scan prefers the PVR1019 key, then any other PVR key")
 {
     ScratchDisplayKey scratch;
-    // PVR0001 comes before PVR1019 in key order, so only the preference makes PVR1019 win.
-    scratch.add(L"ABC0001", L"inst", FakeApi::make_edid(0x0421, 0x0001)); // Not a PVR monitor.
+    scratch.add(L"ABC0001", L"inst", FakeApi::make_edid(0x0421, 0x0001));
     scratch.add(L"PVR0001", L"inst", FakeApi::make_edid(0x42d2, 0x0002));
     scratch.add(L"PVR1019", L"inst", FakeApi::make_edid(0x42d2, 0x1019));
     scratch.add(L"PVR2000", L"inst", FakeApi::make_edid(0x42d2, 0x2000));
@@ -568,7 +540,6 @@ TEST_CASE("the registry scan prefers the PVR1019 key, then any other PVR key")
     REQUIRE(nvdm::read_edid_from_display_key(scratch.key(), edid));
     CHECK(product_of(edid) == 0x1019);
 
-    // Without it, another PVR key answers (which one is up to the registry's order); a non-PVR monitor never does.
     scratch.remove_model(L"PVR1019");
     REQUIRE(nvdm::read_edid_from_display_key(scratch.key(), edid));
     const uint16_t other = product_of(edid);
@@ -583,14 +554,13 @@ TEST_CASE("the registry scan prefers the PVR1019 key, then any other PVR key")
 TEST_CASE("the registry scan skips a PVR1019 instance with no usable EDID")
 {
     ScratchDisplayKey scratch;
-    scratch.add(L"PVR1019", L"broken", std::vector<uint8_t>(128, 0x11)); // No EDID header.
+    scratch.add(L"PVR1019", L"broken", std::vector<uint8_t>(128, 0x11));
     scratch.add(L"PVR0001", L"inst", FakeApi::make_edid(0x42d2, 0x0002));
 
     std::vector<uint8_t> edid;
     REQUIRE(nvdm::read_edid_from_display_key(scratch.key(), edid));
     CHECK(product_of(edid) == 0x0002);
 
-    // A good second instance under PVR1019 beats the other key.
     scratch.add(L"PVR1019", L"good", FakeApi::make_edid(0x42d2, 0x1019));
     REQUIRE(nvdm::read_edid_from_display_key(scratch.key(), edid));
     CHECK(product_of(edid) == 0x1019);

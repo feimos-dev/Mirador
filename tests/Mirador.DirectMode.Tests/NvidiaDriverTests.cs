@@ -37,7 +37,6 @@ public class NvidiaDriverTests
     [Fact]
     public void This_pcs_nvidia_driver_is_none_or_one_mirador_can_read()
     {
-        // Asks Windows (WMI). On a PC without an NVIDIA GPU there is nothing to read.
         var windows = NvidiaDriver.CurrentWindowsVersion();
 
         if (windows is not null)

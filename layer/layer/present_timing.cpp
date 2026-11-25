@@ -13,7 +13,6 @@
 namespace dvl {
 namespace {
 
-// A stage's time in `times`: 0 for a stage the frame has not reached, or one the layer does not report.
 uint64_t stage_time(const nvdm::FrameTimes& times, VkPresentStageFlagsEXT stage)
 {
     int64_t t = 0;
@@ -26,7 +25,6 @@ uint64_t stage_time(const nvdm::FrameTimes& times, VkPresentStageFlagsEXT stage)
     return t > 0 ? static_cast<uint64_t>(t) : 0;
 }
 
-// Whether any of the stages asked for has a time.
 bool any_stage(const nvdm::FrameTimes& times, VkPresentStageFlagsEXT stages)
 {
     for (VkPresentStageFlagsEXT bit = 1; bit != 0 && bit <= stages; bit <<= 1) {
@@ -37,14 +35,11 @@ bool any_stage(const nvdm::FrameTimes& times, VkPresentStageFlagsEXT stages)
     return false;
 }
 
-// One result. A complete one lists every stage asked for, 0 where the frame never got there; a partial one the stages
-// that have a time so far. As many as fit in pPresentStages (its presentStageCount on the way in).
 void fill_result(VkPastPresentationTimingEXT& out, uint64_t present_id, uint64_t target_time, uint64_t domain_id,
                  VkPresentStageFlagsEXT stages, const nvdm::FrameTimes& times, bool complete)
 {
     out.presentId = present_id;
     out.targetTime = target_time;
-    // A domain id that is not the swapchain's falls back to QPC, which the result then names.
     if (domain_id == kStageLocalTimeDomainId) {
         out.timeDomain = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
         out.timeDomainId = kStageLocalTimeDomainId;
@@ -67,7 +62,7 @@ void fill_result(VkPastPresentationTimingEXT& out, uint64_t present_id, uint64_t
     out.reportComplete = complete ? VK_TRUE : VK_FALSE;
 }
 
-} // namespace
+}
 
 bool present_at_enabled()
 {
@@ -89,7 +84,7 @@ VkResult fill_time_domains(VkSwapchainTimeDomainPropertiesEXT& out)
                                                    VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT};
     static constexpr uint64_t kIds[] = {kQpcTimeDomainId, kStageLocalTimeDomainId};
     if (out.pTimeDomains == nullptr || out.pTimeDomainIds == nullptr) {
-        out.timeDomainCount = 2; // both null asks for the count (one null alone is invalid; taken as asking too)
+        out.timeDomainCount = 2;
         return VK_SUCCESS;
     }
     return fill_list(&out.timeDomainCount, out.pTimeDomains, 2, [&](uint32_t i, VkTimeDomainKHR& domain) {
@@ -152,7 +147,6 @@ Target read_target(const PresentRequest& request, int64_t refresh_ns, int64_t no
         t.use = Target::Use::Relative;
         return t;
     }
-    // Compared as unsigned first: a target past INT64_MAX is far ahead of any QPC time.
     if (now_ns < 0 || request.target_time > static_cast<uint64_t>(now_ns) + kFarTargetNs) {
         t.use = Target::Use::TooFar;
         return t;
@@ -242,8 +236,6 @@ VkResult PresentTimings::past(nvdm::SwapchainGen gen, VkPastPresentationTimingFl
     const bool partial = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT) != 0;
     const bool any_order = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT) != 0;
 
-    // The results there are, in present order: complete ones, and partial ones if allowed. In present order, the first
-    // record with none holds back every later one.
     struct Ready {
         size_t index;
         nvdm::FrameTimes times;
@@ -278,7 +270,6 @@ VkResult PresentTimings::past(nvdm::SwapchainGen gen, VkPastPresentationTimingFl
         fill_result(out.pPresentationTimings[k], r.present_id, r.target_time, r.time_domain_id, r.stages,
                     ready[k].times, ready[k].complete);
     }
-    // The complete ones written give their slots back (from the back, so the indexes stay right).
     for (size_t k = n; k-- > 0;) {
         if (ready[k].complete) {
             records.erase(records.begin() + static_cast<std::ptrdiff_t>(ready[k].index));
@@ -294,4 +285,4 @@ size_t PresentTimings::slots_taken(nvdm::SwapchainGen gen) const
     return it == swapchains_.end() ? 0 : it->second.records.size();
 }
 
-} // namespace dvl
+}

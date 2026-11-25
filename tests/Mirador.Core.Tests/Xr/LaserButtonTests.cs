@@ -13,7 +13,6 @@ public class LaserButtonTests
         Assert.True(button.Update(0.8f, onPanel: true));
         Assert.True(button.Down);
 
-        // Between the two points it stays as it is.
         Assert.False(button.Update(0.5f, onPanel: true));
         Assert.True(button.Down);
 
@@ -42,7 +41,6 @@ public class LaserButtonTests
         Assert.False(button.Update(1, onPanel: true));
         Assert.False(button.Down);
 
-        // Let go and pulled again on the panel: that presses.
         button.Update(0, onPanel: true);
         Assert.True(button.Update(1, onPanel: true));
     }

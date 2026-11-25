@@ -22,7 +22,6 @@ bool same_name(std::wstring_view a, std::wstring_view b)
     if (a.empty() || a.size() != b.size()) {
         return false;
     }
-    // Ordinal and case-insensitive, as the file system compares names.
     return CompareStringOrdinal(a.data(), static_cast<int>(a.size()), b.data(), static_cast<int>(b.size()), TRUE) ==
            CSTR_EQUAL;
 }
@@ -37,7 +36,7 @@ std::string_view trim(std::string_view s)
     return s.substr(first, s.find_last_not_of(blanks) - first + 1);
 }
 
-} // namespace
+}
 
 bool process_allowed(std::wstring_view exe_basename, std::string_view extra_list)
 {
@@ -84,4 +83,4 @@ bool current_process_allowed()
     return process_allowed(current_process_basename(), env_get(L"MIRADOR_DIRECT_MODE_PROCESSES").value_or(std::string()));
 }
 
-} // namespace dvl
+}

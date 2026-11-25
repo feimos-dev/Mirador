@@ -72,7 +72,6 @@ public sealed class DirectModeCheckTests : IDisposable
     [Fact]
     public async Task A_headset_left_to_windows_doesnt_refuse_the_start_and_isnt_remembered()
     {
-        // The layer stepped aside (the EDID's HMD block): nothing about the driver failed, nor did anything pass.
         answer = (
             [
                 "Product FAILED: the Pimax headset (PVR 0x1030)'s EDID carries Microsoft's HMD block, so Windows drives it through its own HMD route and this layer leaves it alone",
@@ -101,8 +100,6 @@ public sealed class DirectModeCheckTests : IDisposable
         Assert.StartsWith("Mirador couldn't check direct mode with the new NVIDIA driver 621.01:", e.Message, StringComparison.Ordinal);
         Assert.EndsWith("Try again.", e.Message, StringComparison.Ordinal);
     }
-
-    // --- turning the layer on ---
 
     private static Profile Profile() => new("p1", "P", null, BuildSource.Mirador, [], new Dictionary<string, string>());
 
@@ -148,7 +145,6 @@ public sealed class DirectModeCheckTests : IDisposable
     [Fact]
     public void Variables_a_shell_may_have_left_that_change_the_layer_are_taken_out_of_monados_environment()
     {
-        // As start-monado.ps1 did: an empty value removes the variable from what Monado inherits.
         Assert.Equal(
             [
                 "DISABLE_MIRADOR_DIRECT_MODE", "MIRADOR_DIRECT_MODE_TEST_NO_EDID", "MIRADOR_DIRECT_MODE_IGNORE_HOLDERS",

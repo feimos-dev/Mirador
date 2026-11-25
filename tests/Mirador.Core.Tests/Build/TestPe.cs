@@ -3,7 +3,6 @@ using System.Text;
 
 namespace Mirador.Core.Tests.Build;
 
-/// <summary>Writes the smallest PE32+ file with an import table naming <c>imports</c>: enough for <see cref="Core.Build.PeImports"/>.</summary>
 internal static class TestPe
 {
     private const int SectionRva = 0x1000;
@@ -11,7 +10,6 @@ internal static class TestPe
 
     public static byte[] Build(params string[] imports)
     {
-        // The section: the import descriptors (one per DLL and the all-zero end), then the names.
         var descriptors = (imports.Length + 1) * 20;
         var names = new List<byte>();
         var nameRvas = new List<int>();

@@ -1,11 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The default mode of mirador-display-check: NVAPI only. The display session opens exactly as it does in
-// the layer; then this file plays an application that presents one solid colour per frame, through the same frame
-// model, display loop and display thread the layer runs, and counts the display's flips. There is no Vulkan here, so
-// the frame fences are always signalled and the back-buffers are cleared through a D3D11 device of our own.
-
 #include <windows.h>
 
 #include <d3d11.h>
@@ -35,12 +30,10 @@ namespace {
 using Microsoft::WRL::ComPtr;
 
 constexpr int64_t kMs = 1'000'000;
-constexpr int64_t kPresentWaitNs = 500 * kMs; // a present is credited within a refresh; this is generous
+constexpr int64_t kPresentWaitNs = 500 * kMs;
 constexpr int64_t kAcquireGiveUpNs = 2'000'000'000;
-constexpr int64_t kCloseStopWaitNs = 100 * kMs; // the console handler's wait
+constexpr int64_t kCloseStopWaitNs = 100 * kMs;
 
-// Lines from the display thread, the model and the session, printed by the main loop (never from under the
-// display-session lock: a console write can take milliseconds).
 class LineQueue {
 public:
     void add(const std::string& line)
@@ -65,16 +58,12 @@ private:
     std::vector<std::string> lines_;
 };
 
-// No Vulkan: a frame never has a fence to wait for (queue() is given kNoFence), and if the loop asks anyway the answer
-// is that it has signalled.
 class AlwaysSignalled final : public nvdm::FenceOps {
 public:
     bool wait(nvdm::FenceSlot, int64_t) override { return true; }
     bool status(nvdm::FenceSlot) override { return true; }
 };
 
-// The DXGI adapters of NVIDIA, as LUIDs, in enumeration order: the display session finds out which one drives the
-// headset (a laptop has an integrated GPU too).
 std::vector<LUID> nvidia_adapter_luids()
 {
     std::vector<LUID> luids;
@@ -96,9 +85,6 @@ std::vector<LUID> nvidia_adapter_luids()
     return luids;
 }
 
-// Clears the back-buffers: a D3D11 device of our own on the display's adapter opens the three shared handles NVAPI made
-// (as nvdm_probe did on the bound device) and clears one at a time, waiting until the GPU has finished, so the Present
-// that follows shows the colour.
 class Clearer {
 public:
     bool create(const LUID& luid, const std::vector<HANDLE>& shared, std::string& why)
@@ -139,7 +125,6 @@ public:
                 why = hresult_text("OpenSharedResource", hr);
                 return false;
             }
-            // The back-buffer is R8G8B8A8_TYPELESS, so the view needs a typed format.
             D3D11_RENDER_TARGET_VIEW_DESC view{};
             view.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
             view.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -160,7 +145,6 @@ public:
         return true;
     }
 
-    // False if the clear did not finish within half a second (the frame is presented anyway).
     bool clear(uint32_t index, const float colour[4])
     {
         if (index >= views_.size()) {
@@ -193,8 +177,6 @@ private:
     std::vector<ComPtr<ID3D11RenderTargetView>> views_;
 };
 
-// Everything the display thread touches. Heap-allocated and left alone if the thread cannot be joined (it may still be
-// inside an NVAPI call), so nothing it uses is ever destroyed under it.
 struct Rig {
     Rig(nvdm::DisplaySession& s, int64_t refresh_ns)
         : session(s), clock(s.clock()), lock(s.lock()), model(model_config(refresh_ns), &pool), waiter(clock),
@@ -219,7 +201,7 @@ struct Rig {
     nvdm::Win32Waiter waiter;
     AlwaysSignalled fences;
     LineQueue lines;
-    std::condition_variable changed; // notified under the lock at every counter increment
+    std::condition_variable changed;
     nvdm::DisplayThread thread;
 };
 
@@ -229,8 +211,6 @@ nvdm::FrameModel::Counters counters_of(Rig& rig)
     return rig.model.counters();
 }
 
-// The oldest free back-buffer for a new frame (FrameModel::acquire), waiting for the display thread's credits to free
-// one. The model never returns nothing for long; the bound here is only so that a broken display cannot hang the tool.
 std::optional<nvdm::Acquired> acquire_frame(Rig& rig, nvdm::SwapchainGen gen)
 {
     std::unique_lock<std::mutex> hold(rig.lock);
@@ -246,7 +226,6 @@ std::optional<nvdm::Acquired> acquire_frame(Rig& rig, nvdm::SwapchainGen gen)
     }
 }
 
-// vkWaitForPresentKHR: until the display thread has credited the frame (its back-buffer is on screen).
 bool wait_present(Rig& rig, nvdm::SwapchainGen gen, uint64_t id)
 {
     std::unique_lock<std::mutex> hold(rig.lock);
@@ -263,7 +242,7 @@ bool wait_present(Rig& rig, nvdm::SwapchainGen gen, uint64_t id)
 
 const float kColours[4][4] = {{1, 0, 0, 1}, {0, 1, 0, 1}, {0, 0, 1, 1}, {1, 1, 1, 1}};
 
-} // namespace
+}
 
 ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& out)
 {
@@ -271,15 +250,13 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
     result.counts.requested_seconds = options.seconds;
     nvdm::DisplaySession& session = *env.session;
 
-    // 1. The display session, on whichever NVIDIA adapter drives the headset.
     say(out, "opening the display session (NVAPI, EnableDirectMode, BindDevice; waits for the display to appear)");
     nvdm::OpenResult opened{false, nvdm::OpenStep::Luid, 0, "no NVIDIA adapter found"};
     if (env.adapters.empty()) {
-        opened = session.open(LUID{}); // fails at Luid and names the display's adapter
+        opened = session.open(LUID{});
     }
     for (const LUID& luid : env.adapters) {
         opened = session.open(luid);
-        // Only "this adapter does not drive the display" goes on to the next adapter; any other failure is the answer.
         if (opened.ok || opened.step != nvdm::OpenStep::Luid || opened.code != 0) {
             break;
         }
@@ -307,7 +284,6 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
     say(out, "EDID route: %s", nvdm::edid_route_name(session.edid_route()));
     const int64_t refresh_ns = product.refresh_mhz != 0 ? 1'000'000'000'000LL / product.refresh_mhz : 11'111'111;
 
-    // 2. A way to put colours into the back-buffers.
     std::vector<HANDLE> shared;
     for (uint32_t i = 0; i < nvdm::kBackBufferCount; i++) {
         shared.push_back(session.back_buffer(i).shared);
@@ -322,7 +298,6 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
                  "whatever they hold", why.c_str());
     }
 
-    // 3. The layer's own presenting parts, driven by this thread as an application would.
     auto rig = std::make_unique<Rig>(session, refresh_ns);
     Rig* const r = rig.get();
     nvdm::DisplayLoopConfig config;
@@ -336,15 +311,11 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         return std::make_unique<nvdm::DisplayLoop>(r->session.api(), r->model, r->lock, r->clock, r->waiter, r->fences,
                                                    r->stats, config);
     });
-    // Closing the console ends the process once the console handler returns: the handler stops the thread first,
-    // waiting up to 100 ms for it to leave NVAPI. The hook is replaced before the rig can go (it is
-    // declared after `rig`, so it is destroyed first), and replacing it waits for a run in progress.
     set_interrupt_stop_hook([r] { r->thread.stop_and_join(kCloseStopWaitNs); });
     struct ClearStopHook {
         ~ClearStopHook() { set_interrupt_stop_hook({}); }
     } clear_stop_hook;
     {
-        // The first pass reads the counter and starts the epoch (both clocks set to now): give it a moment.
         const int64_t give_up = r->clock.now_ns() + 2'000'000'000;
         for (;;) {
             {
@@ -371,13 +342,12 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         options.seconds, static_cast<unsigned long long>(expected_flips(options.seconds, refresh_hz)), refresh_hz,
         static_cast<double>(env.warm_up_ns) / 1e9);
 
-    // Only failed presents count from the run's start, warm-up included.
     const nvdm::FrameModel::Counters run_before = counters_of(*r);
     nvdm::FrameModel::Counters before = run_before;
     const int64_t t_start = r->clock.now_ns();
     const int64_t warm_up_end = t_start + env.warm_up_ns;
     bool counting = env.warm_up_ns <= 0;
-    int64_t t0 = t_start; // where the counted window starts
+    int64_t t0 = t_start;
     int64_t deadline = (counting ? t0 : warm_up_end) + static_cast<int64_t>(options.seconds) * 1'000'000'000;
     int64_t next_progress = t0 + 5'000'000'000;
     uint64_t id = 0;
@@ -409,16 +379,13 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         id++;
         {
             std::lock_guard<std::mutex> hold(r->lock);
-            // Its GPU work is done: cleared, waited for.
             r->model.queue(frame->seq, id, nvdm::kNoFence, r->clock.now_ns());
         }
-        r->waiter.signal_frame_queued(); // after queue(), outside the lock, as the layer's present does
+        r->waiter.signal_frame_queued();
         if (!wait_present(*r, gen, id)) {
             wait_timeouts++;
         }
         r->lines.drain(out);
-        // A dead display completes every present at once: the loop would run at the speed of the
-        // clears for the rest of the run. The mode's rate cannot do 3 times its count.
         if (id > 3 * expected_flips(options.seconds + static_cast<double>(env.warm_up_ns) / 1e9, refresh_hz) + 100) {
             result.steps_ok = false;
             result.failed_step = "presenting " + std::to_string(id) +
@@ -441,7 +408,6 @@ ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& 
         r->model.remove_swapchain(gen);
     }
 
-    // 4. Stop the display thread. One that cannot leave NVAPI in a second is left behind with everything it uses.
     const bool joined = r->thread.stop_and_join(nvdm::kJoinTimeoutNs);
     r->lines.drain(out);
     if (!joined) {
@@ -495,7 +461,6 @@ int run_enable_direct_mode(nvdm::Api& api, Output& out)
 
 ModeResult run_nvapi_mode(const Options& options, Output& out)
 {
-    // The session's own lines (driver version, EDID route, the failing step) go to the console as they come.
     std::mutex session_mutex;
     std::vector<std::string> session_lines;
     nvdm::set_process_session_log([&](const std::string& line) {
@@ -510,7 +475,7 @@ ModeResult run_nvapi_mode(const Options& options, Output& out)
     } reset_sink;
 
     NvapiEnv env;
-    env.session = &nvdm::process_session(); // the real one: it talks to the driver at its first open()
+    env.session = &nvdm::process_session();
     env.adapters = nvidia_adapter_luids();
     env.clear_back_buffers = true;
     env.session_lines = [&] {
@@ -520,4 +485,4 @@ ModeResult run_nvapi_mode(const Options& options, Output& out)
     return run_nvapi_check(env, options, out);
 }
 
-} // namespace dvl
+}

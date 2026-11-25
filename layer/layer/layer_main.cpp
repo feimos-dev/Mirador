@@ -1,11 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The layer DLL's entry points: negotiation with the loader, the proc-address functions it hands over, vkCreateInstance
-// and vkDestroyInstance, and DllMain. The other intercepts live in their own files and come in through the lists of
-// intercepts.hpp (device.cpp, display_intercepts.cpp, surface_intercepts.cpp; Tasks 10-11 add theirs); each is also in
-// the intercepted list of handled_commands.cpp, and a test checks that the two agree.
-
 #include <windows.h>
 
 #include <vulkan/vulkan.h>
@@ -31,13 +26,6 @@
 #define DVL_LAYER_VERSION "unknown"
 #endif
 
-// The one export. vk_layer.h declares the negotiation function without dllexport.
-//
-// vkGetInstanceProcAddr and vkGetDeviceProcAddr are NOT exported by name, on purpose. The loader asks the DLL for them
-// by name only when negotiation fails, as the fallback of its older interface. With the names exported, a layer that
-// declines (the process guard, a loader older than interface 2) would be put into the chain anyway and work from those
-// exports. Without them the loader logs "Failed to find 'vkGetInstanceProcAddr' in layer" and skips the layer, which
-// is what declining has to mean (checked with vulkaninfo and loader 1.4.357). Negotiation hands out the same functions.
 #pragma comment(linker, "/EXPORT:vkNegotiateLoaderLayerInterfaceVersion")
 
 namespace {
@@ -45,9 +33,6 @@ namespace {
 PFN_vkVoidFunction VKAPI_CALL layer_GetInstanceProcAddr(VkInstance instance, const char* name);
 PFN_vkVoidFunction VKAPI_CALL layer_GetDeviceProcAddr(VkDevice device, const char* name);
 
-// The loader/layer interface this layer implements (vkNegotiateLoaderLayerInterfaceVersion): 2 is the one that hands
-// the proc-address functions over in negotiation, and the newest there is. The layer needs it, so a loader that offers
-// less is refused (review focus 5).
 constexpr uint32_t kInterfaceVersion = 2;
 
 std::atomic<uint32_t> g_loader_offered{0};
@@ -60,9 +45,6 @@ std::string process_name()
     return dvl::to_utf8(dvl::current_process_basename());
 }
 
-// Keeps this DLL mapped until the process ends. The loader unloads a layer at every vkDestroyInstance, but
-// the layer's state is per process by design: one log file, one start line, the console handler, and later the display
-// session. A process that declined never gets here, so the loader still unloads it.
 void pin_this_dll()
 {
     if (g_pinned.exchange(true)) {
@@ -72,12 +54,6 @@ void pin_this_dll()
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                        reinterpret_cast<LPCWSTR>(&pin_this_dll), &self);
 }
-
-/*
- * Chain walking. The loader puts a VkLayerInstanceCreateInfo / VkLayerDeviceCreateInfo with function
- * VK_LAYER_LINK_INFO into the pNext chain; each layer reads its next layer from it and moves the link on by one for
- * the layer below. A layer that skips this breaks the chain for everything under it.
- */
 
 VkLayerInstanceCreateInfo* find_instance_link(const VkInstanceCreateInfo* ci)
 {
@@ -92,7 +68,6 @@ VkLayerInstanceCreateInfo* find_instance_link(const VkInstanceCreateInfo* ci)
     return nullptr;
 }
 
-// The first vkCreateInstance of the process: the one start line and the console handler.
 void on_first_instance() noexcept
 {
     if (g_started.exchange(true)) {
@@ -106,13 +81,8 @@ void on_first_instance() noexcept
                  DVL_LAYER_VERSION, g_loader_offered.load(), kInterfaceVersion, process_name().c_str(),
                  GetCurrentProcessId());
     } catch (...) {
-        // Only the line is lost; the instance exists and the call succeeds.
     }
 }
-
-/*
- * Instance and device creation and destruction.
- */
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_CreateInstance(const VkInstanceCreateInfo* ci, const VkAllocationCallbacks* alloc,
                                                     VkInstance* out)
@@ -129,10 +99,8 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateInstance(const VkInstanceCreateInfo* 
             dvl::log(dvl::Level::Error, "vkCreateInstance: the next layer has no vkCreateInstance");
             return VK_ERROR_INITIALIZATION_FAILED;
         }
-        link->u.pLayerInfo = link->u.pLayerInfo->pNext; // the layer below finds its own link
+        link->u.pLayerInfo = link->u.pLayerInfo->pNext;
 
-        // VK_EXT_display_surface_counter is ours: the driver lacks it (the loader would drop it too), so it does not
-        // go down.
         std::vector<const char*> names;
         names.reserve(ci->enabledExtensionCount);
         bool asked_counter = false;
@@ -166,8 +134,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateInstance(const VkInstanceCreateInfo* 
         }
 
         on_first_instance();
-        // Design 6.3: an enabled extension with a command that takes our objects, and that the layer neither handles
-        // nor lists as not applicable, is logged (a layer bug, not the application's).
         dvl::check_command_coverage(ci->ppEnabledExtensionNames, ci->enabledExtensionCount, "vkCreateInstance");
         const uint32_t api = ci->pApplicationInfo != nullptr ? ci->pApplicationInfo->apiVersion : 0;
         dvl::log(dvl::Level::Debug, "vkCreateInstance: API %u.%u, %u extensions, VK_EXT_display_surface_counter %s",
@@ -186,11 +152,8 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyInstance(VkInstance instance, const VkAl
     if (instance == VK_NULL_HANDLE) {
         return;
     }
-    // Out of the table first: the handle is gone once the call below returns.
     const std::unique_ptr<dvl::InstanceData> data = dvl::remove_instance(instance);
     if (!data || data->DestroyInstance == nullptr) {
-        // Not ours to forget, but the loader's and the driver's objects must not leak: down through the one function
-        // the layer below has, if there is one.
         const PFN_vkDestroyInstance fallback = dvl::fallback_destroy_instance();
         dvl::log(dvl::Level::Error, "vkDestroyInstance: instance %p is not one the layer knows; %s",
                  static_cast<void*>(instance), fallback != nullptr ? "passed down" : "it cannot be passed down");
@@ -202,10 +165,6 @@ VKAPI_ATTR void VKAPI_CALL layer_DestroyInstance(VkInstance instance, const VkAl
     dvl::log(dvl::Level::Debug, "vkDestroyInstance: instance %p", static_cast<void*>(instance));
     data->DestroyInstance(instance, alloc);
 }
-
-/*
- * The intercept tables: what the layer answers itself, by Vulkan name. Anything else goes to the layer below.
- */
 
 struct Intercept {
     std::string_view name;
@@ -229,10 +188,6 @@ PFN_vkVoidFunction find_device_intercept(std::string_view name)
     return nullptr;
 }
 
-// vkGetInstanceProcAddr also hands out device commands (an application may ask for them at instance level), so the
-// device table is searched too. The physical-device commands are here as well: the loader fills its instance dispatch
-// table through this function for every command it knows (all of the layer's), so none needs
-// pfnGetPhysicalDeviceProcAddr (see the negotiation).
 PFN_vkVoidFunction find_instance_intercept(std::string_view name)
 {
     static const Intercept table[] = {
@@ -260,7 +215,6 @@ PFN_vkVoidFunction VKAPI_CALL layer_GetInstanceProcAddr(VkInstance instance, con
     if (const PFN_vkVoidFunction ours = find_instance_intercept(name)) {
         return ours;
     }
-    // Not ours: the next layer's answer. Without an instance there is no next layer to ask.
     const dvl::InstanceData* data = dvl::find_instance_data(instance);
     return data != nullptr ? data->gipa(instance, name) : nullptr;
 }
@@ -277,7 +231,7 @@ PFN_vkVoidFunction VKAPI_CALL layer_GetDeviceProcAddr(VkDevice device, const cha
     return data != nullptr ? data->gdpa(device, name) : nullptr;
 }
 
-} // namespace
+}
 
 extern "C" VKAPI_ATTR VkResult VKAPI_CALL vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* negotiate)
 {
@@ -287,9 +241,6 @@ extern "C" VKAPI_ATTR VkResult VKAPI_CALL vkNegotiateLoaderLayerInterfaceVersion
         }
         const uint32_t offered = negotiate->loaderLayerInterfaceVersion;
 
-        // The process guard: a safety net for a machine-wide MIRADOR_DIRECT_MODE=1. The loader skips a layer
-        // that fails here (its DLL stays loaded until vkDestroyInstance, and the layer's extension names stay listed,
-        // which is why the guard cannot keep goal 4 by itself). One line, and no new log file: see log_append.
         if (!dvl::current_process_allowed()) {
             if (!g_decline_logged.exchange(true)) {
                 dvl::log_append(dvl::Level::Warn,
@@ -314,11 +265,6 @@ extern "C" VKAPI_ATTR VkResult VKAPI_CALL vkNegotiateLoaderLayerInterfaceVersion
         negotiate->loaderLayerInterfaceVersion = kInterfaceVersion;
         negotiate->pfnGetInstanceProcAddr = layer_GetInstanceProcAddr;
         negotiate->pfnGetDeviceProcAddr = layer_GetDeviceProcAddr;
-        // Optional in interface 2, and not needed: the loader asks it only for physical-device commands it has no
-        // trampoline of its own for (loader_phys_dev_ext_gpa_*), and every one the layer intercepts is a core or known
-        // extension command, which the loader's trampolines dispatch through the table it filled from
-        // vkGetInstanceProcAddr (loader 1.4.309: loader_init_instance_extension_dispatch_table). M0 saw Monado's
-        // vkGetPhysicalDeviceSurfaceCapabilities2EXT and display queries reach the layer this way.
         negotiate->pfnGetPhysicalDeviceProcAddr = nullptr;
         dvl::log(dvl::Level::Debug, "negotiated: the loader offers layer interface version %u, the layer uses %u",
                  offered, kInterfaceVersion);
@@ -335,8 +281,6 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
         DisableThreadLibraryCalls(instance);
         break;
     case DLL_PROCESS_DETACH:
-        // lpReserved non-NULL: the process is exiting, and nothing happens. NULL is FreeLibrary, which
-        // only reaches a DLL that never accepted the process (see pin_this_dll).
         dvl::on_process_detach(reserved);
         break;
     default:

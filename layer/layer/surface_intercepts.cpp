@@ -1,10 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The surface commands. vkCreateDisplayPlaneSurfaceKHR on our mode makes a surface of the layer's, and
-// every query on it is answered here and never fails. Any other surface (Monado's peek window, a driver display's
-// surface) goes down unchanged, ...Capabilities2EXT included: the loader's terminator emulates it for the driver.
-
 #include <vulkan/vulkan.h>
 
 #include <memory>
@@ -36,7 +32,6 @@ const char* alpha_name(VkDisplayPlaneAlphaFlagBitsKHR alpha)
 VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInfoKHR* ci, VkSurfaceKHR* out)
 {
     if (ci->planeIndex != 0) {
-        // Design 6.3: our mode is shown on our plane alone; this pair has no valid call down.
         log(Level::Error, "vkCreateDisplayPlaneSurfaceKHR: the layer's mode is shown on plane 0 only; plane %u refused",
             ci->planeIndex);
         return VK_ERROR_UNKNOWN;
@@ -47,8 +42,6 @@ VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInf
                           "not open");
         return VK_ERROR_UNKNOWN;
     }
-    // The surface offers what the import allows on the physical device that lists the display in this instance
-    //. An instance that lists it nowhere (the mode handle came from another instance) has no such answer.
     InstanceData& data = instance_data(instance);
     const std::optional<VkPhysicalDevice> listing = listing_physical_device(data);
     if (!listing) {
@@ -63,8 +56,6 @@ VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInf
     record->info = *ci;
     record->info.pNext = nullptr;
     record->spec = SurfaceSpec{VkExtent2D{product.width, product.height}, surface_usage(data, *listing)};
-    // Every alpha mode is accepted and shown opaque. An extent other than the mode's is answered with the
-    // mode's in the surface caps.
     log(Level::Info,
         "vkCreateDisplayPlaneSurfaceKHR: a surface on the %s, plane 0 stack %u, alpha %s (shown opaque), extent "
         "%ux%u%s",
@@ -75,7 +66,6 @@ VkResult create_our_surface(VkInstance instance, const VkDisplaySurfaceCreateInf
     return VK_SUCCESS;
 }
 
-// The surface queries all have this form: our surface is answered by `ours`, any other goes down.
 template <class Ours, class Down>
 VkResult surface_query(VkSurfaceKHR surface, Ours&& ours, Down&& down)
 {
@@ -91,14 +81,13 @@ const VkSurfaceKHR& surface_of(const VkPhysicalDeviceSurfaceInfo2KHR* info)
     return info != nullptr ? info->surface : none;
 }
 
-} // namespace
+}
 
 VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDisplayPlaneSurfaceKHR(VkInstance instance,
                                                                   const VkDisplaySurfaceCreateInfoKHR* ci,
                                                                   const VkAllocationCallbacks* alloc,
                                                                   VkSurfaceKHR* out)
 {
-    // With display queries, the only place the layer may fail.
     return guarded("vkCreateDisplayPlaneSurfaceKHR", [&] {
         if (is_our_mode(ci->displayMode)) {
             return create_our_surface(instance, ci, out);
@@ -106,12 +95,9 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDisplayPlaneSurfaceKHR(VkInstance ins
         InstanceData& data = instance_data(instance);
         const std::optional<VkPhysicalDevice> listing = listing_physical_device(data);
         if (!listing) {
-            // Our plane is not listed in this instance: plane indices are the driver's own.
             return call_down(data.CreateDisplayPlaneSurfaceKHR, "vkCreateDisplayPlaneSurfaceKHR", instance, ci, alloc,
                              out);
         }
-        // A driver mode, with our plane listed first (on the one physical device that lists it; the driver lists no
-        // displays today, so the mode is that physical device's).
         if (ci->planeIndex == 0) {
             log(Level::Error, "vkCreateDisplayPlaneSurfaceKHR: plane 0 is the layer's, and shows only the layer's "
                               "mode; a driver mode on it is refused");
@@ -156,8 +142,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPhysicalDeviceSurfaceSupportKHR(VkPhysic
         return surface_query(
             surface,
             [&](const SurfaceRecord&) {
-                // Every family of the physical device that lists our display: presenting goes through NVAPI. Not
-                // from another physical device.
                 InstanceData* instance = find_instance_data(physical_device);
                 *supported = instance != nullptr && display_listed_now(*instance, physical_device) ? VK_TRUE : VK_FALSE;
                 return VK_SUCCESS;
@@ -283,8 +267,6 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetPhysicalDeviceSurfaceCapabilities2EXT(Vk
                 return VK_SUCCESS;
             },
             [&] {
-                // The driver lacks VK_EXT_display_surface_counter; the loader's terminator emulates the query from
-                // the plain one, with no counters.
                 InstanceData& instance = instance_data(physical_device);
                 return call_down(instance.GetPhysicalDeviceSurfaceCapabilities2EXT,
                                  "vkGetPhysicalDeviceSurfaceCapabilities2EXT", physical_device, surface, caps);
@@ -337,7 +319,7 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetDeviceGroupSurfacePresentModesKHR(VkDevi
         return surface_query(
             surface,
             [&](const SurfaceRecord&) {
-                *modes = VK_DEVICE_GROUP_PRESENT_MODE_LOCAL_BIT_KHR; // one GPU, presenting its own images
+                *modes = VK_DEVICE_GROUP_PRESENT_MODE_LOCAL_BIT_KHR;
                 return VK_SUCCESS;
             },
             [&] {
@@ -367,4 +349,4 @@ VKAPI_ATTR VkResult VKAPI_CALL layer_GetDeviceGroupSurfacePresentModes2EXT(VkDev
     });
 }
 
-} // namespace dvl
+}

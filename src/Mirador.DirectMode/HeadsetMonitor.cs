@@ -2,25 +2,15 @@ using System.Runtime.InteropServices;
 
 namespace Mirador.DirectMode;
 
-/// <summary>A monitor Windows knows: its device interface path and whether its adapter is part of the desktop.</summary>
 public sealed record MonitorEntry(string DeviceId, bool OnDesktop);
 
-/// <summary>
-/// Whether the headset shows up among the desktop's monitors. In direct mode NVIDIA keeps it off the desktop; when
-/// something such as Pimax Play or SteamVR has handed it back, Windows lists it as an ordinary monitor.
-/// </summary>
 public static class HeadsetMonitor
 {
     private const uint EddGetDeviceInterfaceName = 0x1;
     private const uint AttachedToDesktop = 0x1;
 
-    /// <summary>The most adapters and monitors per adapter looked at, so a misbehaving driver can't make this loop.</summary>
     private const int Limit = 64;
 
-    /// <summary>
-    /// True when a monitor on the desktop belongs to <paramref name="pnpVendor"/> (Pimax is <c>PVR</c>): its device
-    /// id contains <c>#PVR</c> or <c>\PVR</c>, in any case.
-    /// </summary>
     public static bool HeadsetOnDesktop(IReadOnlyList<MonitorEntry> monitors, string pnpVendor = "PVR")
     {
         return monitors.Any(monitor =>
@@ -29,10 +19,6 @@ public static class HeadsetMonitor
                 || monitor.DeviceId.Contains(@"\" + pnpVendor, StringComparison.OrdinalIgnoreCase)));
     }
 
-    /// <summary>
-    /// Every monitor Windows lists, per adapter (<c>EnumDisplayDevicesW</c>), with its device interface path.
-    /// <see cref="MonitorEntry.OnDesktop"/> is the adapter's "attached to desktop" state. Changes nothing.
-    /// </summary>
     public static IReadOnlyList<MonitorEntry> List()
     {
         var monitors = new List<MonitorEntry>();

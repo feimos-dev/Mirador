@@ -2,11 +2,6 @@ using Mirador.Core.BaseStations;
 
 namespace Mirador.Core.Tests.BaseStations;
 
-/// <summary>
-/// A radio with scripted adverts, state and connection failures, recording every connection and write per address, from
-/// any thread. Adverts reach only the watches that are open, and sending one with none open throws, so a test can't pass
-/// because the manager never heard what the test meant it to hear.
-/// </summary>
 internal sealed class FakeStationRadio : IStationRadio
 {
     private readonly object _gate = new();
@@ -23,13 +18,10 @@ internal sealed class FakeStationRadio : IStationRadio
     private int _openLinks;
     private int _mostOpenLinks;
 
-    /// <summary>One call of <see cref="ConnectAsync"/>.</summary>
     public sealed record Connection(string Address, bool RandomAddress);
 
-    /// <summary>One value written to a characteristic, as hex.</summary>
     public sealed record Write(string Address, Guid Service, Guid Characteristic, string Value);
 
-    /// <inheritdoc />
     public BluetoothState State
     {
         get
@@ -51,25 +43,18 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <inheritdoc />
     public event Action? StateChanged;
 
-    /// <summary>When true, every call that returns a task never completes, and ignores its token as Windows does.</summary>
     public bool NeverAnswers { get; set; }
 
-    /// <summary>Called at the start of every connection, before it succeeds or fails, with the address.</summary>
     public Action<ulong>? OnConnect { get; set; }
 
-    /// <summary>Called after every write the station took (it is recorded already), with the address, before the write returns.</summary>
     public Action<ulong>? OnWrite { get; set; }
 
-    /// <summary>When set, <see cref="Watch"/> throws what it makes instead of watching.</summary>
     public Func<Exception>? WatchFailure { get; set; }
 
-    /// <summary>When set, ending a watch throws what it makes (after the watch has stopped).</summary>
     public Func<Exception>? UnwatchFailure { get; set; }
 
-    /// <summary>Whether a watch is open.</summary>
     public bool Watching
     {
         get
@@ -81,7 +66,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>How many watches were started.</summary>
     public int WatchCalls
     {
         get
@@ -93,7 +77,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>The most links that were open at the same time.</summary>
     public int MostOpenLinks
     {
         get
@@ -105,7 +88,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>The links open now.</summary>
     public int OpenLinks
     {
         get
@@ -117,7 +99,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>Everything asked of the radio, in order: <c>connect A</c>, <c>write A 01</c>, <c>close A</c>, with A the address.</summary>
     public string[] Steps
     {
         get
@@ -151,15 +132,12 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>The connections to one station.</summary>
     public Connection[] ConnectionsTo(ulong address) =>
         [.. Connections.Where(c => c.Address == StationProtocol.FormatAddress(address))];
 
-    /// <summary>The values written to one station, as hex.</summary>
     public string[] WritesTo(ulong address) =>
         [.. Writes.Where(w => w.Address == StationProtocol.FormatAddress(address)).Select(w => w.Value)];
 
-    /// <summary>From now on, connecting to the station throws what <paramref name="failure"/> makes (a <see cref="StationException"/> by default).</summary>
     public void Unreachable(ulong address, Func<Exception>? failure = null)
     {
         lock (_gate)
@@ -168,7 +146,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>Undoes <see cref="Unreachable"/>.</summary>
     public void Reachable(ulong address)
     {
         lock (_gate)
@@ -177,7 +154,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>From now on, connecting to the station never completes.</summary>
     public void Hang(ulong address)
     {
         lock (_gate)
@@ -186,7 +162,6 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <summary>The next connection to the station waits until the returned source is completed; the ones after it don't wait.</summary>
     public TaskCompletionSource Hold(ulong address)
     {
         var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -198,7 +173,6 @@ internal sealed class FakeStationRadio : IStationRadio
         return hold;
     }
 
-    /// <summary>Completes once <paramref name="done"/> is true; it is checked now and after everything the radio records.</summary>
     public Task Until(Func<FakeStationRadio, bool> done)
     {
         var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -211,7 +185,6 @@ internal sealed class FakeStationRadio : IStationRadio
         return signal.Task;
     }
 
-    /// <summary>Sends the advert to every open watch, on the calling thread. Throws when nothing is watching.</summary>
     public void Advertise(Advert advert)
     {
         Action<Advert>[] watches;
@@ -231,10 +204,8 @@ internal sealed class FakeStationRadio : IStationRadio
         }
     }
 
-    /// <inheritdoc />
     public Task StartAsync() => NeverAnswers ? new TaskCompletionSource().Task : Task.CompletedTask;
 
-    /// <inheritdoc />
     public IDisposable Watch(Action<Advert> heard)
     {
         if (WatchFailure is { } failure)
@@ -251,7 +222,6 @@ internal sealed class FakeStationRadio : IStationRadio
         return new Unwatch(this, heard);
     }
 
-    /// <inheritdoc />
     public async Task<IStationLink> ConnectAsync(ulong address, bool randomAddress, CancellationToken ct)
     {
         var text = StationProtocol.FormatAddress(address);

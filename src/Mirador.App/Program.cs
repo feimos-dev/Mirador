@@ -11,13 +11,8 @@ using Mirador.Ipc;
 
 namespace Mirador.App;
 
-/// <summary>
-/// Mirador's start: the elevated runtime switch first (it never opens a window), then one Mirador per user and
-/// session: a second hands its request to the first over the app pipe and ends.
-/// </summary>
 public static partial class Program
 {
-    /// <summary>How long a second Mirador waits for the first to show its window, or to start Monado (a Start takes up to 45 s).</summary>
     private static readonly TimeSpan ShowWait = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan StartWait = TimeSpan.FromSeconds(90);
@@ -25,7 +20,6 @@ public static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        // Ending Monado cleanly: a key into its console, from this short-lived process. No window, no log, no app.
         if (ConsoleExitKey.Requested(args) is { } monado)
         {
             return ConsoleExitKey.Send(monado) is null ? 0 : 1;
@@ -33,9 +27,6 @@ public static partial class Program
 
         var parsed = AppArgs.Parse(args);
 
-        // The elevated step of "Run Monado as administrator": records this user's consent, and SteamVR's Lighthouse DLLs
-        // that Valve didn't sign as they are now. No window, no app. With an approval in the same run (turning on "Run as
-        // administrator" for a profile that needs one), both happen behind the one prompt.
         if (parsed.AllowElevatedMonado)
         {
             AppLog.Open(AppPaths.Default);
@@ -50,7 +41,6 @@ public static partial class Program
             }
         }
 
-        // The elevated step of approving a profile's changed variables alone: its approved copy stays as it is.
         if (parsed.ApproveVariables is { } approveVariables)
         {
             AppLog.Open(AppPaths.Default);
@@ -68,9 +58,6 @@ public static partial class Program
             }
         }
 
-        // The elevated step of approving a profile: for a branch or build folder it copies the
-        // build into the install folder, which only administrators can change, and records each file's hash; for the
-        // bundled Monado nothing is copied. Either way the profile's variables are recorded with it. No window.
         if (parsed.ApproveBuild is { } approve)
         {
             AppLog.Open(AppPaths.Default);
@@ -86,8 +73,6 @@ public static partial class Program
                     owner, approve.ProfileId, commit, source,
                     AppContext.BaseDirectory, new Mirador.Ipc.RegistryApprovedBuildStore(), approve.Variables, AppLog.Write);
 
-                // When the machine's runtime was this profile's earlier approved copy, it is the new copy now. An approval
-                // of the bundled Monado has no copy, and the earlier one goes: Mirador's Monado takes over, when it is there.
                 if (runtimeWasThisProfiles)
                 {
                     if (!bundled && Path.IsPathRooted(build.Folder))
@@ -111,7 +96,6 @@ public static partial class Program
             }
         }
 
-        // The uninstaller's other step: Mirador no longer starts at sign-in. HKCU only, so no elevation needed.
         if (parsed.RemoveSignIn)
         {
             try
@@ -121,7 +105,7 @@ public static partial class Program
             }
             catch (Exception)
             {
-                return 1; // the Run value stays, and Windows would start a Mirador that is gone; the uninstaller logs the exit code
+                return 1;
             }
         }
 
@@ -162,15 +146,13 @@ public static partial class Program
         return 0;
     }
 
-    /// <summary>Hands a second start to the Mirador already running: start Monado, or show the window.</summary>
     private static int AskTheFirst(AppArgs parsed)
     {
         if ((parsed.Background || parsed.SignIn) && !parsed.Start)
         {
-            return 0; // a stand-in or the sign-in start raced another Mirador: it runs, and nothing should pop up over the game
+            return 0;
         }
 
-        // The first Mirador may then bring its window to the front (Windows lets only the foreground program do that).
         const uint AnyProcess = unchecked((uint)-1);
         AllowSetForegroundWindow(AnyProcess);
         var request = parsed.Start ? AppPipe.Start : AppPipe.Show;
@@ -189,21 +171,18 @@ public static partial class Program
         return reply == AppPipe.Ok ? 0 : 1;
     }
 
-    /// <summary>Whether Mirador runs elevated (as administrator).</summary>
     private static bool IsElevated()
     {
         using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
         return new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
     }
 
-    /// <summary>A plain message box, for what must be said before (or without) a window.</summary>
     internal static void MessageBox(string text)
     {
         const uint IconError = 0x10;
         _ = MessageBoxW(IntPtr.Zero, text, "Mirador", IconError);
     }
 
-    /// <summary>What WinUI's own Main calls first: it ends the process with a message when Windows is too old.</summary>
     [DllImport("Microsoft.ui.xaml.dll")]
     private static extern void XamlCheckProcessRequirements();
 

@@ -23,10 +23,6 @@ public sealed partial class LighthousePage : Page
 
     public LighthouseViewModel ViewModel { get; }
 
-    /// <summary>
-    /// The page listens to the stations while it is the current page (in the frame) and the window is on screen. The
-    /// window is looked up on Loaded, not on navigation: a first navigation happens while the window is being made.
-    /// </summary>
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         current = true;
@@ -55,16 +51,12 @@ public sealed partial class LighthousePage : Page
 
     private bool askingSteamVr;
 
-    /// <summary>
-    /// "Stop SteamVR starting when a controller turns on", flipped by the user: refused while SteamVR runs; turning it on
-    /// asks first. Whatever happens, the switch then shows SteamVR's setting as it is.
-    /// </summary>
     private async void OnSteamVrButtonStartToggled(object sender, RoutedEventArgs e)
     {
         var toggle = (ToggleSwitch)sender;
         if (askingSteamVr || toggle.IsOn == ViewModel.SteamVrButtonStartStopped)
         {
-            return; // the binding showing the state, not the user
+            return;
         }
 
         askingSteamVr = true;
@@ -100,7 +92,6 @@ public sealed partial class LighthousePage : Page
         }
     }
 
-    /// <summary>"Export to SteamVR": refused while SteamVR or Monado runs, or when SteamVR wouldn't use it; asks first.</summary>
     private async void OnExportToSteamVr(object sender, RoutedEventArgs e)
     {
         try
@@ -145,7 +136,6 @@ public sealed partial class LighthousePage : Page
         }
     }
 
-    /// <summary>The station's "…" menu: power it on or off (it sleeps), rename it, its ID (1.0), forget it.</summary>
     private void OnMore(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: StationItem item } button)
@@ -186,10 +176,6 @@ public sealed partial class LighthousePage : Page
         new TextBox { Text = item.Id ?? "", PlaceholderText = "AABBCCDD" },
         text => ViewModel.SetId(item, text));
 
-    /// <summary>
-    /// A dialog with one text box, Save and Cancel. Save hands the text to <paramref name="save"/>; what it says went
-    /// wrong is shown under the box and the dialog stays open.
-    /// </summary>
     private async Task AskAsync(string title, string? text, TextBox box, Func<string, string?> save)
     {
         var problem = new TextBlock
@@ -233,7 +219,6 @@ public sealed partial class LighthousePage : Page
         }
         catch (Exception ex)
         {
-            // Most likely another dialog is open: the user is busy with it.
             AppLog.Write($"Couldn't show \"{title}\"", ex);
         }
     }

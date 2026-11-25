@@ -4,20 +4,10 @@ using Mirador.Core;
 
 namespace Mirador.DirectMode;
 
-/// <summary>
-/// The NVIDIA driver's version. Direct mode goes through NVIDIA's private interface, whose ids can
-/// move with any driver, so Mirador checks direct mode again when the driver changes.
-/// </summary>
 public static class NvidiaDriver
 {
-    /// <summary>How long WMI may take to answer; its default is to wait for ever.</summary>
     private static readonly TimeSpan WmiTimeout = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// NVIDIA's version from the one Windows shows: the last five digits of the last two parts, so
-    /// <c>32.0.16.2101</c> is <c>621.01</c>. The last part counts as four digits even when Windows dropped its
-    /// leading zeros. Null when <paramref name="windowsVersion"/> isn't four numbers.
-    /// </summary>
     public static string? FromWindowsVersion(string windowsVersion)
     {
         var parts = windowsVersion.Trim().Split('.');
@@ -31,11 +21,6 @@ public static class NvidiaDriver
         return $"{last5[..3]}.{last5[3..]}";
     }
 
-    /// <summary>
-    /// The Windows driver version of the first video controller whose name contains NVIDIA
-    /// (<c>Win32_VideoController</c>, through WMI), such as <c>32.0.16.2101</c>; null when there is none.
-    /// </summary>
-    /// <exception cref="MiradorException">Windows couldn't list the graphics cards; the message says so.</exception>
     public static string? CurrentWindowsVersion()
     {
         try

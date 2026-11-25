@@ -6,30 +6,15 @@ using System.Text;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// Listens on the app pipe (<see cref="AppPipe"/>) and answers each request with what <c>handle</c> returns. Only the
-/// signed-in user (elevated or not) can connect, and the pipe is theirs (its owner), so a client can tell it from one
-/// another user made. Callers are served side by side, at most <see cref="MaxServed"/> at once, one request each: a
-/// line longer than <see cref="AppPipe.MaxLineBytes"/>, or one that doesn't arrive within <see cref="ReadLimit"/>,
-/// closes the connection, and a caller that doesn't hang up after its reply is disconnected after <see cref="ReadLimit"/>.
-/// The first instance is created as the first of its name, and each next listener is created while the instance it
-/// replaces still holds the name, so no other program can take it while Mirador runs.
-/// </summary>
-/// <param name="name">The pipe's name, as <see cref="AppPipe.CurrentName"/> gives it.</param>
-/// <param name="handle">Answers one request line (without its newline) with one reply line; it may take as long as a
-/// Start. It also gets the caller's process id, as Windows reports it for the pipe (null when it can't).</param>
 public sealed class AppPipeServer(string name, Func<string, int?, CancellationToken, Task<string>> handle) : IAsyncDisposable
 {
-    /// <summary>A server whose <paramref name="handle"/> doesn't need to know the caller.</summary>
     public AppPipeServer(string name, Func<string, CancellationToken, Task<string>> handle)
         : this(name, (line, _, ct) => handle(line, ct))
     {
     }
 
-    /// <summary>Callers served at once; the rest wait to be accepted. Far below Windows' 255 instances of a name.</summary>
     public const int MaxServed = 16;
 
-    // Room for a whole request and a whole reply, so neither side blocks on the other's reading.
     private const int BufferBytes = 2 * (AppPipe.MaxLineBytes + 1);
 
     private readonly CancellationTokenSource stopping = new();
@@ -38,21 +23,14 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
     private NamedPipeServerStream? first;
     private Task? loop;
 
-    /// <summary>How long a caller has to send its request, and to hang up once it has the reply.</summary>
     internal TimeSpan ReadLimit { get; init; } = TimeSpan.FromSeconds(5);
 
-    /// <summary>The pause before trying again when Windows won't make another instance of the pipe.</summary>
     internal TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(1);
 
-    /// <summary>Raised, on a background thread, when the server stops listening because it couldn't make another instance.</summary>
     public event Action<Exception>? Failed;
 
-    /// <summary>Raised, on a background thread, when <c>handle</c> threw; the caller got <c>FAIL</c> and the message.</summary>
     public event Action<Exception>? HandlerFailed;
 
-    /// <summary>Creates the pipe and starts listening.</summary>
-    /// <exception cref="UnauthorizedAccessException">The name is taken: another Mirador, or another program, listens on it.</exception>
-    /// <exception cref="IOException">Windows wouldn't create the pipe.</exception>
     public void Start()
     {
         first = CreatePipe(firstInstance: true);
@@ -77,7 +55,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         stopping.Dispose();
     }
 
-    /// <summary>The signed-in user, and only them, may connect, and owns the pipe; nobody over the network.</summary>
     internal static PipeSecurity CreatePipeSecurity()
     {
         using var identity = WindowsIdentity.GetCurrent();
@@ -96,13 +73,11 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
             ? NamedPipeServerStreamAcl.Create(
                 name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
                 options, BufferBytes, BufferBytes, CreatePipeSecurity())
-            // Elsewhere only for the tests: .NET's pipes there have no permissions or first instances.
             : new NamedPipeServerStream(
                 name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous, BufferBytes, BufferBytes);
     }
 
-    /// <summary>Another listener, trying again a few times when Windows says every instance is busy.</summary>
     private async Task<NamedPipeServerStream> NextPipeAsync(CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
@@ -125,7 +100,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         {
             while (true)
             {
-                // A slot first: while every slot serves a caller, the next one waits on the listening instance.
                 await slots.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
@@ -133,7 +107,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
                 }
                 catch (IOException)
                 {
-                    // The caller went away before it was accepted; this instance is no use any more.
                     slots.Release();
                     var dead = listening;
                     listening = null;
@@ -154,7 +127,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
                     throw;
                 }
 
-                // The next listener first, while the connected instance still holds the name.
                 var connected = listening;
                 listening = null;
                 try
@@ -178,7 +150,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
             }
             catch (Exception)
             {
-                // A listener's mistake must not hide the failure or break the shutdown.
             }
         }
         finally
@@ -231,7 +202,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         }
         catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException)
         {
-            // The caller went away, sent too slowly, or Mirador is closing: nothing to answer.
         }
         finally
         {
@@ -251,7 +221,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         }
     }
 
-    /// <summary>The handler's reply; a handler that throws is answered with <c>FAIL</c> and its message, and reported.</summary>
     private async Task<string> AnswerAsync(string request, int? caller, CancellationToken ct)
     {
         try
@@ -276,10 +245,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         }
     }
 
-    /// <summary>
-    /// Waits, at most <see cref="ReadLimit"/>, for the caller to close its end once it has the reply: disconnecting
-    /// first would throw away a reply it hasn't read yet. Whatever it sends meanwhile is read and dropped.
-    /// </summary>
     private async Task WaitForHangUpAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -293,11 +258,9 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            // It kept its end open; it is disconnected now.
         }
     }
 
-    /// <summary>One line without its newline (a <c>\r</c> before it is dropped); null when it is longer than allowed or doesn't end.</summary>
     internal static async Task<string?> ReadLineAsync(Stream stream, CancellationToken ct)
     {
         var line = new byte[AppPipe.MaxLineBytes];
@@ -331,7 +294,6 @@ public sealed class AppPipeServer(string name, Func<string, int?, CancellationTo
         return Encoding.UTF8.GetString(line, 0, count);
     }
 
-    /// <summary>The process at the other end of <paramref name="pipe"/>, as Windows reports it; null when it can't.</summary>
     private static int? CallerProcessId(NamedPipeServerStream pipe)
     {
         try

@@ -4,20 +4,14 @@ using Mirador.App.Services;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>One row of the Installed page: a part and its version, or why it isn't there.</summary>
 public sealed record InstalledItem(string Name, string Detail);
 
-/// <summary>
-/// The Installed page: what Mirador has installed and at which version: Mirador itself, the bundled Monado,
-/// OpenLamina, then the build tools a branch build installs when it needs them.
-/// </summary>
 public sealed partial class InstalledViewModel(AppHost host) : ObservableObject
 {
     public ObservableCollection<InstalledItem> Parts { get; } = [];
 
     public ObservableCollection<InstalledItem> BuildTools { get; } = [];
 
-    /// <summary>Why the build tools couldn't be read, or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProblem))]
     public partial string? Problem { get; set; }
@@ -27,7 +21,6 @@ public sealed partial class InstalledViewModel(AppHost host) : ObservableObject
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
-    /// <summary>Reads everything again: the parts at once, the build tools (vswhere) off the UI thread.</summary>
     public async Task RefreshAsync()
     {
         var versions = Ipc.MiradorMonado.Read(host.Locator.MiradorRoot);

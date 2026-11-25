@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>Keeps every formatted log message so a test can check what was (and was not) written.</summary>
 internal sealed class ListLogger<T> : ILogger<T>
 {
     private readonly List<(LogLevel Level, string Message)> entries = [];

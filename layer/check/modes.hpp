@@ -16,52 +16,31 @@
 
 namespace dvl {
 
-// What a mode hands back to main(): whether every step worked (and if not, which one failed first) and what the run
-// counted. main() turns it into the verdict (judge) and the exit code.
 struct ModeResult {
     bool steps_ok = true;
-    std::string failed_step; // set when !steps_ok: the step, what happened and its return value
+    std::string failed_step;
     RunCounts counts;
 };
 
-// Ctrl+C and Ctrl+Break end a run early instead of killing the process (a killed process may leave the display thread
-// inside NVAPI): main() installs the handler, the loops look at the flag. Closing the console, or a second Ctrl+C, ends
-// the process through the default handler, but only after the handler has run the stop hook (below) and waited up to
-// 100 ms for it, so the NVAPI mode's display thread is not killed inside NVAPI.
 void install_interrupt_handler();
 bool interrupted();
 
-// The handler install_interrupt_handler() installs; tests call it directly.
 BOOL on_interrupt_event(DWORD event);
-// What stops the NVAPI mode's display thread (stop_and_join with a 100 ms timeout), for the handler to run before the
-// process ends. Set while that thread runs, empty otherwise. Replacing it waits for a run in progress to end, so what
-// it refers to may be destroyed once it has been replaced.
 void set_interrupt_stop_hook(std::function<void()> hook);
-// Tests: the flag a handled event set is cleared again.
 void clear_interrupted_for_tests();
 
-// --- The check: NVAPI only --------------------------------------------------------------------------------
-//
-// Opens the process's display session (driver version, every private id, display, EnableDirectMode, BindDevice,
-// back-buffers, mode) on the DXGI adapter that drives the headset, then presents solid colours for options.seconds
-// through the same frame model and display thread the layer uses, with a FenceOps that is always signalled (no Vulkan
-// here), and counts presents and flips. Touches the real NVAPI: never call it from a test.
 ModeResult run_nvapi_mode(const Options& options, Output& out);
 
-// What run_nvapi_check needs from outside, so a test can put a session on a fake NVAPI in place of the process's.
 struct NvapiEnv {
     nvdm::DisplaySession* session = nullptr;
-    std::vector<LUID> adapters;       // The NVIDIA adapters to try, in order; none: one try that names the display's.
-    bool clear_back_buffers = true;   // Clear them through a D3D11 device (the real handles only); false: not at all.
-    int64_t warm_up_ns = 3'000'000'000; // Presented, not counted: a working display stutters at first.
-    std::function<std::vector<std::string>()> session_lines; // The session's log so far, for the driver version.
+    std::vector<LUID> adapters;
+    bool clear_back_buffers = true;
+    int64_t warm_up_ns = 3'000'000'000;
+    std::function<std::vector<std::string>()> session_lines;
 };
 
-// --enable-direct-mode: NVAPI Initialize, then EnableDirectMode for the Pimax vendor, and nothing else (no display
-// session, no heartbeat). Prints "PASS: direct mode is on for the headset." and returns kExitPass, or "FAIL: ..." with
-// "what to do:" and returns kExitFail.
 int run_enable_direct_mode(nvdm::Api& api, Output& out);
 
 ModeResult run_nvapi_check(const NvapiEnv& env, const Options& options, Output& out);
 
-} // namespace dvl
+}

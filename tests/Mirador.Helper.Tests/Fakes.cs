@@ -1,28 +1,23 @@
 namespace Mirador.Helper.Tests;
 
-/// <summary>Records what the handler asked of the services; nothing touches Windows.</summary>
 internal sealed class FakeServiceControl : IServiceControl
 {
     public bool Installed { get; set; } = true;
     public bool Running { get; set; }
 
-    /// <summary>A stop that timed out and hasn't finished: not running, but not stopped either.</summary>
     public bool Stopping { get; set; }
     public Exception? StopFails { get; set; }
 
-    /// <summary>When set, <see cref="Stop"/> waits for it (after raising <see cref="StopEntered"/>).</summary>
     public ManualResetEventSlim? StopGate { get; set; }
 
     public ManualResetEventSlim StopEntered { get; } = new();
     public List<string> Stopped { get; } = [];
     public List<TimeSpan> StopTimeouts { get; } = [];
 
-    /// <summary>Pimax's service's <c>ImagePath</c>; its folder is where Pimax's eye runtime may run from.</summary>
     public string? PimaxImagePath { get; set; } = $"\"{Path.Combine(HelperHandlerTests.PimaxRuntime, "PiServiceLauncher.exe")}\"";
 
     public string? ImagePath(string name) => Installed ? PimaxImagePath : null;
 
-    /// <summary>Pimax's service process: its id and start; null when it doesn't run.</summary>
     public (int Id, DateTime Started)? PimaxProcess { get; set; } = (500, new DateTime(2026, 11, 4, 10, 0, 0));
 
     public (int Id, DateTime Started)? Process(string name) => Installed ? PimaxProcess : null;
@@ -46,20 +41,16 @@ internal sealed class FakeServiceControl : IServiceControl
     }
 }
 
-/// <summary>Records which process names were ended and answers command-line queries from a table.</summary>
 internal sealed class FakeProcessControl : IProcessControl
 {
     public List<string> Killed { get; } = [];
     public Exception? KillFails { get; set; }
     public Dictionary<string, string[]> Lines { get; } = [];
 
-    /// <summary>The program file every listed process runs (Pimax's eye runtime in its own folder, unless a test says otherwise).</summary>
     public string? ExecutablePath { get; set; } = HelperHandlerTests.EyeRuntimePath;
 
-    /// <summary>The parent of every listed process: Pimax's service unless a test says otherwise.</summary>
     public int? ParentId { get; set; } = 500;
 
-    /// <summary>When every listed process started: after Pimax's service, unless a test says otherwise.</summary>
     public DateTime? Started { get; set; } = new DateTime(2026, 11, 4, 10, 0, 5);
     public List<string> Queried { get; } = [];
 
@@ -79,7 +70,6 @@ internal sealed class FakeProcessControl : IProcessControl
     }
 }
 
-/// <summary>The host's lifetime, counting how often the helper asked it to stop.</summary>
 internal sealed class FakeLifetime : Microsoft.Extensions.Hosting.IHostApplicationLifetime
 {
     private int stopRequests;
@@ -95,13 +85,11 @@ internal sealed class FakeLifetime : Microsoft.Extensions.Hosting.IHostApplicati
     public void StopApplication() => Interlocked.Increment(ref stopRequests);
 }
 
-/// <summary>The two registry values the helper manages, held in memory.</summary>
 internal sealed class FakeRuntimeRegistry : IRuntimeRegistry
 {
     public string? Active { get; set; }
     public string? Recorded { get; set; }
 
-    /// <summary>The manifests listed under AvailableRuntimes.</summary>
     public HashSet<string> Available { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public void SetAvailable(string manifest, bool available)
@@ -118,7 +106,6 @@ internal sealed class FakeRuntimeRegistry : IRuntimeRegistry
     public Exception? Fails { get; set; }
     public int Writes { get; private set; }
 
-    /// <summary>The most calls to <see cref="GetActive"/> that were inside it at the same moment.</summary>
     public int MaxConcurrent { get; private set; }
 
     private int inside;
@@ -161,7 +148,6 @@ internal sealed class FakeRuntimeRegistry : IRuntimeRegistry
     }
 }
 
-/// <summary>The consent values in memory; nothing touches the registry.</summary>
 internal sealed class FakeConsentValues : Mirador.Ipc.IConsentValues
 {
     public HashSet<string> Sids { get; } = [];

@@ -43,7 +43,7 @@ public class DiagnosticsZipTests
             ["environment.txt", "mirador.log", "monado-settings.json", "monado.log", "profile.json", "versions.txt"],
             entries.Keys.Where(k => k != "fake.txt").Order());
         Assert.Contains("XRT_COMPOSITOR_SCALE_PERCENTAGE=120\n", entries["environment.txt"]);
-        Assert.DoesNotContain("USERPROFILE", entries["environment.txt"]); // only what Mirador set
+        Assert.DoesNotContain("USERPROFILE", entries["environment.txt"]);
         Assert.Contains("\"name\": \"Dream Air\"", entries["profile.json"]);
         Assert.Contains("\"kind\": \"Mirador\"", entries["profile.json"]);
         Assert.Equal("Mirador 0.1.0\n", entries["versions.txt"]);
@@ -187,7 +187,7 @@ public class DiagnosticsZipTests
         using var dir = new TempDir();
         var zip = new DiagnosticsZip();
         zip.AddText("a.txt", "x");
-        Directory.CreateDirectory(dir.File("d.zip")); // a folder where the zip should go: the final move fails
+        Directory.CreateDirectory(dir.File("d.zip"));
 
         var e = Assert.ThrowsAny<Exception>(() => zip.Save(dir.File("d.zip")));
         Assert.True(e is IOException or UnauthorizedAccessException, e.ToString());

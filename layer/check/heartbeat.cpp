@@ -20,8 +20,8 @@ namespace dvl {
 
 std::array<uint8_t, kHeartbeatSize> heartbeat_report()
 {
-    std::array<uint8_t, kHeartbeatSize> report{}; // zero-padded
-    report[0] = 0x00;                             // report id
+    std::array<uint8_t, kHeartbeatSize> report{};
+    report[0] = 0x00;
     report[1] = 0x58;
     report[2] = 0x04;
     report[3] = 0x39;
@@ -36,8 +36,6 @@ bool is_board_interface_path(std::string_view path)
     }
     return lowered.find("vid_34a4&pid_0044&mi_00") != std::string::npos;
 }
-
-// --- The board through Win32 HID ---------------------------------------------------------------------------------
 
 namespace {
 
@@ -78,7 +76,7 @@ public:
             SP_DEVICE_INTERFACE_DATA interface_data{};
             interface_data.cbSize = sizeof(interface_data);
             if (!SetupDiEnumDeviceInterfaces(devices, nullptr, &hid_guid, index, &interface_data)) {
-                break; // ERROR_NO_MORE_ITEMS
+                break;
             }
             DWORD size = 0;
             SetupDiGetDeviceInterfaceDetailW(devices, &interface_data, nullptr, 0, &size, nullptr);
@@ -91,7 +89,6 @@ public:
             if (!SetupDiGetDeviceInterfaceDetailW(devices, &interface_data, path, size, nullptr, nullptr)) {
                 continue;
             }
-            // Only the board's interface is opened: the path names the ids, so no other HID device is touched.
             const std::string narrow_path = narrow(path->DevicePath);
             if (!is_board_interface_path(narrow_path)) {
                 continue;
@@ -125,7 +122,6 @@ public:
             return false;
         }
 
-        // The report sizes the board's descriptor gives (they include the report id byte).
         PHIDP_PREPARSED_DATA preparsed = nullptr;
         if (HidD_GetPreparsedData(handle_, &preparsed)) {
             HIDP_CAPS caps{};
@@ -151,7 +147,6 @@ public:
         if (handle_ == INVALID_HANDLE_VALUE) {
             return false;
         }
-        // hidapi pads or cuts the report to the descriptor's output report length, and so does this.
         std::vector<uint8_t> buffer(output_length_ != 0 ? output_length_ : kHeartbeatSize, 0);
         std::memcpy(buffer.data(), report.data(), std::min(buffer.size(), report.size()));
         OVERLAPPED overlapped{};
@@ -164,7 +159,7 @@ public:
             }
             if (WaitForSingleObject(write_event_, 1000) != WAIT_OBJECT_0) {
                 CancelIoEx(handle_, &overlapped);
-                GetOverlappedResult(handle_, &overlapped, &written, TRUE); // the buffer must outlive the request
+                GetOverlappedResult(handle_, &overlapped, &written, TRUE);
                 return false;
             }
             if (!GetOverlappedResult(handle_, &overlapped, &written, FALSE)) {
@@ -179,7 +174,7 @@ public:
         if (handle_ == INVALID_HANDLE_VALUE || input_length_ == 0) {
             return;
         }
-        for (int i = 0; i < 64; i++) { // bounded: a board that never stops talking cannot hold the heartbeat
+        for (int i = 0; i < 64; i++) {
             DWORD n = 0;
             if (!read_pending_) {
                 read_overlapped_ = OVERLAPPED{};
@@ -187,7 +182,7 @@ public:
                 ResetEvent(read_event_);
                 if (ReadFile(handle_, read_buffer_.data(), static_cast<DWORD>(read_buffer_.size()), &n,
                              &read_overlapped_)) {
-                    continue; // a report was waiting: dropped
+                    continue;
                 }
                 if (GetLastError() != ERROR_IO_PENDING) {
                     return;
@@ -195,13 +190,13 @@ public:
                 read_pending_ = true;
             }
             if (GetOverlappedResult(handle_, &read_overlapped_, &n, FALSE)) {
-                read_pending_ = false; // a report arrived while it was pending: dropped, read again
+                read_pending_ = false;
                 continue;
             }
             if (GetLastError() != ERROR_IO_INCOMPLETE) {
-                read_pending_ = false; // the request failed
+                read_pending_ = false;
             }
-            return; // nothing waiting; the request stays pending for the next time
+            return;
         }
     }
 
@@ -211,7 +206,7 @@ public:
             if (read_pending_) {
                 CancelIoEx(handle_, &read_overlapped_);
                 DWORD n = 0;
-                GetOverlappedResult(handle_, &read_overlapped_, &n, TRUE); // the buffer must outlive the request
+                GetOverlappedResult(handle_, &read_overlapped_, &n, TRUE);
                 read_pending_ = false;
             }
             CloseHandle(handle_);
@@ -236,20 +231,18 @@ private:
     bool read_pending_ = false;
 };
 
-} // namespace
+}
 
 std::unique_ptr<HeartbeatPort> make_hid_port()
 {
     return std::make_unique<HidPort>();
 }
 
-// --- The thread --------------------------------------------------------------------------------------------------
-
 struct Heartbeat::Impl {
     std::unique_ptr<HeartbeatPort> port;
     std::chrono::milliseconds period;
 
-    mutable std::mutex mutex; // guards the members below, and is what `wake` waits on
+    mutable std::mutex mutex;
     std::condition_variable wake;
     bool stopping = false;
     bool running = false;
@@ -279,13 +272,13 @@ struct Heartbeat::Impl {
                 break;
             }
             if (clock::now() < next) {
-                continue; // woke early
+                continue;
             }
             hold.unlock();
             send_once();
             port->drain();
             hold.lock();
-            next = clock::now() + period; // never two reports closer than a period, even after a stall
+            next = clock::now() + period;
         }
     }
 };
@@ -319,7 +312,6 @@ bool Heartbeat::start()
         m.detail = detail;
         return false;
     }
-    // The first report goes out before start() returns, so a caller that then waits for the display has been heard.
     if (!m.port->write(heartbeat_report())) {
         m.failed++;
         m.port->close();
@@ -353,7 +345,7 @@ void Heartbeat::stop()
     if (thread.joinable()) {
         thread.join();
     }
-    m.port->close(); // nothing is sent after this
+    m.port->close();
 }
 
 bool Heartbeat::running() const
@@ -378,4 +370,4 @@ std::string Heartbeat::detail() const
     return impl_->detail;
 }
 
-} // namespace dvl
+}

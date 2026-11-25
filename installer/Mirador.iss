@@ -1,17 +1,7 @@
-; Mirador's installer (Inno Setup 6). Built by tools\build-installer.ps1 from artifacts\bundle (tools\build-bundle.ps1):
-;   ISCC /DAppVersion=<version> installer\Mirador.iss
-; A release adds /DSignTool=<name> /S<name>=<command>, and Inno Setup signs the uninstaller and the installer with it.
-;
-; {app} is Program Files\Mirador, admin-only: the helper service runs from it as LocalSystem and makes its Monado the
-; OpenXR runtime of every app, so there is no folder choice. If one ever comes back, {app} needs
-; a protected DACL (Administrators and SYSTEM full control, Users read and execute).
-
 #ifndef AppVersion
   #define AppVersion "0.1.0"
 #endif
 #define Bundle "..\artifacts\bundle"
-; The bundle (tools\build-bundle.ps1) has no Monado or OpenLamina: the helper downloads Monado and the app installs
-; OpenLamina with its own installer.
 #define ServiceName "MiradorHelper"
 
 [Setup]
@@ -27,7 +17,6 @@ DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
-; Consent to run Monado as administrator is never carried over from an earlier install (a re-run, a silent one, an upgrade): it is given in Mirador or by ticking the task now, and taken back in Mirador.
 UsePreviousTasks=no
 CloseApplications=yes
 RestartApplications=no
@@ -43,19 +32,15 @@ SolidCompression=yes
 MinVersion=10.0.19041
 #ifdef SignTool
 SignTool={#SignTool}
-; The sign tool tries again by itself.
 SignToolRetryCount=0
 #endif
 
 [InstallDelete]
-; What an older version left there goes, so no stale file is loaded.
 Type: filesandordirs; Name: "{app}\layer"
 Type: filesandordirs; Name: "{app}\standin"
 Type: filesandordirs; Name: "{app}\tools"
 
 [UninstallDelete]
-; Mirador's Monado, which the helper installed, and its download folder; and the
-; builds users approved to run as administrator, which the elevated approval step copied.
 Type: filesandordirs; Name: "{app}\monado"
 Type: filesandordirs; Name: "{app}\builds"
 
@@ -66,12 +51,9 @@ Source: "{#Bundle}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs 
 Name: "{autoprograms}\Mirador"; Filename: "{app}\Mirador.exe"
 
 [Registry]
-; Where the stand-in finds Mirador when no user has run it yet.
 Root: HKLM64; Subkey: "SOFTWARE\Mirador"; ValueType: string; ValueName: "AppPath"; ValueData: "{app}\Mirador.exe"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
-; No consent for Monado as administrator here: a profile's "Run as administrator" asks for it when it is saved
-;, and it goes once no profile has it on.
 Filename: "{app}\Mirador.exe"; Description: "Start Mirador"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
@@ -82,7 +64,6 @@ const
   MiradorKey = 'SOFTWARE\Mirador';
   QuitMirador = 'Mirador is running. Quit it from its tray icon (Quit), then press Retry.';
 
-{ Mirador holds its own files while it runs: it must be quit, not pulled away. }
 function MiradorQuit: Boolean;
 begin
   while CheckForMutexes('Local\Mirador') do
@@ -118,7 +99,6 @@ begin
   Result := Sc('query {#ServiceName}') = 0;
 end;
 
-{ Stops the helper and waits (up to 30 s) until it has; a service that isn't there is fine. }
 procedure StopHelper;
 var
   I, Code: Integer;
@@ -128,7 +108,6 @@ begin
   Sc('stop {#ServiceName}');
   for I := 1 to 60 do
   begin
-    { sc query's exit code doesn't say the state: ask PowerShell for it, quietly. }
     if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       '-NoProfile -NonInteractive -Command "if ((Get-Service {#ServiceName}).Status -eq ''Stopped'') { exit 0 } else { exit 1 }"',
       '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0) then
@@ -137,9 +116,6 @@ begin
   end;
 end;
 
-// Before copying: only Program Files\Mirador, which only administrators can change (a /DIR= elsewhere is refused:
-// the helper runs from that folder as SYSTEM); then the helper stops, since an update or the dev install
-// (tools\dev-install-helper.ps1) may run it from there.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   if CompareText(ExpandConstant('{app}'), ExpandConstant('{autopf}\Mirador')) <> 0 then
@@ -152,7 +128,6 @@ begin
   Result := '';
 end;
 
-{ The standalone layer's registration (its own install) goes: Mirador's replaces it. }
 function HasSuffix(const Text, Suffix: String): Boolean;
 begin
   Result := (Length(Text) >= Length(Suffix))
@@ -170,14 +145,11 @@ begin
     for I := 0 to GetArrayLength(Names) - 1 do
     begin
       Name := Lowercase(Names[I]);
-      { Another copy of this layer, or the one it was before it was renamed (dreamair_vk_layer.json, the standalone
-        release's and an older Mirador's): two registered would both load. }
       if (Name <> Ours) and (HasSuffix(Name, '\mirador_direct_mode.json') or HasSuffix(Name, '\dreamair_vk_layer.json')) then
         RegDeleteValue(HKLM64, ImplicitLayers, Names[I]);
     end;
 end;
 
-{ A step of the helper's setup that failed is said, with what to do: Mirador needs it for the steps that need an administrator. }
 procedure HelperStep(const What: String; Code: Integer);
 begin
   if Code <> 0 then
@@ -199,7 +171,6 @@ begin
   HelperStep('started', Sc('start {#ServiceName}'));
 end;
 
-{ Whether Manifest is one of Mirador's: a version of the bundled Monado, or an approved build's copy. }
 function IsMiradorsManifest(const Manifest: String): Boolean;
 var
   Monado, Builds: String;
@@ -210,7 +181,6 @@ begin
     and HasSuffix(Lowercase(Manifest), '\openxr_monado.json');
 end;
 
-{ The runtime entries of the bundled Monado's versions (the helper's). }
 procedure RemoveMiradorsRuntimes;
 var
   Names: TArrayOfString;
@@ -231,8 +201,6 @@ begin
   end;
 end;
 
-{ Uninstall: put the OpenXR runtime back if Mirador's is active, then take the helper out. Profiles, logs and
-  backups in %LOCALAPPDATA%\Mirador stay. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Active, Recorded: String;
@@ -241,7 +209,6 @@ begin
   if CurUninstallStep <> usUninstall then
     Exit;
 
-  { Mirador no longer starts at sign-in: the Run value is the uninstalling user's. }
   if not Exec(ExpandConstant('{app}\Mirador.exe'), '--remove-sign-in', '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Log('Mirador.exe --remove-sign-in could not be started.')
   else if Code <> 0 then
@@ -252,32 +219,25 @@ begin
     if SuppressibleMsgBox('Monado is the active OpenXR runtime. Switch back to the runtime that was active before?',
       mbConfirmation, MB_YESNO, IDYES) = IDYES then
     begin
-      { First the helper goes quiet, so no request races the restore. }
       StopHelper;
       if not RegQueryStringValue(HKLM64, MiradorKey, 'PreviousActiveRuntime', Recorded) then
         Recorded := '';
       if not Exec(ExpandConstant('{app}\Mirador.Helper.exe'), '--restore-runtime', '', SW_HIDE, ewWaitUntilTerminated, Code) then
         Code := -1;
-      { However that went: put back what was recorded, if Mirador's runtime is still the active one. }
       if (Recorded <> '') and RegQueryStringValue(HKLM64, OpenXrKey, 'ActiveRuntime', Active) and IsMiradorsManifest(Active) then
         RegWriteStringValue(HKLM64, OpenXrKey, 'ActiveRuntime', Recorded);
     end;
 
-    { Never left pointing at a file this uninstall removes: no runtime rather than a broken one. }
     if RegQueryStringValue(HKLM64, OpenXrKey, 'ActiveRuntime', Active) and IsMiradorsManifest(Active) then
       RegDeleteValue(HKLM64, OpenXrKey, 'ActiveRuntime');
   end;
   RemoveMiradorsRuntimes;
 
   StopHelper;
-  { The helper registers the direct-mode layer while a profile uses it. }
   RegDeleteValue(HKLM64, ImplicitLayers, ExpandConstant('{app}\layer\mirador_direct_mode.json'));
   Sc('delete {#ServiceName}');
   RegDeleteValue(HKLM64, MiradorKey, 'PreviousActiveRuntime');
-  { Everyone's consent to run Monado as administrator goes with Mirador, and with it
-    the SteamVR files each user allowed. }
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ElevatedMonado');
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ElevatedMonadoFiles');
-  { And every user's approved builds: an approval isn't carried over to a reinstall. }
   RegDeleteKeyIncludingSubkeys(HKLM64, MiradorKey + '\ApprovedBuilds');
 end;

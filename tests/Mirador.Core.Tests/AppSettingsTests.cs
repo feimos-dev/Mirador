@@ -48,7 +48,6 @@ public class AppSettingsTests
     [Fact]
     public void Old_file_with_off_mode_still_loads()
     {
-        // Until 2026-11-07 "Off means: Sleep / Standby" was kept; off is always sleep now, and the old value is ignored.
         using var dir = new TempDir();
         var store = new AppSettingsStore(dir.File("settings.json"));
         File.WriteAllText(dir.File("settings.json"), """{"closeToTray": false, "baseStationsOnAtStart": false, "baseStationsOff": "Standby", "baseStationsOffAtStop": false}""");
@@ -58,7 +57,6 @@ public class AppSettingsTests
         Assert.Equal(new AppSettings(CloseToTray: false, BaseStationsOnAtStart: false, BaseStationsOffAtStop: false), settings);
         Assert.False(File.Exists(dir.File("settings.json.bad")));
 
-        // Saved again, it is gone.
         store.Save(settings);
 
         var text = File.ReadAllText(dir.File("settings.json"));
@@ -118,7 +116,6 @@ public class AppSettingsTests
 
         Assert.False(store.Load().StartMiradorForGames);
 
-        // The stand-in reads this very text: the key, then false.
         Assert.Contains("\"startMiradorForGames\": false", File.ReadAllText(dir.File("settings.json")));
     }
 

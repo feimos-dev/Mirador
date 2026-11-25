@@ -5,42 +5,19 @@ using Microsoft.Win32;
 
 namespace Mirador.Ipc;
 
-/// <summary>
-/// A build a user approved to run as administrator or as the machine's OpenXR runtime: a
-/// copy in <c>{app}\builds\&lt;user SID&gt;\&lt;profile&gt;\&lt;commit&gt;\</c>, which only administrators can change, and
-/// the SHA-256 of each of its files, kept in <c>HKLM\SOFTWARE\Mirador\ApprovedBuilds\&lt;user SID&gt;\&lt;profile&gt;</c>.
-/// Per user: profile ids such as <c>custom</c> are the same for everyone, and one user's approval is not another's.
-/// </summary>
-/// <param name="Owner">The SID of the user who approved it.</param>
-/// <param name="ProfileId">The profile the build is for.</param>
-/// <param name="Commit">The commit it was built from (or <c>folder</c> for a build folder with no git).</param>
-/// <param name="Folder">The approved copy; empty for the bundled Monado (<see cref="ApprovedBuilds.BundledCommit"/>).</param>
-/// <param name="Files">Each file of the copy, by its path relative to <see cref="Folder"/>, with its SHA-256 (lower case); none for the bundled Monado.</param>
-/// <param name="Variables">
-/// The profile's own environment variables approved with it, in the profile's order: an elevated Start with variables
-/// runs only when they are exactly these. None for an approval from before variables could be approved.
-/// </param>
 public sealed record ApprovedBuild(
     string Owner, string ProfileId, string Commit, string Folder, IReadOnlyDictionary<string, string> Files,
     IReadOnlyList<KeyValuePair<string, string>>? Variables = null)
 {
-    /// <summary>The approved variables; empty when there are none.</summary>
     public IReadOnlyList<KeyValuePair<string, string>> Variables { get; init; } = Variables ?? [];
 
-    /// <summary>The copy's runtime manifest, which Mirador writes itself at the approval (it names the copy's own DLL).</summary>
     public string Manifest => Path.Combine(Folder, "openxr_monado.json");
 
-    /// <summary>The copy's service folder.</summary>
     public string ServerDir => Path.Combine(Folder, "bin");
 
-    /// <summary>
-    /// Where the copy's runtime DLL looks for the service when a game finds no service running: Mirador's stand-in,
-    /// which the approval puts there.
-    /// </summary>
     public string StandInDir => Path.Combine(ServerDir, "service");
 }
 
-/// <summary>Where approved builds are recorded; only an administrator can write it.</summary>
 public interface IApprovedBuildStore
 {
     ApprovedBuild? Get(string owner, string profileId);
@@ -49,52 +26,25 @@ public interface IApprovedBuildStore
 
     void Remove(string owner, string profileId);
 
-    /// <summary>The profiles <paramref name="owner"/> has an approval recorded for.</summary>
     IReadOnlyList<string> ProfilesOf(string owner);
 }
 
-/// <summary>
-/// Approving a build and checking an approved one. <see cref="Approve"/> runs elevated, in
-/// Mirador's <c>--approve-build</c> step after one UAC prompt; the helper only reads and checks (<see cref="Verify"/>)
-/// before every elevated Start and before making the copy the OpenXR runtime.
-/// </summary>
 public static partial class ApprovedBuilds
 {
-    /// <summary>
-    /// The commit of an approval for the bundled Monado: it runs as administrator without a copy, being Mirador's own,
-    /// so such an approval holds only a profile's variables (no folder, no files).
-    /// </summary>
     public const string BundledCommit = "bundled";
 
-    /// <summary>The DLL the approved copy's manifest names, relative to the copy.</summary>
     public static readonly string RuntimeDll = Path.Combine("bin", "openxr_monado.dll");
 
-    /// <summary>The folder of all approved builds below Mirador's install folder.</summary>
     public static string Root(string appDir) => Path.Combine(appDir, "builds");
 
-    /// <summary>The folder of one user's approved builds of one profile.</summary>
     public static string ProfileRoot(string appDir, string owner, string profileId) => Path.Combine(Root(appDir), owner, profileId);
 
-    /// <summary>Whether <paramref name="id"/> is a profile id (a GUID's digits or a default profile's name): never a path.</summary>
     public static bool IsProfileId(string? id) => id is not null && ProfileIdPattern().IsMatch(id);
 
-    /// <summary>Whether <paramref name="commit"/> is a git commit's id: 7 to 40 lower-case hex digits, never <see cref="BundledCommit"/> or a path.</summary>
     public static bool IsGitCommit(string? commit) => commit is not null && GitCommitPattern().IsMatch(commit);
 
-    /// <summary>Whether <paramref name="sid"/> looks like a SID: never a path.</summary>
     public static bool IsOwner(string? sid) => sid is not null && OwnerPattern().IsMatch(sid);
 
-    /// <summary>
-    /// Copies the install in <paramref name="source"/> to <c>{appDir}\builds\&lt;owner&gt;\&lt;profile&gt;\&lt;commit&gt;\</c>,
-    /// writes the copy's runtime manifest itself (naming the copy's own DLL, whatever the build's manifest said), hashes
-    /// the copy and records it. Only then do the profile's earlier copies go, as far as they can (one still in use stays
-    /// until the next approval). A link or junction anywhere in the source is refused: it could point the copy at files
-    /// outside the build. The profile's <paramref name="variables"/> are recorded with it. For the bundled Monado
-    /// (<see cref="BundledCommit"/>) nothing is copied: the record holds the variables only, and the profile's earlier
-    /// copies go. The copy's manifest carries Monado's own fields over from the build's (<see cref="WriteManifest"/>);
-    /// <paramref name="log"/> is told about any it leaves out.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The source or a variable can't be approved; the message says why.</exception>
     public static ApprovedBuild Approve(
         string owner, string profileId, string commit, string source, string appDir, IApprovedBuildStore store,
         IReadOnlyList<KeyValuePair<string, string>>? variables = null, Action<string>? log = null)
@@ -109,7 +59,6 @@ public static partial class ApprovedBuilds
             throw new InvalidOperationException("That isn't a commit.");
         }
 
-        // The bundled Monado's approval copies nothing: a build folder named with it would be recorded without its files.
         if (commit == BundledCommit && !string.IsNullOrEmpty(source))
         {
             throw new InvalidOperationException("An approval of the bundled Monado has no build folder.");
@@ -143,7 +92,6 @@ public static partial class ApprovedBuilds
         PlaceStandIn(appDir, staging);
         var files = Hash(staging);
 
-        // The new copy in place and recorded first; an earlier copy of the same commit is moved aside whole.
         if (Directory.Exists(target))
         {
             Directory.Move(target, target + ".old-" + Guid.NewGuid().ToString("N"));
@@ -162,12 +110,6 @@ public static partial class ApprovedBuilds
         return build;
     }
 
-    /// <summary>
-    /// Approves new <paramref name="variables"/> for a profile whose approval is otherwise kept: its copy isn't made
-    /// again, only checked (<see cref="Verify"/>) and its record's variables replaced. For a bundled Monado approval the
-    /// record holds the variables only anyway.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">There is no approval to keep, its copy changed, or a variable can't be approved.</exception>
     public static ApprovedBuild ApproveVariables(
         string owner, string profileId, string appDir, IApprovedBuildStore store, IReadOnlyList<KeyValuePair<string, string>>? variables)
     {
@@ -188,8 +130,6 @@ public static partial class ApprovedBuilds
         return updated;
     }
 
-    /// <summary>The variables as recorded, once each may be set for Monado as administrator.</summary>
-    /// <exception cref="InvalidOperationException">One may not.</exception>
     private static IReadOnlyList<KeyValuePair<string, string>> Approvable(IReadOnlyList<KeyValuePair<string, string>>? variables)
     {
         IReadOnlyList<KeyValuePair<string, string>> approved = [.. variables ?? []];
@@ -206,10 +146,6 @@ public static partial class ApprovedBuilds
         return approved;
     }
 
-    /// <summary>
-    /// Takes an approval back: its record first (from then on nothing runs it), then its copy, as far as it can go now
-    /// (a copy still in use stays until the next approval or the uninstall).
-    /// </summary>
     public static void Forget(string owner, string profileId, string appDir, IApprovedBuildStore store)
     {
         if (!IsOwner(owner) || !IsProfileId(profileId))
@@ -222,11 +158,6 @@ public static partial class ApprovedBuilds
         SweepLeftovers(appDir, store);
     }
 
-    /// <summary>
-    /// Null when <paramref name="build"/> is still exactly what was approved: in its place under
-    /// <paramref name="appDir"/>, its manifest naming its own DLL, every recorded file there with its recorded hash, and
-    /// no program or library added. Otherwise why not, in plain words.
-    /// </summary>
     public static string? Verify(ApprovedBuild build, string appDir)
     {
         if (!IsOwner(build.Owner) || !IsProfileId(build.ProfileId) || !CommitPattern().IsMatch(build.Commit)
@@ -270,16 +201,6 @@ public static partial class ApprovedBuilds
         return null;
     }
 
-    /// <summary>
-    /// Whether the build in <paramref name="sourceInstall"/> (the profile's build as it is now) is the one approved: the
-    /// same files as the approved copy, none added or removed, each with the copy's hash. The two files the approval
-    /// writes itself aren't compared: the copy's runtime manifest and Mirador's stand-in (<see cref="WrittenByApproval"/>).
-    /// A link or junction anywhere in the build counts as a change, as the approval refuses one. A rebuild is new code and
-    /// runs as the user until approved.
-    /// </summary>
-    /// <param name="hashOf">The SHA-256 of a file, lower case: <see cref="HashOf"/>, or a cache in front of it.</param>
-    /// <exception cref="IOException">The build's folder can't be read.</exception>
-    /// <exception cref="UnauthorizedAccessException">A folder of the build can't be listed.</exception>
     public static bool Matches(ApprovedBuild build, string sourceInstall, Func<string, string>? hashOf = null)
     {
         hashOf ??= HashOf;
@@ -316,46 +237,26 @@ public static partial class ApprovedBuilds
             compared++;
         }
 
-        // Every file of the copy was found in the build: none was removed since.
         return compared == build.Files.Keys.Count(k => !WrittenByApproval(k));
     }
 
-    /// <summary>
-    /// Whether <paramref name="relative"/>, a path in an approved copy, is one the approval writes itself rather than
-    /// copies as it is: the runtime manifest (<see cref="WriteManifest"/>) and the stand-in's names in the service folder
-    /// (<see cref="PlaceStandIn"/>).
-    /// </summary>
     private static bool WrittenByApproval(string relative) =>
         string.Equals(relative, "openxr_monado.json", StringComparison.OrdinalIgnoreCase)
         || StandInNames.FileNames.Any(name => string.Equals(relative, Path.Combine("bin", "service", name), StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// Whether the copy's manifest names the copy's own DLL in a way OpenXR programs can load (a quick look, for the app;
-    /// <see cref="Verify"/> checks every file): a path with forward slashes isn't, so such a copy counts as not approved.
-    /// </summary>
     public static bool NamesOwnDll(ApprovedBuild build) =>
         LibraryOf(build.Manifest) is { } library && string.Equals(library, Path.Combine(build.Folder, RuntimeDll), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The SHA-256 of a file, lower case.</summary>
     public static string HashOf(string path)
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
 
-    /// <summary>libmonado, relative to the copy, which Monado's manifest names in <c>MND_libmonado_path</c>.</summary>
     internal static readonly string LibmonadoDll = Path.Combine("bin", "monado.dll");
 
     private const string LibmonadoKey = "MND_libmonado_path";
 
-    /// <summary>
-    /// The copy's manifest, written by Mirador: a build's own may name a DLL anywhere (an absolute path into the user's
-    /// build folder), and every OpenXR program would load that. The path has backslashes: the OpenXR loader joins it to
-    /// the manifest's folder and loads it, and with forward slashes in that path Windows doesn't look in the DLL's own
-    /// folder for the DLLs it needs, so it fails to load.
-    /// Monado's own <c>MND_*</c> fields come from the build's manifest (the copy's, before it is replaced), each path
-    /// rewritten to the same file in the copy or left out; without a libmonado there, the copy's own is named.
-    /// </summary>
     internal static void WriteManifest(string source, string copy, Action<string>? log = null)
     {
         var manifest = Path.Combine(copy, "openxr_monado.json");
@@ -393,7 +294,6 @@ public static partial class ApprovedBuilds
         File.WriteAllBytes(manifest, stream.ToArray());
     }
 
-    /// <summary>A path (a key ending in <c>_path</c>) as a string; other text, numbers and true/false as they are.</summary>
     private static List<KeyValuePair<string, object>> MonadoFields(string manifest, string source, string copy, Action<string>? log)
     {
         var fields = new List<KeyValuePair<string, object>>();
@@ -448,10 +348,6 @@ public static partial class ApprovedBuilds
         return fields;
     }
 
-    /// <summary>
-    /// The same file of the copy, relative to it; null when it isn't a file of the build in the copy. A bare file name is
-    /// one the loader searches for, so only the copy's <c>bin</c> file of that name.
-    /// </summary>
     private static string? CopiedPath(JsonElement value, string source, string copy)
     {
         try
@@ -475,7 +371,6 @@ public static partial class ApprovedBuilds
             }
 
             var relative = Path.GetRelativePath(root, full);
-            // A colon here names a stream of the file (file::$DATA).
             return !relative.Contains(':') && File.Exists(Path.Combine(copy, relative)) ? relative : null;
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or InvalidOperationException)
@@ -484,11 +379,6 @@ public static partial class ApprovedBuilds
         }
     }
 
-    /// <summary>
-    /// Mirador's own stand-in (<c>{app}\standin</c>) where the copy's runtime DLL looks for the service, whatever the build
-    /// had there: a game that starts while Monado is stopped then asks Mirador, as with any other Monado. Without it in
-    /// Mirador's folder (a development copy), the copy keeps what the build had.
-    /// </summary>
     private static void PlaceStandIn(string appDir, string copy)
     {
         var standIn = Path.Combine(appDir, "standin", StandInNames.FileName);
@@ -503,10 +393,6 @@ public static partial class ApprovedBuilds
         }
     }
 
-    /// <summary>
-    /// The full path of the DLL a manifest names, or null when it can't be read or can't be loaded as written (a forward
-    /// slash: see <see cref="WriteManifest"/>).
-    /// </summary>
     private static string? LibraryOf(string manifest)
     {
         try
@@ -526,10 +412,6 @@ public static partial class ApprovedBuilds
 
     private static void Copy(DirectoryInfo from, string to) => CopyUnder(from, to, FinalPath(from.FullName, folder: true));
 
-    // The checks by path below refuse a link that is there when they look; the step runs elevated while the user's own
-    // programs can still change the build folder, so each file is also opened once and judged by where its handle
-    // really is (a folder swapped for a junction after its check leads outside the build's own folder), and its bytes
-    // are copied from that same handle.
     private static void CopyUnder(DirectoryInfo from, string to, string root)
     {
         if (from.LinkTarget is not null)
@@ -564,7 +446,6 @@ public static partial class ApprovedBuilds
     private static bool IsUnder(string path, string root) =>
         path.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Where a folder really is, links and junctions on its way resolved.</summary>
     private static string FinalPath(string path, bool folder)
     {
         const uint ReadAttributes = 0x80, ShareAll = 0x7, OpenExisting = 3, BackupSemantics = 0x02000000;
@@ -577,7 +458,6 @@ public static partial class ApprovedBuilds
         return FinalPath(handle);
     }
 
-    /// <summary>Where an open file or folder really is, as a plain path (without <c>\\?\</c>).</summary>
     private static string FinalPath(Microsoft.Win32.SafeHandles.SafeFileHandle handle)
     {
         var buffer = new char[1024];
@@ -610,12 +490,6 @@ public static partial class ApprovedBuilds
         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(folder, f), HashOf, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Moves <paramref name="folder"/> aside whole (into <c>{app}\builds\.old-*</c>), then deletes it. A copy the
-    /// elevated Monado runs from (its working folder is inside) or with a file held open can't be moved, so it stays
-    /// whole, never half deleted, until a later approval or forget sweeps it (<see cref="SweepLeftovers"/>) or the
-    /// uninstall. A game that has only loaded the copy's DLL doesn't stop the move: the DLL stays behind aside.
-    /// </summary>
     private static void RemoveWhole(string folder, string appDir)
     {
         if (!Directory.Exists(folder))
@@ -636,10 +510,6 @@ public static partial class ApprovedBuilds
         Cleanup.TryDeleteDirectory(aside);
     }
 
-    /// <summary>
-    /// What an earlier <see cref="RemoveWhole"/> moved aside but couldn't delete, and, of every user, the profile folders
-    /// that no approval is recorded for any more (one that couldn't be moved when it was forgotten).
-    /// </summary>
     private static void SweepLeftovers(string appDir, IApprovedBuildStore store)
     {
         var root = Root(appDir);
@@ -679,14 +549,8 @@ public static partial class ApprovedBuilds
     private static partial Regex GitCommitPattern();
 }
 
-/// <summary>
-/// The approved builds in <c>HKLM\SOFTWARE\Mirador\ApprovedBuilds</c> (64-bit view): a key per user SID and profile with
-/// <c>Commit</c>, <c>Folder</c> and <c>Variables</c> (a multi-string of <c>NAME=VALUE</c>, in order; missing on a record
-/// from before variables could be approved), and its <c>Files</c> subkey with a value per file (relative path → SHA-256).
-/// </summary>
 public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
 {
-    /// <summary>The key's path under <c>HKEY_LOCAL_MACHINE</c>.</summary>
     public const string KeyPath = @"SOFTWARE\Mirador\ApprovedBuilds";
 
     private readonly RegistryHive hive;
@@ -697,7 +561,6 @@ public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
     {
     }
 
-    /// <summary>For tests: the key somewhere a test may write (under <c>HKEY_CURRENT_USER</c>).</summary>
     internal RegistryApprovedBuildStore(RegistryHive hive, string keyPath)
     {
         this.hive = hive;
@@ -733,7 +596,6 @@ public sealed class RegistryApprovedBuildStore : IApprovedBuildStore
         {
             foreach (var line in lines)
             {
-                // The name ends at the first '=': a value may hold more.
                 var at = line.IndexOf('=', StringComparison.Ordinal);
                 if (at > 0)
                 {

@@ -5,35 +5,17 @@ using Mirador.Core.Native;
 
 namespace Mirador.DirectMode;
 
-/// <summary>What the layer's display check found.</summary>
-/// <param name="Pass">Whether direct mode works (the check ended with exit code 0).</param>
-/// <param name="Message">What it found, from its last <c>PASS: …</c> or <c>FAIL: …</c> line.</param>
-/// <param name="WhatToDo">Its advice, from its <c>what to do: …</c> line; null when it gave none.</param>
-/// <param name="Output">Everything it wrote, for the diagnostics.</param>
 public sealed record DisplayCheckResult(bool Pass, string Message, string? WhatToDo, string Output)
 {
-    /// <summary>Whether the check ran to its end; false when it couldn't start or ran out of time (no verdict).</summary>
     public bool Finished { get; init; } = true;
 
-    /// <summary>
-    /// Whether the layer left the headset to Windows (its EDID carries Microsoft's HMD block: <c>NOT USED: …</c>):
-    /// direct mode isn't used for it, so the check says nothing about the driver. Not a pass, not a fail.
-    /// </summary>
     public bool NotUsed { get; init; }
 }
 
-/// <summary>
-/// Runs the layer's display check (<c>mirador-display-check.exe</c>), which drives the headset's panels through
-/// NVIDIA's private direct-mode interface for about 23 s (3 s of warm-up, then 20 s counted) without Monado. NVIDIA
-/// may move that interface with any driver, so Mirador runs it when the driver changed. The headset's own software and Monado must not run: the check refuses
-/// while they hold the display (the headset's module frees it first).
-/// </summary>
 public static class DisplayCheck
 {
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
 
-    /// <summary>Runs the check at <paramref name="exe"/> with <paramref name="arguments"/> and reads its verdict. Never throws for a failed check.</summary>
-    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled; the check was ended first.</exception>
     public static async Task<DisplayCheckResult> RunAsync(
         string exe, Func<ProcessSpec, IConsoleProcess> start, CancellationToken ct, string arguments = "")
     {
@@ -86,7 +68,6 @@ public static class DisplayCheck
         return Result(pass && !notUsed, message, whatToDo, output) with { NotUsed = notUsed };
     }
 
-    /// <summary>Ends the check and waits a moment for it to let go of the display.</summary>
     private static async Task KillAsync(IConsoleProcess process)
     {
         process.Kill();
@@ -107,8 +88,6 @@ public static class DisplayCheck
         return new DisplayCheckResult(pass, message, whatToDo, output.ToString());
     }
 
-    /// <summary>The text after <paramref name="marker"/> in <paramref name="line"/>, trimmed; null when the line doesn't hold it.</summary>
-    /// <remarks>The marker must start a word: <c>BYPASS:</c> isn't <c>PASS:</c>.</remarks>
     private static string? After(string line, string marker)
     {
         for (var at = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);

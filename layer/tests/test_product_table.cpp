@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The built-in product table: which headset an EDID names.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
@@ -14,8 +12,6 @@
 
 namespace {
 
-// The EDID value Windows keeps for the Dream Air (HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\PVR1019\...\Device
-// Parameters\EDID): three blocks, 384 bytes, read from a real machine. It starts 00FFFFFFFFFFFF0042D21910.
 constexpr const char* kDreamAirEdidHex =
     "00FFFFFFFFFFFF0042D2191001000000FF230104A50000780030FDAE503BB2230C474A00000001010101010101010101"
     "010101010101000000100000000000000000000000000000000000100000000000000000000000000000000000FC0050"
@@ -40,7 +36,7 @@ std::vector<uint8_t> from_hex(const std::string& hex)
     return bytes;
 }
 
-} // namespace
+}
 
 TEST_CASE("dream_air_edid_found")
 {
@@ -58,7 +54,6 @@ TEST_CASE("dream_air_edid_found")
     CHECK(product->refresh_mhz == 90000);
     CHECK(std::string(product->name) == "Pimax Dream Air");
 
-    // It is the table's entry: kDreamAir itself, with a name that lives as long as the process.
     CHECK(product->name == nvdm::kDreamAir.name);
     CHECK(nvdm::kDreamAir.pnp_vendor == 0x42d2);
     CHECK(nvdm::kDreamAir.pnp_product == 0x1019);
@@ -76,7 +71,6 @@ TEST_CASE("the base block alone is enough")
 TEST_CASE("unknown_product_rejected")
 {
     CHECK_FALSE(nvdm::find_product(nvdm::FakeApi::make_edid(0x42d2, 0x1020)).has_value());
-    // The product code alone is not the key: another manufacturer's 0x1019 is not a Dream Air.
     CHECK_FALSE(nvdm::find_product(nvdm::FakeApi::make_edid(0x4c2d, 0x1019)).has_value());
 }
 

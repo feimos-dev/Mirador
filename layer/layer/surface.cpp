@@ -31,7 +31,6 @@ T& as(VkBaseOutStructure* s)
     return *reinterpret_cast<T*>(s);
 }
 
-// A two-call list inside an output struct (count and pointer members).
 void list_modes(uint32_t& count, VkPresentModeKHR* out, std::optional<VkPresentModeKHR> mode)
 {
     const uint32_t total = mode ? 1 : 0;
@@ -50,7 +49,6 @@ struct SurfaceRegistry {
     std::unordered_map<const void*, std::unique_ptr<SurfaceRecord>> records;
 };
 
-// Made at first use and never destroyed.
 SurfaceRegistry& registry()
 {
     static SurfaceRegistry* const r = new SurfaceRegistry;
@@ -62,7 +60,7 @@ const void* key(VkSurfaceKHR surface)
     return reinterpret_cast<const void*>(surface);
 }
 
-} // namespace
+}
 
 VkSurfaceCapabilitiesKHR surface_capabilities(const SurfaceSpec& spec)
 {
@@ -144,7 +142,7 @@ void fill_surface_capabilities_chain(void* next, const SurfaceSpec& spec, std::o
             break;
         }
         default:
-            break; // not known to the layer: left as the application set it
+            break;
         }
     }
 }
@@ -269,4 +267,4 @@ std::unique_ptr<SurfaceRecord> remove_surface(VkSurfaceKHR surface)
     return record;
 }
 
-} // namespace dvl
+}

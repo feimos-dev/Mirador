@@ -2,15 +2,8 @@ using Mirador.Core.Monado;
 
 namespace Mirador.Core.Profiles;
 
-/// <summary>What is wrong with a profile before it is saved, in words for the editor.</summary>
 public static class ProfileValidation
 {
-    /// <summary>
-    /// The profile's problems, empty when it can be saved: a name, a Monado build that can be found (a folder build is
-    /// checked through <paramref name="locator"/>; a branch's link, ref and CMake options must be ones Mirador builds), extra variables with names that are set, have no <c>=</c> and appear
-    /// once (ignoring case, as Windows does); then whatever <paramref name="moduleProblem"/> finds (none of Mirador's
-    /// modules has one now).
-    /// </summary>
     public static IReadOnlyList<string> Problems(Profile p, MonadoLocator locator, Func<Profile, string?> moduleProblem)
     {
         var problems = new List<string>();
@@ -37,7 +30,6 @@ public static class ProfileValidation
         }
         else if (p.Monado.Kind == SourceKind.Branch && BranchLink.Problem(p.Monado) is { } branchProblem)
         {
-            // A branch not built yet is no problem: the profile is saved, then built (its Start says it isn't yet).
             problems.Add(branchProblem);
         }
 

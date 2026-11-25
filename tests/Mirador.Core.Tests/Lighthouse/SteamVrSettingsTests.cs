@@ -25,7 +25,6 @@ public sealed class SteamVrSettingsTests : IDisposable
         System.IO.File.WriteAllText(File, text);
     }
 
-    /// <summary>A file as SteamVR writes one: several sections, numbers, arrays, nested objects.</summary>
     private const string Typical = """
         {
            "dashboard" : {
@@ -67,7 +66,6 @@ public sealed class SteamVrSettingsTests : IDisposable
         Write(Typical);
         Assert.Null(Settings().AutoLaunchOnButton());
 
-        // Only the power section's key counts.
         Write("""{ "steamvr" : { "autoLaunchSteamVROnButtonPress" : false } }""");
         Assert.Null(Settings().AutoLaunchOnButton());
     }
@@ -130,13 +128,11 @@ public sealed class SteamVrSettingsTests : IDisposable
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(Typical), JsonNode.Parse(System.IO.File.ReadAllText(File))));
         Assert.Null(Settings().AutoLaunchOnButton());
 
-        // A power section made only for the key goes with it.
         Write("""{ "steamvr" : {} }""");
         Settings().SetAutoLaunchOnButton(false);
         Settings().SetAutoLaunchOnButton(null);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{ "steamvr" : {} }"""), JsonNode.Parse(System.IO.File.ReadAllText(File))));
 
-        // A value that was there before goes back as it was.
         Write("""{ "power" : { "autoLaunchSteamVROnButtonPress" : true } }""");
         Settings().SetAutoLaunchOnButton(false);
         Settings().SetAutoLaunchOnButton(true);
@@ -153,7 +149,6 @@ public sealed class SteamVrSettingsTests : IDisposable
         var backup = Path.Combine(BackupDir, "steamvr.vrsettings.mirador-" + time.GetLocalNow().ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(Typical, System.IO.File.ReadAllText(backup));
 
-        // A second change in the same second keeps that first copy.
         Settings().SetAutoLaunchOnButton(null);
         Assert.Equal(Typical, System.IO.File.ReadAllText(backup));
         Assert.Single(Directory.GetFiles(BackupDir));

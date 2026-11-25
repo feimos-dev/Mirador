@@ -2,20 +2,8 @@ using System.Text.RegularExpressions;
 
 namespace Mirador.Core.Profiles;
 
-/// <summary>
-/// The link an owner pastes for a branch profile, and the checks that keep its URL, ref and
-/// options from becoming anything but a clone of a public repository over HTTPS: no local path, no other protocol,
-/// nothing git or CMake would read as an option of their own.
-/// </summary>
 public static partial class BranchLink
 {
-    /// <summary>
-    /// A repository and ref from a pasted link: a repository URL (the ref then <c>main</c>), a GitLab or GitHub branch
-    /// page (<c>…/-/tree/&lt;branch&gt;</c>, <c>…/tree/&lt;branch&gt;</c>), a GitLab merge request
-    /// (<c>…/-/merge_requests/&lt;n&gt;</c>, built from <c>refs/merge-requests/&lt;n&gt;/head</c>) or a GitHub pull
-    /// request (<c>…/pull/&lt;n&gt;</c>, from <c>refs/pull/&lt;n&gt;/head</c>).
-    /// </summary>
-    /// <exception cref="MiradorException">The link is none of these; the message says what is accepted.</exception>
     public static (string Url, string Ref) Parse(string link)
     {
         var text = (link ?? "").Trim();
@@ -39,7 +27,6 @@ public static partial class BranchLink
             (repoPath, gitRef) = (tree.Groups[1].Value, Uri.UnescapeDataString(tree.Groups[2].Value));
         }
         else if (!path.Contains("/-/", StringComparison.Ordinal) && path.Count(c => c == '/') >= 1
-            // On GitHub a repository is owner/name; anything longer is another of its pages (a commit, a file, releases).
             && !(uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) && path.Count(c => c == '/') != 1))
         {
             (repoPath, gitRef) = (path, BuildSource.UpstreamRef);
@@ -59,10 +46,6 @@ public static partial class BranchLink
         return problem is null ? (url, gitRef) : throw new MiradorException(problem);
     }
 
-    /// <summary>
-    /// Whether <paramref name="link"/> names what to build itself: a merge request, a pull request, a commit or a branch
-    /// page. A repository's own link doesn't, so the Profiles page offers its branches; so does anything that isn't a link.
-    /// </summary>
     public static bool NamesItsBranch(string? link)
     {
         if (!Uri.TryCreate((link ?? "").Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
@@ -74,7 +57,6 @@ public static partial class BranchLink
         return MergeRequest().IsMatch(path) || PullRequest().IsMatch(path) || Commit().IsMatch(path) || Tree().IsMatch(path);
     }
 
-    /// <summary>Null when <paramref name="url"/> is an HTTPS repository URL Mirador may clone; else why not.</summary>
     public static string? UrlProblem(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))
@@ -91,10 +73,6 @@ public static partial class BranchLink
         return null;
     }
 
-    /// <summary>
-    /// Null when <paramref name="gitRef"/> is a branch or ref git accepts and can't take for an option (no leading
-    /// <c>-</c>); else why not. The rules are git's own (<c>git check-ref-format</c>), a little stricter.
-    /// </summary>
     public static string? RefProblem(string? gitRef)
     {
         if (string.IsNullOrWhiteSpace(gitRef))
@@ -113,10 +91,6 @@ public static partial class BranchLink
         return null;
     }
 
-    /// <summary>
-    /// Null when every option is a CMake cache setting (<c>-DNAME=value</c> or <c>-DNAME:TYPE=value</c>); else why not.
-    /// Other options (<c>-C</c> loads a script, <c>-G</c> changes the generator) are refused: the recipe sets those.
-    /// </summary>
     public static string? OptionsProblem(IEnumerable<string>? options)
     {
         foreach (var option in options ?? [])
@@ -130,11 +104,9 @@ public static partial class BranchLink
         return null;
     }
 
-    /// <summary>The options typed one per line or separated by spaces, each kept whole.</summary>
     public static IReadOnlyList<string> SplitOptions(string text) =>
         (text ?? "").Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    /// <summary>The problems of a branch source, or null when it can be built.</summary>
     public static string? Problem(BuildSource source) =>
         UrlProblem(source.Url) ?? RefProblem(source.Ref) ?? OptionsProblem(source.Options);
 

@@ -8,13 +8,6 @@ using Mirador.Ipc;
 
 namespace Mirador.DirectMode;
 
-/// <summary>What the NVIDIA direct-mode layer needs from the rest of Mirador.</summary>
-/// <param name="BundledLayerDir">The layer that comes with Mirador (<c>{app}\layer</c>).</param>
-/// <param name="StartConsole">Starts the display check (<see cref="ConsoleProcess.Start"/>).</param>
-/// <param name="State">What Mirador remembers about direct mode.</param>
-/// <param name="NvidiaWindowsVersion">The NVIDIA driver's Windows version (<see cref="NvidiaDriver.CurrentWindowsVersion"/>); null without an NVIDIA GPU.</param>
-/// <param name="Monitors">The monitors Windows lists (<see cref="HeadsetMonitor.List"/>), to see the headset on the desktop; null: not looked at.</param>
-/// <param name="MonadoRuns">Whether Monado runs now; the headset on the desktop is only a problem while it doesn't. Null: it doesn't.</param>
 public sealed record NvidiaDirectModeDeps(
     string BundledLayerDir,
     Func<ProcessSpec, IConsoleProcess> StartConsole,
@@ -23,20 +16,14 @@ public sealed record NvidiaDirectModeDeps(
     Func<IReadOnlyList<MonitorEntry>>? Monitors = null,
     Func<bool>? MonadoRuns = null);
 
-/// <summary>
-/// NVIDIA direct mode through Mirador's layer: checks the GPU and the layer, has the helper register the layer, checks
-/// direct mode again when the driver changed, and gives Monado the layer's variables.
-/// </summary>
 public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
 {
-    /// <summary>The EDID vendors of the headsets the layer drives (its product table).</summary>
     private static readonly string[] Vendors = ["PVR"];
 
     public DirectModeKind Kind => DirectModeKind.Nvidia;
 
     public string DisplayName => "NVIDIA";
 
-    /// <summary>Where the last display check's output is kept, for the diagnostics.</summary>
     public static string DisplayCheckFile(AppPaths paths) => Path.Combine(paths.LogsDir, "display-check.txt");
 
     public Task<IReadOnlyList<CheckResult>> CheckAsync(ModuleContext ctx, CancellationToken ct) =>
@@ -62,10 +49,6 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
         return reply.Ok ? null : reply.Error ?? "Mirador's helper service couldn't change the Vulkan layers.";
     }
 
-    /// <summary>
-    /// Registers the layer (again: profiles are per Windows user, the registration per machine, so another user may have
-    /// taken it out), checks direct mode when the driver changed, and gives Monado the layer's variables.
-    /// </summary>
     public async Task<ModuleSession> BeforeStartAsync(ModuleContext ctx, IProgress<string> progress, CancellationToken ct)
     {
         var layer = DirectModeLayer.Locate(deps.BundledLayerDir);
@@ -79,7 +62,6 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
         return new DirectModeSession(DirectModeLayer.Environment(deps.BundledLayerDir), notUsed, ctx.Time);
     }
 
-    /// <summary>Runs the display check. A pass records the driver as good, so the next Start doesn't check again.</summary>
     public async Task<CheckResult> CheckDisplayAsync(ModuleContext ctx, CancellationToken ct)
     {
         const string Label = "Display check";
@@ -111,7 +93,6 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
                     : message);
     }
 
-    /// <summary>Runs <c>mirador-display-check --enable-direct-mode</c>, then looks whether the headset left the desktop.</summary>
     public async Task<string?> FixAsync(ModuleContext ctx, CancellationToken ct)
     {
         LayerFiles layer;
@@ -176,11 +157,6 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
         }
     }
 
-    /// <summary>
-    /// Whether the headset is listed among the desktop's monitors while Monado doesn't run: direct mode is off for it
-    /// (its own software or SteamVR handed it back to Windows). A list that can't be read counts as no, and so does a PC
-    /// where Fix direct mode can't help: without an NVIDIA GPU or Mirador's layer (their own checks say so).
-    /// </summary>
     private bool HeadsetShowsAsMonitor() =>
         deps.Monitors is { } monitors
         && Safe(() => deps.MonadoRuns?.Invoke() ?? false) is not true
@@ -191,11 +167,9 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
     private static bool OnDesktop(IReadOnlyList<MonitorEntry> monitors) =>
         Vendors.Any(vendor => HeadsetMonitor.HeadsetOnDesktop(monitors, vendor));
 
-    /// <summary>NVIDIA's version of the driver, or Windows' when Mirador can't read it; null without an NVIDIA GPU.</summary>
     private string? DriverNow() =>
         deps.NvidiaWindowsVersion() is { } windows ? NvidiaDriver.FromWindowsVersion(windows) ?? windows : null;
 
-    /// <summary>Keeps the driver direct mode last passed with; a failure to save only costs a display check next time.</summary>
     private void RememberDriver(string? driver)
     {
         try
@@ -207,7 +181,6 @@ public sealed class NvidiaDirectMode(NvidiaDirectModeDeps deps) : IDirectMode
         }
     }
 
-    /// <summary>The saved state; an empty one when the file can't be read now.</summary>
     private DirectModeState LoadState()
     {
         try

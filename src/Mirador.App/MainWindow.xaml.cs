@@ -13,7 +13,6 @@ namespace Mirador.App;
 
 public sealed partial class MainWindow : Window
 {
-    /// <summary>Whether the pane shows the Eye tracking page, empty until calibration exists.</summary>
     private static readonly bool ShowsEyeTracking = false;
 
     private static readonly Dictionary<string, Type> PagesByTag = new()
@@ -28,7 +27,6 @@ public sealed partial class MainWindow : Window
         ["Settings"] = typeof(SettingsPage),
     };
 
-    /// <summary>The pane's items: the pages, then App settings at the foot.</summary>
     private IEnumerable<NavigationViewItem> PaneItems =>
         NavView.MenuItems.Concat(NavView.FooterMenuItems).OfType<NavigationViewItem>();
 
@@ -39,7 +37,6 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Mirador.ico"));
 
-        // The icon left of the title, decoded at the title bar's 16 px times the display's scale so it stays sharp.
         AppTitleBar.IconSource = new ImageIconSource
         {
             ImageSource = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "Mirador.png")))
@@ -49,7 +46,6 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        // AppWindow sizes are in physical pixels: scale the size meant at 100 % to the window's display.
         var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var scale = GetDpiForWindow(handle) / 96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1100 * scale), (int)(760 * scale)));
@@ -73,11 +69,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// The first run's question: where the profiles' Monado comes from, Mirador's Monado
-    /// first. The answer goes into every first-run profile and is saved, so it is asked once; building from a link or
-    /// picking a build folder continues on the Profiles page.
-    /// </summary>
     private async Task AskWhereMonadoComesFromAsync()
     {
         var bundled = true;
@@ -129,7 +120,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>The smallest window at 100 % scale: every page still fits next to the open pane.</summary>
     private const int MinimumWidth = 760;
 
     private const int MinimumHeight = 500;
@@ -140,14 +130,11 @@ public sealed partial class MainWindow : Window
 
     private readonly EndSession endSession;
 
-    /// <summary>Whether the window is on screen (not hidden in the tray).</summary>
     public bool IsShown => AppWindow.IsVisible;
 
-    /// <summary>Whether the window is shown and the one the user works in.</summary>
     public bool IsInForeground =>
         AppWindow.IsVisible && GetForegroundWindow() == WinRT.Interop.WindowNative.GetWindowHandle(this);
 
-    /// <summary>The window's content once it has loaded (a window started hidden hasn't), for a dialog's XamlRoot.</summary>
     public Task<FrameworkElement> LoadedRootAsync()
     {
         var root = (FrameworkElement)Content;
@@ -167,7 +154,6 @@ public sealed partial class MainWindow : Window
         return loaded.Task;
     }
 
-    /// <summary>Brings the window back from the tray (or from being minimized) and to the front.</summary>
     public void ShowAndActivate()
     {
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
@@ -178,12 +164,9 @@ public sealed partial class MainWindow : Window
         AppWindow.Show();
         Activate();
 
-        // Activate() alone leaves a window that is shown but behind others where it is; the tray icon's click, or the
-        // pipe's SHOW from a second Mirador, gives this process the right to take the foreground.
         SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
     }
 
-    /// <summary>When the window last lost the focus: a click on the tray icon deactivates it before Mirador hears of the click.</summary>
     private long deactivatedAt = Stopwatch.GetTimestamp() - Stopwatch.Frequency * 60;
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
@@ -198,7 +181,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>A left click on the tray icon: hides the window when it is in front, else brings it to the front.</summary>
     public void ToggleFromTray()
     {
         var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
@@ -213,11 +195,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// Shows the window on the taskbar, minimized, without taking focus (a start at sign-in). It is shown first, not
-    /// activated, and minimized once its content has loaded: WinUI crashes (a stowed COMException from
-    /// Microsoft.ui.xaml.dll) when a window that has never been laid out is minimized.
-    /// </summary>
+    // Shown first and minimized only once its content has loaded: WinUI crashes when a window that was never laid
+    // out is minimized.
     public async void ShowMinimized()
     {
         try
@@ -241,11 +220,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// Makes the open pane as wide as its widest label needs: where the label starts in the pane, plus the label's
-    /// whole width, plus the room the item keeps after its label (padding, margins). Closed, the pane still shows the
-    /// icons alone. False while the pane is closed or its items aren't laid out yet.
-    /// </summary>
     private bool FitPaneToLabels()
     {
         if (!NavView.IsPaneOpen)
@@ -266,7 +240,6 @@ public sealed partial class MainWindow : Window
                 return false;
             }
 
-            // A label in a narrow pane is cut short, so measure the same text on its own.
             var whole = new TextBlock
             {
                 Text = text,
@@ -278,7 +251,6 @@ public sealed partial class MainWindow : Window
             };
             whole.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
 
-            // The label's room ends where its layout slot does; the pane goes on past that by the item's padding.
             var slot = LayoutInformation.GetLayoutSlot(label);
             var toPane = holder.TransformToVisual(NavView);
             var start = toPane.TransformPoint(new Windows.Foundation.Point(slot.Left, 0)).X;
@@ -296,7 +268,6 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    /// <summary>The text block an item shows its label in (the icon is a text block too, with the glyph).</summary>
     private static TextBlock? FindLabel(DependencyObject parent, string text)
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -316,13 +287,11 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    /// <summary>Shows the page with <paramref name="tag"/> (Home, Profiles, …).</summary>
     public void Navigate(string tag)
     {
         NavView.SelectedItem = PaneItems.FirstOrDefault(i => (string)i.Tag == tag);
     }
 
-    /// <summary>Closing hides the window when Mirador stays in the tray; otherwise it quits, asking first while Monado runs.</summary>
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (App.Current.ClosingForGood)
@@ -341,7 +310,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Minimized, the window goes to the tray when App settings say so.</summary>
     private void OnWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (args.DidPresenterChange && sender.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized }

@@ -2,16 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Mirador.Core.Profiles;
 
-/// <summary>
-/// All profiles and which one is selected. Never changed in place: every method returns a new set.
-/// New profiles go at the end; names are trimmed and must be unique (ignoring case).
-/// </summary>
 public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string SelectedId)
 {
-    /// <summary>
-    /// The first-run set: one profile, "Default", on the bundled Monado with no headset type. A headset's profile starts as
-    /// a copy of it with the headset picked.
-    /// </summary>
     public static ProfileSet Defaults() => new(
         [new Profile("default", "Default", null, BuildSource.Mirador, [], new Dictionary<string, string>())],
         "default");
@@ -25,7 +17,6 @@ public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string Selected
         return this with { SelectedId = id };
     }
 
-    /// <summary>Adds <paramref name="p"/> at the end. Its id must be new.</summary>
     public ProfileSet Add(Profile p)
     {
         if (string.IsNullOrEmpty(p.Id) || Profiles.Any(x => x.Id == p.Id))
@@ -36,7 +27,6 @@ public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string Selected
         return this with { Profiles = [.. Profiles, p with { Name = CheckName(p.Name, exceptId: null) }] };
     }
 
-    /// <summary>Adds a copy of profile <paramref name="id"/> at the end, with a new id and the name <paramref name="newName"/>.</summary>
     public ProfileSet Duplicate(string id, string newName)
     {
         var source = Find(id);
@@ -52,7 +42,6 @@ public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string Selected
 
     public ProfileSet Rename(string id, string name) => Replace(Find(id) with { Name = name });
 
-    /// <summary>Removes a profile. The last one cannot go; if the selected one goes, the first remaining one is selected.</summary>
     public ProfileSet Delete(string id)
     {
         Find(id);
@@ -65,7 +54,6 @@ public sealed record ProfileSet(IReadOnlyList<Profile> Profiles, string Selected
         return this with { Profiles = rest, SelectedId = SelectedId == id ? rest[0].Id : SelectedId };
     }
 
-    /// <summary>Swaps in <paramref name="p"/> for the profile with the same id, keeping its place in the list.</summary>
     public ProfileSet Replace(Profile p)
     {
         Find(p.Id);

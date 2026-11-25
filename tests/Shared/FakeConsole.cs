@@ -5,7 +5,6 @@ using Mirador.Core.Monado;
 
 namespace Mirador.Tests;
 
-/// <summary>A console program that writes the lines it is given and ends when told to.</summary>
 internal sealed class FakeConsole : IConsoleProcess
 {
     private readonly object gate = new();
@@ -14,10 +13,8 @@ internal sealed class FakeConsole : IConsoleProcess
     private Action<string>? listeners;
     private List<string>? early = [];
 
-    /// <summary>The lines to write at once, before any handler is added (they are replayed to the first).</summary>
     public FakeConsole(params string[] firstLines) => early = [.. firstLines];
 
-    /// <summary>Lines written when the program reads the empty line, then it ends with this exit code; null: it doesn't end.</summary>
     public string[] LinesAtEnter { get; set; } = [];
 
     public int? ExitCodeAtEnter { get; set; } = 0;
@@ -103,7 +100,6 @@ internal sealed class FakeConsole : IConsoleProcess
     public void Dispose() => Disposed = true;
 }
 
-/// <summary>Starts <see cref="FakeConsole"/>s, recording what it was asked to run.</summary>
 internal sealed class FakeConsoleStarter(Func<ProcessSpec, FakeConsole> make)
 {
     public List<ProcessSpec> Specs { get; } = [];

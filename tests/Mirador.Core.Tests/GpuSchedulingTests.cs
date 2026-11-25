@@ -7,7 +7,6 @@ public class GpuSchedulingTests
     [Fact]
     public void On_when_every_adapter_that_offers_it_has_it_on()
     {
-        // Windows' basic display adapter never offers it: only the GPUs that do count.
         Assert.Equal(GpuSchedulingState.On, GpuScheduling.StateOf([new(Supported: true, Enabled: true), new(Supported: false, Enabled: false)]));
     }
 
@@ -46,7 +45,6 @@ public class GpuSchedulingTests
     [Trait("Category", "Hardware")]
     public void This_pcs_adapters_can_be_asked()
     {
-        // A real PC: an RTX 5070 Ti with it on.
         Assert.NotEmpty(GpuScheduling.Query());
         Assert.Equal(GpuSchedulingState.On, GpuScheduling.Now());
     }

@@ -12,10 +12,6 @@ public sealed class RoomSetupExportTests : IDisposable
     private static readonly DateTimeOffset Taken = new(2026, 11, 18, 9, 30, 0, TimeSpan.Zero);
     private static readonly MonadoPose Lifted = MonadoPose.Identity with { Y = 0.1f };
 
-    /// <summary>
-    /// One space with SteamVR's room setup (30, not at the origin and turned): steamvr_lh uses it now. The space in use
-    /// is listed first, without one.
-    /// </summary>
     private const string Vrchap = """
         {
            "jsonid" : "chaperone_info",
@@ -49,7 +45,6 @@ public sealed class RoomSetupExportTests : IDisposable
 
     public void Dispose() => steam.Dispose();
 
-    /// <summary>A libmonado connection with the steamvr_lh origin, recording the offset set.</summary>
     private sealed class LighthouseClient : IMonadoClient
     {
         public MonadoPose? Set { get; private set; }
@@ -89,7 +84,6 @@ public sealed class RoomSetupExportTests : IDisposable
         Assert.Equal("Mirador can't tell which Lighthouse space is in use, so it can't export.", RoomSetupExport.Refusal(false, false, steam.Path, null, store));
         Assert.Equal("Mirador has no room setup of this space for SteamVR's Lighthouse tracking. Set it up first.", Refusal());
 
-        // Another origin's setup, or another space's, isn't this one.
         store.Set(new RoomSetup("Pimax", Universe, Lifted, Taken));
         store.Set(new RoomSetup(Origin, "30", Lifted, Taken));
         Assert.Equal("Mirador has no room setup of this space for SteamVR's Lighthouse tracking. Set it up first.", Refusal());
@@ -103,7 +97,6 @@ public sealed class RoomSetupExportTests : IDisposable
 
         RoomSetupExport.Run(steam.Path, steam.File("backups"), Universe, store, TimeProvider.System);
 
-        // The space now holds what was in use: Mirador's offset on top of 30's room setup.
         var placed = Placed(Universe);
         var expected = RoomSetupMath.Transform(Lifted, SteamVrRoom.ChaperonePose([0.25f, -1.5f, 0.125f], 1));
         Assert.Equal(expected.X, placed.X, 1e-4f);
@@ -111,7 +104,6 @@ public sealed class RoomSetupExportTests : IDisposable
         Assert.Equal(expected.Z, placed.Z, 1e-4f);
         Assert.Equal(1, MathF.Abs((expected.Qy * placed.Qy) + (expected.Qw * placed.Qw)), 1e-4f);
 
-        // This space now gets no offset from Mirador; the setup taken without a space stays for the others.
         Assert.Equal(new RoomSetup(Origin, null, Lifted, Taken), store.Get(Origin, null));
         var client = new LighthouseClient();
         Assert.Equal(1, RoomSetupApplier.Apply(client, store, Universe));
@@ -133,14 +125,12 @@ public sealed class RoomSetupExportTests : IDisposable
         RoomSetupApplier.Apply(client, store, Universe);
         Assert.Equal(MonadoPose.Identity, client.Set);
 
-        // Exporting again writes nothing more on top.
         var once = Placed(Universe);
         RoomSetupExport.Run(steam.Path, steam.File("backups"), Universe, store, TimeProvider.System);
         Assert.Equal(once.Y, Placed(Universe).Y, 1e-5f);
         Assert.Equal(once.X, Placed(Universe).X, 1e-5f);
     }
 
-    /// <summary>Where steamvr_lh's chaperone for <paramref name="universe"/> puts a device at the driver's origin.</summary>
     private MonadoPose Placed(string universe)
     {
         var (translation, yaw) = SteamVrRoom.Standing(File.ReadAllText(SteamVrRoom.ChaperoneInfoPath(steam.Path)), universe)!.Value;
@@ -160,7 +150,6 @@ public sealed class RoomSetupExportTests : IDisposable
     [Fact]
     public void A_setup_taken_on_another_steamvr_room_setup_isnt_exported()
     {
-        // Measured while 30's room setup was still at the origin; SteamVR's Room Setup has moved it since.
         store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0, 0, 0, 0)));
 
         Assert.Equal(
@@ -170,7 +159,6 @@ public sealed class RoomSetupExportTests : IDisposable
         store.Set(new RoomSetup(Origin, Universe, Lifted, Taken, new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1)));
         Assert.Null(Refusal());
 
-        // A setup without a base is exported as it is.
         store.Set(new RoomSetup(Origin, Universe, Lifted, Taken));
         Assert.Null(Refusal());
     }

@@ -2,17 +2,10 @@ using System.Numerics;
 
 namespace Mirador.Core.Xr;
 
-/// <summary>A rectangle of the Windows desktop in pixels: a monitor, or the whole virtual desktop.</summary>
 public readonly record struct DesktopRect(int Left, int Top, int Width, int Height);
 
-/// <summary>The arithmetic of the dashboard's desktop panel: where a laser meets it, and where that is on the desktop.</summary>
 public static class DesktopMaths
 {
-    /// <summary>
-    /// Where the ray from <paramref name="start"/> through <paramref name="end"/> meets a flat panel, as fractions of
-    /// its width and height from its top left corner; null when the ray runs along the panel, points away from it or
-    /// misses it. The panel is given by its centre and the directions of its right and top edges (unit length).
-    /// </summary>
     public static (float U, float V)? PanelPoint(Vector3 start, Vector3 end, Vector3 centre, Vector3 right, Vector3 up, float width, float height)
     {
         var direction = end - start;
@@ -35,10 +28,6 @@ public static class DesktopMaths
         return u is < 0 or > 1 || v is < 0 or > 1 ? null : (u, v);
     }
 
-    /// <summary>
-    /// The point (<paramref name="u"/>, <paramref name="v"/>) of <paramref name="monitor"/> as Windows takes an
-    /// absolute mouse position over the whole virtual desktop: 0 to 65535 along each side of <paramref name="all"/>.
-    /// </summary>
     public static (int X, int Y) Absolute(float u, float v, DesktopRect monitor, DesktopRect all)
     {
         var x = monitor.Left + (Math.Clamp(u, 0, 1) * (monitor.Width - 1));

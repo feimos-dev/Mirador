@@ -24,7 +24,6 @@ public sealed class RoomSetupRunTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
-    /// <summary>A libmonado connection with a headset and a controller in origin 0; empty once Monado has stopped.</summary>
     private sealed class Client : IMonadoClient
     {
         public bool Stopped { get; set; }
@@ -56,7 +55,6 @@ public sealed class RoomSetupRunTests : IDisposable
         }
     }
 
-    /// <summary>The session as the step sees it: Monado's connection, how it was started, and starting it again.</summary>
     private sealed class Monado : IRoomSetupSession
     {
         public Client Client { get; } = new();
@@ -95,7 +93,6 @@ public sealed class RoomSetupRunTests : IDisposable
             return Task.FromResult(StartAnswer);
         }
 
-        /// <summary>What "exit on disconnect" does when the measuring program closes.</summary>
         public void StopWithTheClient()
         {
             if (ExitOnDisconnect)
@@ -104,7 +101,6 @@ public sealed class RoomSetupRunTests : IDisposable
             }
         }
 
-        /// <summary>Monado ends, as the session reports it.</summary>
         public void Stop(SessionEnd end)
         {
             Client.Stopped = true;
@@ -144,7 +140,6 @@ public sealed class RoomSetupRunTests : IDisposable
         Assert.Equal(0.07f, store.Get("steamvr_lh", "1500000001")!.Offset.Y, 1e-4f);
         Assert.Equal(0, monado.Starts);
 
-        // Kept with the SteamVR room setup it was measured on.
         Assert.Equal(new SteamVrBase("30", 0.25f, -1.5f, 0.125f, 1), store.Get("steamvr_lh", "1500000001")!.Base);
     }
 
@@ -169,7 +164,6 @@ public sealed class RoomSetupRunTests : IDisposable
         monado.ExitOnDisconnect = true;
         Answer(Measured, 0);
 
-        // The start sets the kept setup.
         Assert.Equal(new RoomStepOutcome("The floor is set.", RoomStepLevel.Success), await Step(RoomStep.Floor));
         Assert.Equal(1, monado.Starts);
         Assert.Equal(0.07f, store.Get("steamvr_lh", "1500000001")!.Offset.Y, 1e-4f);
@@ -216,13 +210,11 @@ public sealed class RoomSetupRunTests : IDisposable
     [Fact]
     public async Task A_failure_that_didnt_stop_monado_starts_nothing()
     {
-        // Without exit on disconnect.
         monado.Current = monado.Client;
         Answer(NoHands, 0);
         Assert.Equal(RoomStepLevel.Error, (await Step(RoomStep.Floor)).Level);
         Assert.Equal(0, monado.Starts);
 
-        // With it, but the measuring program never reached Monado: Monado still runs after the wait.
         monado.ExitOnDisconnect = true;
         runner.Effect = null;
         runner.Answer = _ => (["XR-POSES-FAIL xrCreateInstance failed: XR_ERROR_RUNTIME_UNAVAILABLE"], 1);
@@ -234,7 +226,6 @@ public sealed class RoomSetupRunTests : IDisposable
     [Fact]
     public async Task Nothing_set_is_not_reported_as_set()
     {
-        // Monado closes between the measurement and the offset (no exit on disconnect): the connection gives no origins.
         monado.Current = monado.Client;
         runner.Answer = _ => ([Measured], 0);
         runner.Effect = (_, _) =>
@@ -271,7 +262,6 @@ public sealed class RoomSetupRunTests : IDisposable
     [InlineData("The headset's display didn't come up.", true)]
     public async Task A_stop_the_measuring_program_didnt_cause_starts_nothing(string message, bool problem)
     {
-        // The user's Stop on Home or the tray, Monado ending by itself, or Mirador stopping it for a problem.
         monado.Current = monado.Client;
         monado.ExitOnDisconnect = true;
         runner.Answer = _ => ([Measured], 0);
@@ -285,7 +275,6 @@ public sealed class RoomSetupRunTests : IDisposable
             new RoomStepOutcome("The floor is measured and kept; Monado stopped, so it is set when Monado next starts.", RoomStepLevel.Warning),
             await Step(RoomStep.Floor));
 
-        // A failed measurement as well.
         monado.Current = monado.Client;
         monado.Client.Stopped = false;
         runner.Answer = _ => (["XR-POSES-FAIL no poses within 30 s (after 3 frames)"], 1);

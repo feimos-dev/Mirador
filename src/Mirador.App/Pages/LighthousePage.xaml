@@ -8,10 +8,6 @@
     NavigationCacheMode="Required">
 
     <Page.Resources>
-        <!--
-            A card's command: an icon button without a frame until it is pointed at, and without one when it is greyed
-            (WinUI's subtle button: Identify while the station isn't on shows only its greyed glyph).
-        -->
         <Style
             x:Key="CardCommand"
             BasedOn="{StaticResource SubtleButtonStyle}"
@@ -76,10 +72,6 @@
                 </StackPanel>
             </Grid>
 
-            <!--
-                Each station a card like a settings card: its check box where a card has its icon, the name with the
-                address and what it is doing under it, then Identify and its menu.
-            -->
             <ItemsControl ItemsSource="{x:Bind ViewModel.Stations}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -116,7 +108,6 @@
                                         Text="{x:Bind StateLine, Mode=OneWay}"
                                         TextWrapping="Wrap" />
                                 </StackPanel>
-                                <!-- The tooltip is on a holder: a disabled button shows none of its own. -->
                                 <Grid
                                     Grid.Column="2"
                                     VerticalAlignment="Center"
@@ -153,10 +144,6 @@
                 TextWrapping="Wrap"
                 Visibility="{x:Bind ViewModel.HasNoStations, Mode=OneWay}" />
 
-            <!--
-                Room setup: two steps, each measured by Mirador's small OpenXR program against the running Monado. Why
-                they can't be used shows under the header; how the last one went, in the bar.
-            -->
             <TextBlock Style="{StaticResource SectionHeader}" Text="Room setup" />
             <TextBlock
                 Margin="1,0,0,4"
@@ -206,7 +193,6 @@
                     IsEnabled="{x:Bind ViewModel.CanExport, Mode=OneWay}" />
             </toolkit:SettingsCard>
 
-            <!-- Saved at once, as App settings are; what went wrong shows right here, by the switch that was flipped. -->
             <TextBlock Style="{StaticResource SectionHeader}" Text="Settings" />
             <InfoBar
                 IsClosable="False"

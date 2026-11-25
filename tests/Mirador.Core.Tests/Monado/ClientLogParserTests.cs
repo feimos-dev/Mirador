@@ -27,12 +27,12 @@ public class ClientLogParserTests
     {
         var p = new ClientLogParser();
 
-        Assert.False(p.Feed(Connected(1))); // not named yet
+        Assert.False(p.Feed(Connected(1)));
         Assert.True(p.Feed(Named("HelloXR")));
         Assert.False(p.Feed(" INFO [something_else] unrelated"));
         Assert.False(p.Feed(""));
         Assert.True(p.Feed(Disconnected(1)));
-        Assert.False(p.Feed(Disconnected(1))); // already gone
+        Assert.False(p.Feed(Disconnected(1)));
     }
 
     [Fact]
@@ -63,8 +63,8 @@ public class ClientLogParserTests
         var p = new ClientLogParser();
         p.Feed(Connected(1));
         p.Feed(Connected(2));
-        p.Feed(Named("Second")); // goes to client 2
-        p.Feed(Named("First"));  // client 2 has one now, so this goes to client 1
+        p.Feed(Named("Second"));
+        p.Feed(Named("First"));
 
         Assert.Equal(["First", "Second"], p.ConnectedApps);
 
@@ -96,7 +96,7 @@ public class ClientLogParserTests
 
         p.Feed(Connected(1));
         p.Feed(Named("HelloXR"));
-        Assert.False(p.Feed(Named("Extra"))); // client 1 already has its name
+        Assert.False(p.Feed(Named("Extra")));
         Assert.Equal(["HelloXR"], p.ConnectedApps);
     }
 
@@ -139,7 +139,7 @@ public class ClientLogParserTests
         p.Feed(Connected(1));
         p.Feed(Named("Old"));
 
-        p.Feed(Connected(1)); // the disconnect line was never seen
+        p.Feed(Connected(1));
 
         Assert.Empty(p.ConnectedApps);
         p.Feed(Named("New"));

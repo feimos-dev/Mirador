@@ -16,7 +16,6 @@ public class UserEnvironmentTests
     [Fact]
     public void The_users_environment_has_what_windows_gives_every_program()
     {
-        // Windows only: the block comes from the signed-in user's profile.
         if (!OperatingSystem.IsWindows())
         {
             return;

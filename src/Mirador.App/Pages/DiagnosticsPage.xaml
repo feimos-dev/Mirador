@@ -5,10 +5,6 @@
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     NavigationCacheMode="Required">
 
-    <!--
-        The tools at the top, then the logs, one at a time, filling the rest of the window but never less than 240 high:
-        in a short window the page scrolls instead (DiagnosticsPage.FitLogs).
-    -->
     <ScrollViewer x:Name="PageScroller" SizeChanged="FitLogs">
     <Grid x:Name="PageGrid" Padding="36,24,36,24" RowSpacing="4">
         <Grid.RowDefinitions>
@@ -57,7 +53,6 @@
                     <Button Command="{x:Bind ViewModel.FixDirectModeCommand}" Content="Fix direct mode" />
                 </StackPanel>
             </toolkit:SettingsCard>
-            <!-- The newest "Verify build for Windows" result, step by step; the run's log is the Verify tab below. -->
             <toolkit:SettingsExpander
                 x:Name="VerifyExpander"
                 Description="{x:Bind ViewModel.VerifySummary, Mode=OneWay}"
@@ -74,7 +69,6 @@
             </toolkit:SettingsExpander>
         </StackPanel>
 
-        <!-- Outcomes of the buttons above: each happened once, so each can be closed. -->
         <StackPanel
             Grid.Row="2"
             SizeChanged="FitLogs"

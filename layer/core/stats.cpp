@@ -10,8 +10,6 @@
 namespace nvdm {
 namespace {
 
-// Wake times kept per window for the median. 2700 presents make about as many; a window that takes far longer keeps
-// its first ones (its maximum still sees them all).
 constexpr size_t kWakesKept = 65536;
 
 double to_ms(double ns)
@@ -40,7 +38,7 @@ double median(std::vector<int64_t> values)
     return (lower + upper) / 2.0;
 }
 
-} // namespace
+}
 
 void StatsWindow::on_present(int64_t now_ns)
 {
@@ -59,7 +57,6 @@ void StatsWindow::on_present(int64_t now_ns)
 
 void StatsWindow::on_refresh(uint32_t counter, int64_t qpc_ns)
 {
-    // The count is in the counter; its time is not needed for it.
     static_cast<void>(qpc_ns);
     if (have_counter_ && counter > counter_) {
         flips_ += counter - counter_;
@@ -131,4 +128,4 @@ void StatsWindow::close_window(int64_t now_ns)
     lines_.emplace_back(text);
 }
 
-} // namespace nvdm
+}

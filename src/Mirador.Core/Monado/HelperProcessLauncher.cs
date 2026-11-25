@@ -4,49 +4,22 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Monado;
 
-/// <summary>
-/// An <see cref="IProcessLauncher"/> that starts Monado as administrator through the helper, for a user who allowed it.
-/// It never passes the spec's program or environment: it sends <see cref="HelperCommand.StartMonadoElevated"/> with the
-/// typed settings and module it was built with. Its <see cref="IRunningProcess"/> follows the helper's log file for the
-/// session's lines, learns the exit code by polling <see cref="HelperCommand.WaitMonadoElevated"/>, and stops Monado
-/// with <see cref="HelperCommand.StopMonadoElevated"/>. When the helper refuses because SteamVR's Lighthouse driver
-/// changed since the user allowed it (<see cref="HelperRefusal.SteamVrChanged"/>), the same Start runs as the user
-/// through <paramref name="asUser"/> instead.
-/// </summary>
-/// <param name="asUser">The job launcher, which runs Monado as the user: what every Start that isn't elevated uses.</param>
 public sealed class HelperProcessLauncher(IHelperClient client, ElevatedStart start, string logPath, IProcessLauncher asUser) : IProcessLauncher
 {
-    /// <summary>
-    /// Told after each Start the helper answered either way: <c>true</c> with the helper's message (which names the
-    /// files) when SteamVR's Lighthouse driver changed since the user allowed Monado as administrator, so this Start ran
-    /// as the user; <c>false</c> when Monado started as administrator. Not told when the Start failed.
-    /// </summary>
     public Action<bool, string?>? SteamVrChecked { get; init; }
 
-    /// <summary>How often the exit is polled.</summary>
     internal TimeSpan PollInterval { get; init; } = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>How often the log file is read for new lines.</summary>
     internal TimeSpan FollowInterval { get; init; } = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>How long disposing a killed process waits for the helper to report Monado's exit.</summary>
     internal TimeSpan StopLimit { get; init; } = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// Asks the helper to start the elevated service and returns a process that follows its log and its exit. The spec
-    /// goes only to <c>asUser</c>, when SteamVR changed: the helper runs only its own bundled service, with the
-    /// environment it builds itself.
-    /// </summary>
-    /// <exception cref="MiradorException">The helper refused for any other reason, or couldn't start it (or the
-    /// Start as the user failed); the message is for the user.</exception>
     public IRunningProcess Start(ProcessSpec spec)
     {
         var reply = client.SendAsync(new HelperRequest(HelperCommand.StartMonadoElevated, start), CancellationToken.None)
             .GetAwaiter().GetResult();
         if (!reply.Ok && reply.Refusal == HelperRefusal.SteamVrChanged)
         {
-            // Not a failure: the user allowed Monado as administrator with other copies of SteamVR's unsigned DLLs (an
-            // update since). This Start runs as the user, as it would without consent, and Home offers to allow again.
             SteamVrChecked?.Invoke(true, reply.Error);
             return asUser.Start(spec);
         }
@@ -63,18 +36,10 @@ public sealed class HelperProcessLauncher(IHelperClient client, ElevatedStart st
     }
 }
 
-/// <summary>
-/// A <see cref="HelperCommand.StartMonadoElevated"/> seen as an <see cref="IRunningProcess"/>: its id from the reply,
-/// its lines from following the helper's log file, its exit from polling the helper, and <see cref="Kill"/> through
-/// <see cref="HelperCommand.StopMonadoElevated"/>. Like the job launcher's process, disposing it after a kill waits
-/// (at most the stop limit) until Monado has really ended, so a Start right after a Stop isn't refused because the
-/// old one still runs, and the headset is free before a module's end takes it back.
-/// </summary>
 internal sealed class ElevatedRunningProcess : IRunningProcess
 {
     private const int MaxEarlyLines = 1000;
 
-    /// <summary>The exit code reported when the helper can't be reached (its job ended Monado with it).</summary>
     private const int ExitUnknown = -1;
 
     private static readonly TimeSpan DisposeLimit = TimeSpan.FromSeconds(5);
@@ -150,10 +115,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
 
     public void Kill() => SendStop(clean: false);
 
-    /// <summary>
-    /// The helper asks Monado to end by itself, then ends what is left, and answers once it has (within the stop limit);
-    /// true once the poll has seen the exit, within <paramref name="limit"/> after that.
-    /// </summary>
     public async Task<bool> EndCleanlyAsync(TimeSpan limit)
     {
         if (SendStop(clean: true) is not { } sent)
@@ -173,11 +134,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
         }
     }
 
-    /// <summary>
-    /// An unelevated Mirador can't end an elevated process; the helper does, through its job object. Returns at once with
-    /// the request on its way (null when one was sent already); the exit then shows up through the poll, which
-    /// DisposeAsync waits for (or the helper ends the job when Mirador exits).
-    /// </summary>
     private Task? SendStop(bool clean)
     {
         lock (gate)
@@ -195,17 +151,12 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
                 }
                 catch (Exception)
                 {
-                    // Nothing more to do: the job ends Monado when this Mirador exits, at the latest.
                 }
             });
             return stopSent;
         }
     }
 
-    /// <summary>
-    /// After <see cref="Kill"/>: waits for the stop to reach the helper, then for the poll to see Monado's exit, at most
-    /// the stop limit in all (then the exit is reported as unknown). Then stops following the log.
-    /// </summary>
     public async ValueTask DisposeAsync()
     {
         Task? sent;
@@ -234,7 +185,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
             }
             catch (TimeoutException)
             {
-                // Monado didn't end in time (or the helper didn't answer): report the exit as unknown.
             }
         }
 
@@ -246,7 +196,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
         }
         catch (Exception)
         {
-            // Dispose must not throw: the follow loop is cancelled either way.
         }
 
         stop.Dispose();
@@ -267,7 +216,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
 
                 if (reply.NotDelivered)
                 {
-                    // The helper has gone, so its job ended Monado; stop waiting.
                     exited.TrySetResult(ExitUnknown);
                     return;
                 }
@@ -277,7 +225,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
         }
         catch (OperationCanceledException)
         {
-            // Disposing.
         }
     }
 
@@ -298,7 +245,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
                             logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                         if (file.Length < position)
                         {
-                            // The file was emptied and started again: read it from the top.
                             position = 0;
                             pending.Clear();
                             decoder = Encoding.UTF8.GetDecoder();
@@ -329,7 +275,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
-                    // The helper may be writing or recreating the file; try again next tick.
                 }
 
                 await Task.Delay(followInterval, ct).ConfigureAwait(false);
@@ -337,7 +282,6 @@ internal sealed class ElevatedRunningProcess : IRunningProcess
         }
         catch (OperationCanceledException)
         {
-            // Disposing.
         }
     }
 

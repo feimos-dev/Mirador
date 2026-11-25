@@ -10,14 +10,12 @@
 namespace dvl {
 namespace {
 
-// The objects behind our handles. Their contents are never read: a handle is ours if it is one of these addresses.
 struct LayerObject {
     uint64_t tag;
 };
-LayerObject g_display{0x444953504c415944ull}; // "DISPLAYD"
-LayerObject g_mode{0x45444f4d59414c44ull};    // "DLAYMODE"
+LayerObject g_display{0x444953504c415944ull};
+LayerObject g_mode{0x45444f4d59414c44ull};
 
-// Product names as strings that live for the process (never destroyed).
 const char* lasting_name(const char* name)
 {
     static std::mutex* const mutex = new std::mutex;
@@ -26,7 +24,7 @@ const char* lasting_name(const char* name)
     return names->insert(name != nullptr ? name : "").first->c_str();
 }
 
-} // namespace
+}
 
 VkDisplayKHR our_display()
 {
@@ -106,4 +104,4 @@ VkDisplayPlaneCapabilitiesKHR plane_capabilities(const nvdm::Product& product)
     return caps;
 }
 
-} // namespace dvl
+}

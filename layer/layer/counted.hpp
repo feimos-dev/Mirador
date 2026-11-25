@@ -10,11 +10,6 @@
 
 namespace dvl {
 
-// The two-call idiom of Vulkan's list queries: a null `out` asks for the count; otherwise up to *count entries are
-// written, *count is set to the number written, and VK_INCOMPLETE says there were more.
-
-// A list the layer makes itself, of `total` entries. `fill(i, item)` writes entry i into an item the caller provided
-// (for the ...2KHR structs it writes the payload and keeps sType and pNext).
 template <class T, class Fill>
 VkResult fill_list(uint32_t* count, T* out, uint32_t total, Fill&& fill)
 {
@@ -30,8 +25,6 @@ VkResult fill_list(uint32_t* count, T* out, uint32_t total, Fill&& fill)
     return n < total ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
-// The layer's `ours` entries first, then the layer below's list. `down(count, out)` is the same query passed down,
-// with the same idiom. An error from it is returned as it is.
 template <class T, class Fill, class Down>
 VkResult list_ours_first(uint32_t* count, T* out, uint32_t ours, Fill&& fill, Down&& down)
 {
@@ -60,11 +53,11 @@ VkResult list_ours_first(uint32_t* count, T* out, uint32_t ours, Fill&& fill, Do
         }
         written += theirs;
         if (r == VK_INCOMPLETE) {
-            result = VK_INCOMPLETE; // the list below grew between the two calls
+            result = VK_INCOMPLETE;
         }
     }
     *count = written;
     return result;
 }
 
-} // namespace dvl
+}

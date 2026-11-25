@@ -4,12 +4,10 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Tests.Monado;
 
-/// <summary>The bundled Monado, a built branch and an install folder.</summary>
 public class MonadoSourcesLocatorTests
 {
     private const string Version = "monado-2026.11.10-1a2b3c4d5e";
 
-    /// <summary>Monado's Windows install layout: the manifest at the top naming bin\openxr_monado.dll, the service beside it.</summary>
     private static void MakeInstall(string folder)
     {
         Directory.CreateDirectory(Path.Combine(folder, "bin"));

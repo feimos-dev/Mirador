@@ -5,48 +5,29 @@ using System.Text.Json.Nodes;
 
 namespace Mirador.Core.OpenVr;
 
-/// <summary>
-/// OpenLamina's shared store, the folder its programs keep their common state in: one JSON document per subject
-/// (<c>{"format":1,"data":{…}}</c>) and <c>state.bin</c>, which holds a generation number per document that readers
-/// watch. Mirador reads documents and writes the dashboard's, by the store's own rules: under the store's file lock,
-/// the document replaced whole by a renamed copy, then its generation raised. Mirador never makes the folder: without
-/// OpenLamina there is nothing to tell.
-/// </summary>
 public sealed class OpenLaminaStore(string directory)
 {
-    /// <summary>The scene document: the OpenVR game that runs.</summary>
     public const string Scene = "scene";
 
-    /// <summary>The dashboard document: who runs the dashboard and whether it is open.</summary>
     public const string Dashboard = "dashboard";
 
-    /// <summary>The newest document format Mirador reads and writes.</summary>
     private const int Format = 1;
 
     private const int StateBytes = 16 * 1024;
 
-    /// <summary>How long a writer waits for the store's lock, as OpenLamina's own writers do.</summary>
     private static readonly TimeSpan LockLimit = TimeSpan.FromSeconds(2);
 
-    /// <summary>How long a rename is tried again while another program has the document open.</summary>
     private static readonly TimeSpan ReplaceLimit = TimeSpan.FromMilliseconds(500);
 
     private static readonly JsonSerializerOptions Tabs = new() { WriteIndented = true, IndentCharacter = '\t', IndentSize = 1 };
 
-    /// <summary>The documents in <c>state.bin</c>'s order of generations.</summary>
     private static readonly string[] Documents = ["settings", "applications", "chaperone", "scene", "dashboard", "overlays", "offsets"];
 
-    /// <summary>The store of the signed-in user's OpenLamina.</summary>
     public static string DefaultDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenLamina", "store");
 
-    /// <summary>Whether OpenLamina has made its store on this PC.</summary>
     public bool Exists => Directory.Exists(directory);
 
-    /// <summary>
-    /// The data of <paramref name="document"/>; null when the store or the document isn't there, can't be read now, or
-    /// is a later OpenLamina's.
-    /// </summary>
     public JsonObject? Read(string document)
     {
         try
@@ -61,11 +42,6 @@ public sealed class OpenLaminaStore(string directory)
         }
     }
 
-    /// <summary>
-    /// Changes <paramref name="document"/> with <paramref name="edit"/>, keeping what else is in it. False when the
-    /// store isn't there or the document couldn't be written (another program holds the lock, the document is a later
-    /// OpenLamina's or can't be read): nothing is changed then.
-    /// </summary>
     public bool Update(string document, Action<JsonObject> edit)
     {
         var index = Array.IndexOf(Documents, document);
@@ -108,7 +84,7 @@ public sealed class OpenLaminaStore(string directory)
 
                     if (root is not JsonObject || Data(root) is not { } read)
                     {
-                        return false; // a later OpenLamina's, or not a document: left as it is
+                        return false;
                     }
 
                     data = (JsonObject)read.DeepClone();
@@ -124,7 +100,6 @@ public sealed class OpenLaminaStore(string directory)
                     return false;
                 }
 
-                // Readers look at a document again only when its generation has changed.
                 var at = 8 + (8 * index);
                 state.Write(at, state.ReadUInt64(at) + 1);
                 return true;
@@ -140,7 +115,6 @@ public sealed class OpenLaminaStore(string directory)
         }
     }
 
-    /// <summary>The <c>data</c> object of a document of a format Mirador knows; null otherwise.</summary>
     private static JsonObject? Data(JsonNode? root)
     {
         if (root is not JsonObject document)
@@ -156,7 +130,6 @@ public sealed class OpenLaminaStore(string directory)
         return document["data"] as JsonObject ?? new JsonObject();
     }
 
-    /// <summary>The store's lock: the first byte of <c>store.lock</c>, tried every 2 ms.</summary>
     private static bool Lock(FileStream lockFile)
     {
         var deadline = Environment.TickCount64 + (long)LockLimit.TotalMilliseconds;
@@ -178,10 +151,6 @@ public sealed class OpenLaminaStore(string directory)
         }
     }
 
-    /// <summary>
-    /// <c>state.bin</c>, mapped: "OCST", the format, then eight generations. Set up when it is new; null when it is a
-    /// later OpenLamina's. Call with the store's lock held.
-    /// </summary>
     private MemoryMappedViewAccessor? OpenState()
     {
         var file = new FileStream(
@@ -189,7 +158,6 @@ public sealed class OpenLaminaStore(string directory)
         MemoryMappedViewAccessor view;
         try
         {
-            // A mapping larger than the file extends it.
             using var mapping = MemoryMappedFile.CreateFromFile(file, null, StateBytes, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: false);
             view = mapping.CreateViewAccessor(0, StateBytes, MemoryMappedFileAccess.ReadWrite);
         }

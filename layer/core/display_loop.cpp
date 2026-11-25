@@ -15,11 +15,8 @@
 namespace nvdm {
 namespace {
 
-// Waits shorter than this poll the event instead of setting the timer, whose granularity is about half a millisecond.
 constexpr int64_t kSpinBelowNs = 1'000'000;
-// A timer wait also ends this long after its deadline should the timer not fire.
 constexpr DWORD kTimerSlackMs = 5;
-// A failing GetPresentStats is logged at most this often.
 constexpr int64_t kReadFailLogNs = 1'000'000'000;
 
 std::string format(const char* fmt, ...)
@@ -32,7 +29,6 @@ std::string format(const char* fmt, ...)
     return text;
 }
 
-// Nanoseconds to whole milliseconds, rounded up, for the Win32 waits.
 DWORD ceil_ms(int64_t ns)
 {
     if (ns <= 0) {
@@ -42,13 +38,11 @@ DWORD ceil_ms(int64_t ns)
     return static_cast<DWORD>(std::min<int64_t>(ms, 0x7fffffff));
 }
 
-} // namespace
-
-// --- Win32Waiter -------------------------------------------------------------------------------------------------
+}
 
 Win32Waiter::Win32Waiter(Clock& clock) : clock_(clock)
 {
-    event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr); // auto-reset
+    event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     timer_ = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     high_resolution_ = timer_ != nullptr;
     if (timer_ == nullptr) {
@@ -82,7 +76,7 @@ bool Win32Waiter::wait_frame_or_until(int64_t deadline_ns)
         }
         DWORD result = WAIT_TIMEOUT;
         LARGE_INTEGER due{};
-        due.QuadPart = -(left / 100); // relative, in 100 ns units
+        due.QuadPart = -(left / 100);
         if (timer_ != nullptr && SetWaitableTimerEx(timer_, &due, 0, nullptr, nullptr, nullptr, 0)) {
             const HANDLE handles[2] = {event_, timer_};
             result = WaitForMultipleObjects(2, handles, FALSE, ceil_ms(left) + kTimerSlackMs);
@@ -96,11 +90,9 @@ bool Win32Waiter::wait_frame_or_until(int64_t deadline_ns)
             return true;
         }
         if (result == WAIT_FAILED) {
-            // A broken handle: still wait out the time, so the caller does not spin.
             Sleep(ceil_ms(left));
             return false;
         }
-        // The timer fired: loop, which finishes a wait it ended early and looks at the event once more otherwise.
     }
 }
 
@@ -111,13 +103,12 @@ bool Win32Waiter::wait_frame_or_until_coarse(int64_t deadline_ns)
         if (left <= 0) {
             return WaitForSingleObject(event_, 0) == WAIT_OBJECT_0;
         }
-        // Rounded up, and again after a timeout that came early: never before the deadline.
         const DWORD result = WaitForSingleObject(event_, ceil_ms(left));
         if (result == WAIT_OBJECT_0) {
             return true;
         }
         if (result == WAIT_FAILED) {
-            Sleep(ceil_ms(left)); // a broken handle: still wait out the time
+            Sleep(ceil_ms(left));
             return false;
         }
     }
@@ -127,8 +118,6 @@ void Win32Waiter::signal_frame_queued()
 {
     SetEvent(event_);
 }
-
-// --- DisplayLoop -------------------------------------------------------------------------------------------------
 
 DisplayLoop::DisplayLoop(Api& api, FrameModel& model, std::mutex& lock, Clock& clock, Waiter& waiter,
                          FenceOps& fences, StatsWindow& stats, DisplayLoopConfig config)
@@ -172,7 +161,6 @@ void DisplayLoop::pass()
         }
     }
 
-    // Step 1: wait, unless a Present can be made now.
     Plan p = plan();
     if (!p.ready) {
         int64_t until = p.now + config_.idle_poll_ns;
@@ -182,9 +170,6 @@ void DisplayLoop::pass()
             until = p.now + config_.stopped_poll_ns;
         }
         note(TraceKind::Step1Wait, p.mode == Mode::Active ? 0 : p.mode == Mode::Idle ? 1 : 2, until);
-        // Idle, the wait arms no high-resolution timer: in an app session this is the stretch from a refresh to
-        // Monado's next present, while Monado sleeps on an ordinary timer that one would make it wake late
-        // (Win32Waiter). Idle needs no precise wake-up: the next frame or display event ends the wait at once.
         const bool woke = p.mode == Mode::Idle ? waiter_.wait_frame_or_until_coarse(until)
                                                : waiter_.wait_frame_or_until(until);
         note(TraceKind::Step1Woke, woke ? 1 : 0);
@@ -194,10 +179,6 @@ void DisplayLoop::pass()
         p = plan();
     }
 
-    // Step 2: Present the newest queued frame once its fence has signalled, waiting until ~1 ms before the refresh.
-    // While flips are stopped there is no refresh to keep clear of (the prediction runs on a stale phase): the fence
-    // wait is the stopped mode's wait instead, and a pass that made no Present still waits that long before its read
-    //.
     if (p.ready) {
         const bool stopped = p.mode == Mode::Stopped;
         const int64_t until = stopped ? p.now + config_.stopped_poll_ns : p.target - config_.lead_ns;
@@ -213,7 +194,6 @@ void DisplayLoop::pass()
         }
     }
 
-    // Steps 3-5: the counter. Near the predicted refresh, a poll until it moves; idle or stopped, one read.
     if (p.mode != Mode::Active) {
         read_counter();
     } else if (clock_.now_ns() >= p.target - config_.lead_ns) {
@@ -221,8 +201,6 @@ void DisplayLoop::pass()
     }
 }
 
-// The epoch's start: both clocks to now, so a restart is not taken for stopped flips, and the
-// first read as the counter's baseline. The read comes first, so both go to the model in one lock hold.
 void DisplayLoop::begin()
 {
     RefreshStats stats{};
@@ -249,10 +227,6 @@ DisplayLoop::Plan DisplayLoop::plan()
         model_.tick(p.now);
         stats_.on_counters(model_.counters());
         p.target = predict(model_.last_refresh_ns(), p.now);
-        // A predicted refresh that has passed unread, its poll window (until it + 2 ms) still open: the wait before
-        // it ended late (the thread was not run). Its poll is still due, now, instead of the next refresh's a period
-        // later; that refresh may show the outstanding Present and set display events. Once its
-        // window has closed, the next refresh's poll as usual, so a display that stops is not polled any more often.
         const int64_t period = std::max<int64_t>(config_.refresh_ns, 1);
         const int64_t overdue = p.target - period;
         if (overdue > model_.last_refresh_ns() && p.now < overdue + config_.poll_after_ns) {
@@ -272,11 +246,6 @@ DisplayLoop::Plan DisplayLoop::plan()
     return p;
 }
 
-// The next refresh period after now, counted from the last refresh: always in (now, now + period]. Never a time in the
-// past, however stale the last refresh is, and never more than one period ahead, however wrong it is: a stats QPC
-// time in the future keeps its phase but is counted back to the period after now, so step 1's wait stays within a
-// period. Stable while now moves within the period, so the re-plan after step 1's wait still
-// lands in the poll window. Overflow-free for any two times.
 int64_t DisplayLoop::predict(int64_t last_refresh_ns, int64_t now_ns) const
 {
     const int64_t period = std::max<int64_t>(config_.refresh_ns, 1);
@@ -284,11 +253,10 @@ int64_t DisplayLoop::predict(int64_t last_refresh_ns, int64_t now_ns) const
         const int64_t rest = value % period;
         return rest < 0 ? rest + period : rest;
     };
-    const int64_t since = mod(mod(now_ns) - mod(last_refresh_ns)); // (now - last) mod period, in [0, period)
+    const int64_t since = mod(mod(now_ns) - mod(last_refresh_ns));
     return now_ns + (period - since);
 }
 
-// Step 2 (wait: a fence wait until deadline_ns) and step 3's look at the fence (no wait). True if a Present was made.
 bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
 {
     std::optional<Candidate> c;
@@ -303,10 +271,10 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
             return false;
         }
         pool_serial = model_.pool_serial();
-        model_.fence_waiting(c->fence, true); // before letting go of the lock (the fence protocol); kNoFence: no-op
+        model_.fence_waiting(c->fence, true);
     }
 
-    bool ready = true; // kNoFence: the present was submitted with vkQueueWaitIdle, its GPU work is done
+    bool ready = true;
     if (c->fence != kNoFence) {
         if (wait) {
             note(TraceKind::FenceWait, c->seq, deadline_ns);
@@ -326,7 +294,6 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
         if (abandoned_.load()) {
             return false;
         }
-        // Seen and unmarked in one lock hold. A pool replaced meanwhile (its device destroyed) took its marks with it.
         if (model_.pool_serial() == pool_serial) {
             if (ready) {
                 model_.fence_seen(c->fence);
@@ -335,7 +302,7 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
         }
         if (ready && !stop_requested()) {
             const int64_t now = clock_.now_ns();
-            started = model_.present_started(c->seq, now); // the re-check after the fence wait: false, no NVAPI call
+            started = model_.present_started(c->seq, now);
             if (started) {
                 stats_.on_counters(model_.counters());
                 stats_.on_present(now);
@@ -346,29 +313,24 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
         }
     }
     if (!started) {
-        flush_log(); // no Present follows
-        // A fence wait that gave up before its deadline (an error such as a lost device, or a timeout rounded short):
-        // wait out the rest here, so the pass does not come straight back and spin. A frame
-        // queued meanwhile still ends the wait.
+        flush_log();
         if (wait && !ready && !stop_requested() && clock_.now_ns() < deadline_ns) {
             waiter_.wait_frame_or_until(deadline_ns);
         }
         return false;
     }
 
-    // No log line is written from here to the Present: the frame's fence has signalled, and a file,
-    // console or debugger write could cost it its refresh. The stats line this Present closed is written after it.
     int code = kBadArgument;
     if (c->buffer < config_.tags.size()) {
         note(TraceKind::NvPresentStart, c->seq, c->buffer);
-        code = api_.present(config_.tags[c->buffer]); // outside the lock
+        code = api_.present(config_.tags[c->buffer]);
     } else {
         say(format("no NVAPI tag for back-buffer %u: its Present fails", c->buffer));
     }
     {
         std::lock_guard<std::mutex> hold(lock_);
         if (abandoned_.load()) {
-            return true; // left behind: touch nothing, not even the return time
+            return true;
         }
         const int64_t returned = clock_.now_ns();
         model_.present_returned(c->seq, code, returned);
@@ -382,8 +344,6 @@ bool DisplayLoop::present_newest(int64_t deadline_ns, bool wait)
     return true;
 }
 
-// Step 3: reads until the counter moves or the predicted refresh + 2 ms, looking at the newest queued fence between
-// reads, then back to step 1.
 void DisplayLoop::poll(int64_t target_ns)
 {
     const int64_t until = target_ns + config_.poll_after_ns;
@@ -412,8 +372,6 @@ void DisplayLoop::poll(int64_t target_ns)
     }
 }
 
-// One GetPresentStats, outside the lock, then everything that follows from it under the lock. True if the counter
-// went up.
 bool DisplayLoop::read_counter()
 {
     RefreshStats stats{};
@@ -444,13 +402,10 @@ bool DisplayLoop::read_counter()
     return moved;
 }
 
-// Design 6.7 step 4, under the lock: the read to the model and the stats, each increment to the display events.
 void DisplayLoop::take_reads(int code, const RefreshStats& stats, int64_t now_ns)
 {
     if (code == 0) {
         read_failing_ = false;
-        // A read comes after its refresh, so a refresh time more than a period after now is bogus: it is taken as one
-        // period from now, and the model, the display events and acquire's bound never run ahead on it.
         int64_t qpc = stats.qpc_ns;
         const int64_t latest = now_ns + std::max<int64_t>(config_.refresh_ns, 1);
         if (qpc > latest) {
@@ -497,4 +452,4 @@ void DisplayLoop::flush_log()
     }
 }
 
-} // namespace nvdm
+}

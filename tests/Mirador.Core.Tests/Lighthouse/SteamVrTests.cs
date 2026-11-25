@@ -4,13 +4,11 @@ namespace Mirador.Core.Tests.Lighthouse;
 
 public class SteamVrTests
 {
-    /// <summary>The way Steam writes <c>SteamPath</c> to the registry: lower case, forward slashes.</summary>
     private const string SteamPath = "c:/program files (x86)/steam";
 
     private const string VdfFile = @"c:\program files (x86)\steam\steamapps\libraryfolders.vdf";
     private const string SteamVrInSecondLibrary = @"D:\SteamLibrary\steamapps\common\SteamVR";
 
-    // A real libraryfolders.vdf: tabs between key and value, backslashes doubled, other keys that have to be ignored.
     private const string TwoLibraries = """
         "libraryfolders"
         {
@@ -212,7 +210,7 @@ public class SteamVrTests
     [Fact]
     public void Windows_line_endings_are_fine()
     {
-        var crlf = TwoLibraries.Replace("\r\n", "\n").Replace("\n", "\r\n"); // whatever the checkout made of the source's line endings
+        var crlf = TwoLibraries.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
         Assert.Equal(SteamVrInSecondLibrary, Find(crlf, [SteamVrInSecondLibrary]));
     }
@@ -230,8 +228,8 @@ public class SteamVrTests
     [Theory]
     [InlineData("")]
     [InlineData("not a vdf file")]
-    [InlineData("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"")] // cut off
-    [InlineData("\"libraryfolders\" { \"0\" { \"path\" \"D:\\\\SteamLibrary\" } } }")] // one brace too many
+    [InlineData("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"")]
+    [InlineData("\"libraryfolders\" { \"0\" { \"path\" \"D:\\\\SteamLibrary\" } } }")]
     [InlineData("\"libraryfolders\" \"just a string\"")]
     [InlineData("\"libraryfolders\" { \"0\" \"also a string\" }")]
     [InlineData("\"libraryfolders\" { \"0\" { \"apps\" \"a string\" \"path\" \"D:\\\\SteamLibrary\" } }")]

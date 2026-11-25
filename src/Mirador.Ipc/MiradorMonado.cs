@@ -5,38 +5,22 @@ using System.Text.RegularExpressions;
 
 namespace Mirador.Ipc;
 
-/// <summary>Which of Mirador's Monado builds is in use, and the one kept for "Roll back".</summary>
-/// <param name="Current">The version profiles on Mirador's Monado run, such as <c>monado-2026.11.10-1a2b3c4d5e</c>.</param>
-/// <param name="Previous">The version before it, kept for "Roll back"; null when there is none.</param>
 public sealed record MiradorMonadoVersions(string? Current, string? Previous);
 
-/// <summary>
-/// Mirador's Monado: the weekly builds of upstream <c>main</c> the helper installs in
-/// <c>{app}\monado\&lt;version&gt;\</c>, an admin-only folder, with <c>current.json</c> beside them saying which is in use.
-/// Only the helper writes there; the app reads.
-/// </summary>
 public static partial class MiradorMonado
 {
-    /// <summary>The file in the root that names the current and previous versions.</summary>
     public const string CurrentFile = "current.json";
 
-    /// <summary>The releases' tag prefix: Mirador's weekly prereleases are <c>monado-&lt;yyyy.mm.dd&gt;-&lt;sha&gt;</c>.</summary>
     public const string TagPrefix = "monado-";
 
-    /// <summary>Whether <paramref name="version"/> is a weekly build's name, and so a safe folder name.</summary>
     public static bool IsVersion(string? version) => version is not null && VersionPattern().IsMatch(version);
 
-    /// <summary>
-    /// The build date of a weekly build, from its name (<c>monado-yyyy.MM.dd-&lt;hash&gt;</c>, the date in UTC); null for
-    /// anything else, a date that doesn't exist included.
-    /// </summary>
     public static DateOnly? DateOf(string? version) =>
         IsVersion(version)
         && DateOnly.TryParseExact(version!.Substring(TagPrefix.Length, 10), "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
             ? date
             : null;
 
-    /// <summary>The versions in <paramref name="root"/>, or none when nothing is installed or the file is unusable.</summary>
     public static MiradorMonadoVersions Read(string root)
     {
         var path = Path.Combine(root, CurrentFile);
@@ -58,7 +42,6 @@ public static partial class MiradorMonado
         }
     }
 
-    /// <summary>Writes the versions (the helper only), whole or not at all: a new file moved over the old one.</summary>
     public static void Write(string root, MiradorMonadoVersions versions)
     {
         Directory.CreateDirectory(root);
@@ -68,13 +51,8 @@ public static partial class MiradorMonado
         File.Move(temp, path, overwrite: true);
     }
 
-    /// <summary>The runtime manifest of <paramref name="version"/>.</summary>
     public static string ManifestOf(string root, string version) => Path.Combine(FolderOf(root, version), "openxr_monado.json");
 
-    /// <summary>
-    /// Whether <paramref name="manifest"/> is the manifest of one of Mirador's Monado's versions in <paramref name="root"/>
-    /// (installed or not): <c>{root}\&lt;version&gt;\openxr_monado.json</c>, ignoring case.
-    /// </summary>
     public static bool IsManifestOf(string root, string manifest)
     {
         try
@@ -92,8 +70,6 @@ public static partial class MiradorMonado
         }
     }
 
-    /// <summary>The install folder of <paramref name="version"/>.</summary>
-    /// <exception cref="ArgumentException">It isn't a version's name.</exception>
     public static string FolderOf(string root, string version) =>
         IsVersion(version) ? Path.Combine(root, version) : throw new ArgumentException($"Not a version of the bundled Monado: {version}", nameof(version));
 

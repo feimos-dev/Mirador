@@ -5,36 +5,19 @@ using System.Text.Json.Nodes;
 
 namespace Mirador.Core.OpenVr;
 
-/// <summary>Where OpenVR games go: the first folder in the paths file's <c>runtime</c> list.</summary>
 public enum OpenVrTarget
 {
-    /// <summary>No file, an empty list, or a file Mirador can't read.</summary>
     None,
 
-    /// <summary>The installed OpenLamina, so OpenXR and Monado.</summary>
     Monado,
 
-    /// <summary>SteamVR's own folder.</summary>
     SteamVr,
 
-    /// <summary>Any other folder.</summary>
     Other,
 }
 
-/// <summary>What the paths file says now.</summary>
-/// <param name="Target">Where OpenVR games go.</param>
-/// <param name="First">The first <c>runtime</c> entry as the file has it; null when there is none.</param>
-/// <param name="Problem">Why the file couldn't be read, in plain words; then <paramref name="Target"/> is None.</param>
 public sealed record OpenVrState(OpenVrTarget Target, string? First, string? Problem);
 
-/// <summary>
-/// The user's <c>openvrpaths.vrpath</c>, which Valve's <c>openvr_api.dll</c> in every OpenVR game reads to find the
-/// runtime: the first folder of its <c>runtime</c> list, whose <c>bin\vrclient_x64.dll</c> it loads.
-/// Switching keeps every other key and entry, as OpenLamina's own switcher does, and never writes over a file it
-/// couldn't read.
-/// </summary>
-/// <param name="file">The paths file.</param>
-/// <param name="ourRuntimeDir">The installed OpenLamina: the runtime folder, with <c>bin\</c> below it.</param>
 public sealed class OpenVrPaths(string file, string ourRuntimeDir)
 {
     private static readonly JsonWriterOptions WriterOptions = new()
@@ -45,11 +28,9 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary><c>%LOCALAPPDATA%\openvr\openvrpaths.vrpath</c>.</summary>
     public static string DefaultFile { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "openvr", "openvrpaths.vrpath");
 
-    /// <summary>Reads where OpenVR games go now. A missing file is None, with no problem.</summary>
     public OpenVrState Read()
     {
         var (doc, problem) = Load();
@@ -62,8 +43,6 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
         return first is null ? new OpenVrState(OpenVrTarget.None, null, null) : new OpenVrState(Classify(first), first, null);
     }
 
-    /// <summary>Puts the installed OpenLamina first; every other entry follows in its order.</summary>
-    /// <returns>Null when written, else why nothing was written.</returns>
     public string? UseMonado()
     {
         var (doc, problem) = Load();
@@ -77,10 +56,6 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
         return Save(doc, [Path.TrimEndingDirectorySeparator(Full(ourRuntimeDir)), .. others]);
     }
 
-    /// <summary>
-    /// Whether two folders are the same: full paths, without regard to case, <c>/</c> and <c>\</c> alike, trailing
-    /// separators ignored.
-    /// </summary>
     public static bool SamePath(string a, string b) =>
         string.Equals(
             Path.TrimEndingDirectorySeparator(Full(a)),
@@ -114,7 +89,6 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
     private static List<string> RuntimeList(JsonObject doc) =>
         doc["runtime"] is JsonArray list ? list.Select(n => n!.GetValue<string>()).ToList() : [];
 
-    /// <summary>The file as JSON (null when missing), or why it can't be used: never both.</summary>
     private (JsonObject? Doc, string? Problem) Load()
     {
         string text;
@@ -135,7 +109,6 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
         JsonNode? node;
         try
         {
-            // Duplicate keys refused here: JsonObject would otherwise throw ArgumentException at the first lookup.
             node = JsonNode.Parse(
                 text, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, AllowDuplicateProperties = false });
         }
@@ -190,7 +163,6 @@ public sealed class OpenVrPaths(string file, string ourRuntimeDir)
             }
             catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
             {
-                // The temp file stays; the next write replaces it.
             }
 
             return $"Mirador couldn't write the OpenVR paths file {file} ({e.Message.Trim().TrimEnd('.')}); it is unchanged.";

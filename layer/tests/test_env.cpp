@@ -1,8 +1,6 @@
 // Copyright 2026, Finn Zeruhn
 // SPDX-License-Identifier: BSL-1.0
 
-// The layer's variables (MIRADOR_DIRECT_MODE*); their Dream Air names are no longer read.
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <windows.h>
@@ -19,7 +17,7 @@ struct Variable {
     ~Variable() { SetEnvironmentVariableW(name, nullptr); }
 };
 
-} // namespace
+}
 
 TEST_CASE("env: a layer variable under its new name is read")
 {

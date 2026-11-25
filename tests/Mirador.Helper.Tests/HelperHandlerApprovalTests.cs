@@ -3,7 +3,6 @@ using Mirador.Ipc;
 
 namespace Mirador.Helper.Tests;
 
-/// <summary>The helper's side of approved builds: as the runtime, and taken back.</summary>
 public sealed class HelperHandlerApprovalTests : IDisposable
 {
     private const string Commit = "0123456789abcdef0123456789abcdef01234567";
@@ -156,8 +155,6 @@ public sealed class HelperHandlerApprovalTests : IDisposable
         Assert.Equal(@"C:\SteamVR\steamxr.json", registry.Active);
     }
 
-    // The variables an approval covers, checked by the helper at each elevated Start (ElevatedRequestCheck.ApprovedVariables).
-
     private static ElevatedStart StartWith(string profileId, IReadOnlyList<KeyValuePair<string, string>>? variables, string build = "") =>
         new(3000, 100, 6, "", build, ProfileId: profileId, Variables: variables);
 
@@ -177,7 +174,6 @@ public sealed class HelperHandlerApprovalTests : IDisposable
         Assert.Equal(Changed, Check(StartWith("p1", [.. Approved, new("XRT_EXTRA", "1")]), store, out _));
         Assert.Equal(Changed, Check(StartWith("p1", [Approved[0]]), store, out _));
 
-        // The same variables, a name spelt in another case as Windows allows: the start goes ahead with them.
         Assert.Null(Check(StartWith("p1", [new("pimax_p3c_log", "debug"), new("XRT_LOG", "info")]), store, out var variables));
         Assert.Equal(2, variables.Count);
     }
@@ -210,7 +206,6 @@ public sealed class HelperHandlerApprovalTests : IDisposable
     {
         ApprovedBuilds.Approve(Finn.Value, "p1", ApprovedBuilds.BundledCommit, "", App, store, Approved);
 
-        // The record is for the bundled Monado: a build's start isn't covered by it.
         Assert.NotNull(Check(StartWith("p1", Approved, build: "p1"), store, out _));
 
         var folder = temp.File("user", "p2");
@@ -221,7 +216,7 @@ public sealed class HelperHandlerApprovalTests : IDisposable
         ApprovedBuilds.Approve(Finn.Value, "p2", Commit, folder, App, store, Approved);
 
         Assert.Null(Check(StartWith("p2", Approved, build: "p2"), store, out _));
-        Assert.NotNull(Check(StartWith("p2", Approved), store, out _)); // the bundled Monado isn't the approved build
+        Assert.NotNull(Check(StartWith("p2", Approved), store, out _));
         Assert.NotNull(Check(StartWith("p2", Approved, build: "p1"), store, out _));
     }
 

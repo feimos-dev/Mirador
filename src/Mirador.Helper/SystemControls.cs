@@ -7,10 +7,8 @@ using Microsoft.Win32;
 
 namespace Mirador.Helper;
 
-/// <summary>The real <see cref="IServiceControl"/>, through the Windows service manager.</summary>
 public sealed class SystemServiceControl : IServiceControl
 {
-    /// <summary><c>ERROR_SERVICE_NOT_ACTIVE</c>: the service stopped by itself between looking and asking it to.</summary>
     private const int ErrorServiceNotActive = 1062;
 
     public (int Id, DateTime Started)? Process(string name)
@@ -36,7 +34,6 @@ public sealed class SystemServiceControl : IServiceControl
         }
         catch (Exception e) when (e is ManagementException or ArgumentException or InvalidOperationException or Win32Exception)
         {
-            // Not running, gone meanwhile, or Windows won't say: no service process to trust.
         }
 
         return null;
@@ -107,15 +104,10 @@ public sealed class SystemServiceControl : IServiceControl
     }
 }
 
-/// <summary>The real <see cref="IProcessControl"/>.</summary>
 public sealed partial class SystemProcessControl : IProcessControl
 {
     private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// How long WMI may take to answer. Its default is to wait for ever, and the helper handles one request at a time,
-    /// so a WMI service that hangs would otherwise hang the helper.
-    /// </summary>
     private static readonly TimeSpan WmiTimeout = TimeSpan.FromSeconds(5);
 
     private readonly Func<string, IEnumerable<(string? Path, string? CommandLine, int? ParentId, DateTime? Started)>> queryCommandLines;
@@ -124,7 +116,6 @@ public sealed partial class SystemProcessControl : IProcessControl
     {
     }
 
-    /// <summary>For tests: answers the command-line query without WMI.</summary>
     internal SystemProcessControl(Func<string, IEnumerable<(string? Path, string? CommandLine, int? ParentId, DateTime? Started)>> queryCommandLines) =>
         this.queryCommandLines = queryCommandLines;
 
@@ -144,7 +135,6 @@ public sealed partial class SystemProcessControl : IProcessControl
                     }
                     catch (InvalidOperationException)
                     {
-                        // Already gone, which is what was asked for.
                     }
                     catch (Win32Exception e)
                     {
@@ -162,7 +152,6 @@ public sealed partial class SystemProcessControl : IProcessControl
 
     public IReadOnlyList<ProcessCommandLine> CommandLines(string processName)
     {
-        // The name goes into a WMI query; only plain process names are let through.
         if (!PlainName().IsMatch(processName))
         {
             throw new ArgumentException("Not a plain process name.", nameof(processName));
@@ -184,7 +173,6 @@ public sealed partial class SystemProcessControl : IProcessControl
         }
     }
 
-    /// <summary>The WMI query for the command lines of the running programs called <paramref name="processName"/>.</summary>
     internal static ManagementObjectSearcher CreateSearcher(string processName) =>
         new(
             @"root\cimv2",
@@ -221,10 +209,6 @@ public sealed partial class SystemProcessControl : IProcessControl
     private static partial Regex PlainName();
 }
 
-/// <summary>
-/// The real <see cref="IRuntimeRegistry"/>: <c>ActiveRuntime</c> under <c>SOFTWARE\Khronos\OpenXR\1</c> and
-/// <c>PreviousActiveRuntime</c> under <c>SOFTWARE\Mirador</c>, in the 64-bit view of <c>HKEY_LOCAL_MACHINE</c>.
-/// </summary>
 public sealed class SystemRuntimeRegistry : IRuntimeRegistry
 {
     private const string ActiveKey = @"SOFTWARE\Khronos\OpenXR\1";
@@ -240,7 +224,6 @@ public sealed class SystemRuntimeRegistry : IRuntimeRegistry
     {
     }
 
-    /// <summary>For tests, which point the same code at a scratch key instead of the machine's.</summary>
     internal SystemRuntimeRegistry(RegistryHive hive, string activeKey, string recordedKey)
     {
         this.hive = hive;

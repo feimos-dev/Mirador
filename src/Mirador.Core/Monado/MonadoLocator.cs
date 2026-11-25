@@ -3,34 +3,14 @@ using Mirador.Ipc;
 
 namespace Mirador.Core.Monado;
 
-/// <summary>
-/// Finds the files of a profile's Monado: the bundled Monado, a branch Mirador built, or a build or install folder.
-/// </summary>
-/// <param name="bundledRoot">
-/// <c>{app}\monado</c>: the bundled Monado's versions (<see cref="MiradorMonado"/>).
-/// </param>
-/// <param name="buildsRoot">Where branch profiles are built (<see cref="AppPaths.BuildsDir"/>), one folder per profile.</param>
-/// <param name="approvedCopy">
-/// For a branch or build folder: the approved copy of the build as it is now, or null. Called with the profile and the
-/// build found, also on the UI thread (Home, the Profiles page's checks), so it should hash a build only when its files
-/// changed. Null: approved copies aren't looked up.
-/// </param>
 public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null, Func<Profile, MonadoInstall, ApprovedBuild?>? approvedCopy = null)
 {
     private static readonly string[] ManifestNames = ["openxr_monado-dev.json", "openxr_monado.json"];
 
-    /// <summary>The root of Mirador's Monado's versions.</summary>
     public string MiradorRoot => Path.GetFullPath(bundledRoot);
 
-    /// <summary>Where branch profiles are built, when this locator knows.</summary>
     public string? BuildsRoot => buildsRoot;
 
-    /// <summary>
-    /// Finds <paramref name="profile"/>'s Monado and checks that every file it returns exists (the stand-in folder
-    /// excepted); with its approved copy (<see cref="MonadoInstall.Approved"/>) when this build is the one approved, with
-    /// "Run as administrator" on or off.
-    /// </summary>
-    /// <exception cref="MiradorException">The build is not there or is incomplete; the message says what to do.</exception>
     public MonadoInstall Locate(Profile profile)
     {
         var install = Locate(profile.Monado, profile.Id);
@@ -39,11 +19,6 @@ public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null,
             : install;
     }
 
-    /// <summary>
-    /// Finds the build <paramref name="source"/> names. A branch's build is <paramref name="profileId"/>'s, so it needs
-    /// one; the other kinds don't.
-    /// </summary>
-    /// <exception cref="MiradorException">The build is not there or is incomplete; the message says what to do.</exception>
     public MonadoInstall Locate(BuildSource source, string? profileId = null) => source.Kind switch
     {
         SourceKind.Mirador => LocateMiradors(),
@@ -51,10 +26,8 @@ public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null,
         _ => LocateFolder(source.Folder),
     };
 
-    /// <summary>The install folder of <paramref name="profileId"/>'s branch build (it need not exist yet).</summary>
     public string BranchInstallDir(string profileId) => Path.Combine(BranchDir(profileId), "install");
 
-    /// <summary>The folder of <paramref name="profileId"/>'s branch build: its source, build and install folders.</summary>
     public string BranchDir(string profileId)
     {
         if (buildsRoot is null)
@@ -62,7 +35,6 @@ public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null,
             throw new InvalidOperationException("This locator doesn't know where branches are built.");
         }
 
-        // A profile id is a GUID's digits or one of the default profiles' names: never a path.
         if (profileId.Length == 0 || profileId.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
         {
             throw new ArgumentException($"Not a profile id: {profileId}", nameof(profileId));
@@ -93,10 +65,6 @@ public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null,
             ?? throw new MiradorException("This profile's branch isn't built yet. Build it on the Profiles page.");
     }
 
-    /// <summary>
-    /// Monado's Windows install layout (<c>cmake --install</c>): the manifest at the top, its DLL and the service in
-    /// <c>bin</c>; the stand-in goes in <c>bin\service</c>, where the runtime DLL looks. Null when it isn't one.
-    /// </summary>
     private static MonadoInstall? LocateInstall(string folder, bool isMiradors)
     {
         var manifest = Path.Combine(folder, "openxr_monado.json");
@@ -144,11 +112,6 @@ public sealed class MonadoLocator(string bundledRoot, string? buildsRoot = null,
         return new MonadoInstall(manifest, dll, service, StandInDirFor(dll), IsBundled: false);
     }
 
-    /// <summary>
-    /// Where the runtime DLL looks for the service it was built to start when a game finds no service: <c>service\</c>
-    /// below the DLL's folder. A runtime that looks in its own folder first also finds the stand-in here, as long as it
-    /// was built to start the stand-in's own name (<see cref="StandIn.FileName"/>).
-    /// </summary>
     private static string StandInDirFor(string runtimeDll) => Path.Combine(Path.GetDirectoryName(runtimeDll)!, "service");
 
     private static string ReadRuntimeDll(string manifest, string whatToDo)

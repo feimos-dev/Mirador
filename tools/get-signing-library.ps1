@@ -1,17 +1,4 @@
 #Requires -Version 7.3
-<#
-.SYNOPSIS
-    Gets Azure Artifact Signing's signtool library, at a pinned version, and writes the file that names the signing
-    account: what tools\sign.ps1 signs with in a release.
-.DESCRIPTION
-    Downloads Microsoft.ArtifactSigning.Client from nuget.org, refuses it unless its hash is the pinned one and its
-    library carries Microsoft's signature, and unpacks it to -Out. Then SIGN_DLIB and SIGN_METADATA name the library
-    and the account's file, for this process and (in a workflow) the steps after this one.
-
-    The library asks the Azure CLI for its token, so `az login` comes before signing. It needs the .NET 10 runtime.
-.EXAMPLE
-    tools\get-signing-library.ps1 -Out $env:TEMP\signing -Endpoint https://eus.codesigning.azure.net/ -Account myaccount -CertificateProfile myprofile
-#>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$Out,
@@ -22,7 +9,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# The pin: nuget.org's SHA-512 of the package (base64, as its catalog gives it).
 $version = '1.0.151'
 $sha512 = 'BvPApD/Bxbzj2uf8qBYJ0wPoZYvAySHfrsIMZ2JkMQXy7NdTbQ81Gs71A0n/tOYOIWk3xpKY3YVZ1VtH0jcZhQ=='
 $url = "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$version/microsoft.artifactsigning.client.$version.nupkg"
@@ -48,7 +34,6 @@ if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notm
     throw "$dlib isn't signed by Microsoft ($($signature.Status); $($signature.SignerCertificate.Subject))."
 }
 
-# Only the Azure CLI's login may sign (and the environment's, which a workflow doesn't set).
 $metadata = Join-Path $Out 'metadata.json'
 [ordered]@{
     Endpoint               = $Endpoint

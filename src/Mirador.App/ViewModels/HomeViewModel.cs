@@ -17,17 +17,10 @@ using Mirador.Core.Session;
 
 namespace Mirador.App.ViewModels;
 
-/// <summary>
-/// Home: the profile, the one Start/Stop button, Monado's status lines, the active OpenXR runtime, and what needs the
-/// user's attention (the last failed Start, the runtime, checks, warnings). Lives as long as Mirador, so that what
-/// happens while another page is open isn't lost. Everything here runs on the UI thread.
-/// </summary>
 public sealed partial class HomeViewModel : ObservableObject
 {
-    /// <summary>How often Home reads Monado's devices through libmonado while it shows and Monado runs.</summary>
     private static readonly TimeSpan DevicePollInterval = TimeSpan.FromSeconds(3);
 
-    /// <summary>The keys of the session's own status lines (<see cref="SessionController.Status"/>); the module's lines follow them.</summary>
     private static readonly HashSet<string> SessionLineKeys = ["monado", "apps", "tracking", "standin"];
 
     private readonly AppHost host;
@@ -41,15 +34,10 @@ public sealed partial class HomeViewModel : ObservableObject
     private CancellationTokenSource? devicePolling;
     private bool readingDevices;
 
-    // Monado's devices as last read through libmonado (or the line saying why there is no libmonado), shown between
-    // the session's lines and the module's.
     private IReadOnlyList<StatusLine> deviceLines = [];
 
-    /// <summary>The devices libmonado last listed: their hands and batteries for the controllers card.</summary>
     private IReadOnlyList<MonadoDevice> monadoDevices = [];
 
-    // The selected profile as it was last read (LoadProfiles) or picked here, so that the base stations' frequent
-    // changes don't read profiles.json each time; null while the profiles couldn't be read.
     private Profile? selected;
 
     public HomeViewModel(AppHost host, DispatcherQueue ui)
@@ -61,12 +49,10 @@ public sealed partial class HomeViewModel : ObservableObject
             Notices.Add(new NoticeItem("startup", "Settings", notice, InfoBarSeverity.Warning, IsClosable: true));
         }
 
-        // A headset plugged in or out: the checks say so at once, not at the next visit to Home.
         host.DevicesChanged += () => ui.TryEnqueue(() => _ = RunChecksAsync());
 
         host.Session.Changed += () => ui.TryEnqueue(OnSessionChanged);
 
-        // The OpenVR runtime paths or OpenLamina changed (its installer, SteamVR, a hand edit): the card says so at once.
         host.OpenVrWatch.Changed += () => ui.TryEnqueue(RefreshRuntime);
         host.Session.StatusChanged += () => ui.TryEnqueue(RefreshStatus);
         host.Stations.Changed += OnStationsChanged;
@@ -76,7 +62,6 @@ public sealed partial class HomeViewModel : ObservableObject
         host.Xr.ProblemChanged += () => ui.TryEnqueue(ShowHeadsetProblem);
         App.Current.StartFailed += message =>
         {
-            // Through null, so that the same message again opens the bar again after it was closed.
             LastFailure = null;
             LastFailure = message;
         };
@@ -91,42 +76,32 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public ObservableCollection<StatusItem> Status { get; } = [];
 
-    /// <summary>The controllers and trackers Monado found, for the devices card.</summary>
     public ObservableCollection<DeviceItem> Devices { get; } = [];
 
-    /// <summary>Whether the devices card shows: while Monado runs with the Lighthouse receiver.</summary>
     [ObservableProperty]
     public partial bool ShowDevices { get; set; }
 
-    /// <summary>Whether "None found yet." shows in the devices card.</summary>
     [ObservableProperty]
     public partial bool HasNoDevices { get; set; }
 
-    /// <summary>Whether the base stations card shows: the selected profile uses base stations.</summary>
     [ObservableProperty]
     public partial bool ShowStations { get; set; }
 
-    /// <summary>The "Base stations" row of its card.</summary>
     [ObservableProperty]
     public partial StatusItem StationsRow { get; set; } = new("Base stations", "", StatusLevel.Info);
 
-    /// <summary>Whether the selected stations are changing state (a command being sent, one waking up): a spinner in place of the row's icon.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowStationsIcon))]
     public partial bool StationsBusy { get; set; }
 
-    /// <summary>Whether the row's icon shows: while the stations aren't changing state.</summary>
     public bool ShowStationsIcon => !StationsBusy;
 
-    /// <summary>Whether the On and Off buttons show: not when this PC has no Bluetooth.</summary>
     [ObservableProperty]
     public partial bool ShowStationButtons { get; set; }
 
-    /// <summary>Whether On and Off work: Bluetooth ready, a station selected and no command being sent.</summary>
     [ObservableProperty]
     public partial bool CanSwitchStations { get; set; }
 
-    /// <summary>Notices from Mirador's start, check results that need a look, and warnings while Monado runs.</summary>
     public ObservableCollection<NoticeItem> Notices { get; } = [];
 
     [ObservableProperty]
@@ -154,51 +129,38 @@ public sealed partial class HomeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasRunsAsYouNotice), nameof(AllowLabel))]
     public partial string? RunsAsYouNotice { get; set; }
 
-    /// <summary>
-    /// Whether the "Runs as you" line offers "Allow" (again): the profile has "Run as administrator" on but the consent
-    /// isn't recorded, or the last Start ran as the user because SteamVR's Lighthouse driver changed since the user
-    /// allowed Monado as administrator.
-    /// </summary>
     [ObservableProperty]
     public partial bool OffersAllowAgain { get; set; }
 
-    /// <summary>The button's label: "Allow" when the consent was never recorded, else "Allow again".</summary>
     public string AllowLabel => RunsAsYouNotice == AppHost.NotAllowedReason ? "Allow" : "Allow again";
 
-    /// <summary>False while "Allow again" waits for its UAC prompt.</summary>
     [ObservableProperty]
     public partial bool CanAllowAgain { get; set; } = true;
 
-    /// <summary>What the headset check says while the headset shows as a normal monitor (direct mode is off); null otherwise.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasDirectModeNotice))]
     public partial string? DirectModeNotice { get; set; }
 
     public bool HasDirectModeNotice => DirectModeNotice is not null;
 
-    /// <summary>False while "Fix direct mode" runs.</summary>
     [ObservableProperty]
     public partial bool CanFixDirectMode { get; set; } = true;
 
-    /// <summary>The "OpenXR runtime" row of the runtimes card.</summary>
     [ObservableProperty]
     public partial StatusItem OpenXrRow { get; set; } = new("OpenXR runtime", "", StatusLevel.Info);
 
     [ObservableProperty]
     public partial bool CanSetRuntime { get; set; }
 
-    /// <summary>Whether the "OpenVR runtime" row shows: not in a dev run without OpenLamina.</summary>
     [ObservableProperty]
     public partial bool ShowOpenVr { get; set; }
 
-    /// <summary>The "OpenVR runtime" row of the runtimes card.</summary>
     [ObservableProperty]
     public partial StatusItem OpenVrRow { get; set; } = new("OpenVR runtime", "", StatusLevel.Info);
 
     [ObservableProperty]
     public partial bool CanSetOpenComposite { get; set; }
 
-    /// <summary>Whether "Get OpenLamina" shows: OpenLamina isn't installed.</summary>
     [ObservableProperty]
     public partial bool CanGetOpenComposite { get; set; }
 
@@ -221,12 +183,10 @@ public sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty]
     public partial Uri? UpdateUrl { get; set; }
 
-    /// <summary>"OpenLamina 2026.11.20 is out." from the update check; null when there is none.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasOpenCompositeUpdate))]
     public partial string? OpenCompositeUpdateText { get; set; }
 
-    /// <summary>Whether the notice's "Update" button shows: when Mirador can update OpenLamina and the release has a zip to check.</summary>
     [ObservableProperty]
     public partial bool CanUpdateOpenComposite { get; set; }
 
@@ -250,7 +210,6 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public bool HasOpenCompositeUpdate => OpenCompositeUpdateText is not null;
 
-    /// <summary>Reads the profiles again (the Profiles page may have changed them) and runs the checks.</summary>
     public void Refresh()
     {
         LoadProfiles();
@@ -261,17 +220,12 @@ public sealed partial class HomeViewModel : ObservableObject
         _ = RunChecksAsync();
     }
 
-    /// <summary>
-    /// The warning while hardware-accelerated GPU scheduling is off (or the driver doesn't offer it): Monado as
-    /// administrator needs it for the GPU's realtime priority. Asked each time Home shows; it changes only with a restart.
-    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasGpuSchedulingNotice))]
     public partial string? GpuSchedulingNotice { get; set; }
 
     public bool HasGpuSchedulingNotice => GpuSchedulingNotice is not null;
 
-    /// <summary>The window came to the front: while Home shows, its runtime cards are read again.</summary>
     public void OnWindowActivated()
     {
         if (pageShown)
@@ -280,11 +234,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Home listens to the base stations while it is the current page, the base stations card shows and the window is on
-    /// screen; <paramref name="shown"/> is the first and the last of those. Monado's devices are read while it shows and
-    /// Monado runs.
-    /// </summary>
     public void SetShown(bool shown)
     {
         pageShown = shown;
@@ -292,10 +241,6 @@ public sealed partial class HomeViewModel : ObservableObject
         UpdateDevicePolling();
     }
 
-    /// <summary>
-    /// Reads Monado's devices every <see cref="DevicePollInterval"/> while Home shows and Monado is starting or running,
-    /// and stops otherwise. Stopping clears the device lines.
-    /// </summary>
     private void UpdateDevicePolling()
     {
         var want = pageShown && State is SessionState.Starting or SessionState.Running;
@@ -331,7 +276,6 @@ public sealed partial class HomeViewModel : ObservableObject
                 }
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
-                    // One bad read doesn't end the poll: the next tick tries again.
                     AppLog.Write("Mirador couldn't read Monado's devices", e);
                 }
             }
@@ -339,14 +283,9 @@ public sealed partial class HomeViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // Home went away or Monado stopped.
         }
     }
 
-    /// <summary>
-    /// Reads the devices through the session's libmonado connection on a background thread (it talks to Monado), or
-    /// shows why there is none. One read at a time: while a read waits for Monado, no other starts.
-    /// </summary>
     private async Task ReadDevicesAsync(CancellationToken ct)
     {
         if (readingDevices)
@@ -361,7 +300,6 @@ public sealed partial class HomeViewModel : ObservableObject
             IReadOnlyList<MonadoDevice> devices = [];
             if (host.Session.Monado is { } monado)
             {
-                // A closed connection gives no devices; a read that fails says why.
                 try
                 {
                     devices = await Task.Run(() => monado.Devices(), CancellationToken.None);
@@ -406,10 +344,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Shows what the update check found: one closable message for each newer release, none for one that is up to date.
-    /// A check that couldn't reach GitHub changes nothing here (the Updates card says so).
-    /// </summary>
     public void ShowUpdates(UpdateReport? report)
     {
         if (report is not { Reached: true })
@@ -417,7 +351,6 @@ public sealed partial class HomeViewModel : ObservableObject
             return;
         }
 
-        // Through null, so that the same message again opens the bar again after it was closed.
         UpdateText = null;
         OpenCompositeUpdateText = null;
         if (report.NewerMirador is { } mirador)
@@ -437,14 +370,12 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Shows a newer Mirador release (from the update check).</summary>
     public void ShowUpdate(string tag, string url)
     {
         UpdateText = $"Mirador {tag} is out.";
         UpdateUrl = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri : null;
     }
 
-    /// <summary>"Update" on OpenLamina's notice: its installer, through <see cref="Updates.UpdateOpenCompositeAsync"/>.</summary>
     [RelayCommand]
     private async Task UpdateOpenCompositeAsync()
     {
@@ -465,10 +396,8 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Takes a notice away when its bar is closed.</summary>
     public void Dismiss(NoticeItem notice) => Notices.Remove(notice);
 
-    // Concurrent: pressing "Starting…" must reach Stop while the Start it began still runs.
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task StartStopAsync()
     {
@@ -506,7 +435,6 @@ public sealed partial class HomeViewModel : ObservableObject
             return;
         }
 
-        // The elevated step's errors never reach the user, so the manifest is checked here first.
         if (RuntimeManifest.Validate(install.Manifest) is { } problem)
         {
             RuntimeProblem = problem;
@@ -516,11 +444,8 @@ public sealed partial class HomeViewModel : ObservableObject
         CanSetRuntime = false;
         try
         {
-            // The profile whose build this is: the running one's while Monado runs.
             var profile = host.Session.CurrentProfile?.Profile ?? SelectedSet().Selected;
 
-            // A branch or build folder becomes the runtime only as its approved copy: one prompt approves it first. A
-            // profile that runs as you has no variables to approve for administrator.
             if (!install.IsBundled && !host.ApprovedBuildCurrent(profile)
                 && await host.ApproveBuildAsync(profile.RunAsAdministrator ? profile : profile with { ExtraEnvironment = [] }) is { } refused)
             {
@@ -549,7 +474,6 @@ public sealed partial class HomeViewModel : ObservableObject
             return;
         }
 
-        // A failed Start was about the profile picked before.
         LastFailure = null;
         try
         {
@@ -568,7 +492,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Back to the profile a Start would use, and say why.
             ShowNotice("profiles", "Profiles", $"Mirador couldn't save the profile choice ({e.Message.Trim().TrimEnd('.')}).", InfoBarSeverity.Error);
             LoadProfiles();
         }
@@ -581,7 +504,6 @@ public sealed partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private void SwitchStationsOn() => SwitchStations(() => StationCommand.On);
 
-    /// <summary>Off: the selected stations sleep.</summary>
     [RelayCommand]
     private void SwitchStationsOff() => SwitchStations(host.Stations.OffCommand);
 
@@ -597,7 +519,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>On whichever thread the manager is on: shows the change on the UI thread, once for a burst of them.</summary>
     private void OnStationsChanged()
     {
         if (Interlocked.Exchange(ref stationsRefreshQueued, 1) == 0 && !ui.TryEnqueue(StationsRefreshQueued))
@@ -612,10 +533,8 @@ public sealed partial class HomeViewModel : ObservableObject
         RefreshStations();
     }
 
-    /// <summary>Shows the base stations card (or not) for the selected profile, and what the manager says now.</summary>
     private void RefreshStations()
     {
-        // Without a profile read, the notice about the profiles is shown elsewhere; the card stays as it is.
         if (selected is { } profile)
         {
             var uses = profile.ModuleId is { } id && host.Modules.TryGetValue(id, out var module) && module.UsesSteamVrLighthouse;
@@ -710,7 +629,6 @@ public sealed partial class HomeViewModel : ObservableObject
         };
         if (State == SessionState.Starting && previous == SessionState.Stopped)
         {
-            // A new session, however it was started: the last one's warnings and end are history.
             ClearWarnings();
             RemoveNotice("ended");
             CheckSteamVrButtonStart();
@@ -718,7 +636,6 @@ public sealed partial class HomeViewModel : ObservableObject
 
         if (State != SessionState.Stopped)
         {
-            // The headset on the desktop only matters while Monado doesn't run.
             DirectModeNotice = null;
         }
 
@@ -726,14 +643,12 @@ public sealed partial class HomeViewModel : ObservableObject
         UpdateDevicePolling();
         if (devicePolling is { } polling)
         {
-            // The connection or its problem may have changed: show it now, not at the next tick.
             _ = ReadDevicesAsync(polling.Token);
         }
 
         RefreshRuntime();
         if (State == SessionState.Stopped && previous != SessionState.Stopped)
         {
-            // "While Monado runs" no longer holds; how it ended is the "ended" notice.
             ClearWarnings();
             _ = RunChecksAsync();
         }
@@ -771,7 +686,6 @@ public sealed partial class HomeViewModel : ObservableObject
 
     private void RefreshRuntime()
     {
-        // The running profile's Monado while one runs, else the selected profile's.
         MonadoInstall? install = host.Session.CurrentInstall;
         var profile = install is not null ? host.Session.CurrentProfile?.Profile : null;
         string? noMonado = null;
@@ -789,7 +703,6 @@ public sealed partial class HomeViewModel : ObservableObject
             }
         }
 
-        // A profile with no Monado yet can't Start, and says why.
         if (State == SessionState.Stopped)
         {
             CanStartStop = noMonado is null;
@@ -810,7 +723,6 @@ public sealed partial class HomeViewModel : ObservableObject
         CanSetRuntime = install is not null && !isActive;
         if (isActive)
         {
-            // Why setting it failed no longer matters once it is set.
             RuntimeProblem = null;
         }
 
@@ -820,11 +732,6 @@ public sealed partial class HomeViewModel : ObservableObject
         RefreshOpenVr(isActive, active);
     }
 
-    /// <summary>
-    /// "Allow again" on the "Runs as you" line: the consent step through UAC (<see cref="ElevatedMonado.AllowAsync"/>),
-    /// which records SteamVR's Lighthouse files as they are now. Once it has, the line goes and the next Start runs as
-    /// administrator; a cancelled prompt changes nothing.
-    /// </summary>
     [RelayCommand]
     private async Task AllowAgainAsync()
     {
@@ -854,9 +761,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// The "OpenVR runtime" row, read from the paths file each time, and what needs a look.
-    /// </summary>
     private void RefreshOpenVr(bool openXrIsMonado, string? activeOpenXr)
     {
         ShowOpenVr = true;
@@ -868,19 +772,15 @@ public sealed partial class HomeViewModel : ObservableObject
         }
         catch (Exception e)
         {
-            // Never let this stop the rest of Home (the checks run after it).
             AppLog.Write("Reading where OpenVR games go failed", e);
             view = new OpenVrView("Unknown", false, null, $"Mirador couldn't read where OpenVR games go ({e.Message.Trim().TrimEnd('.')}).");
         }
 
         if (!view.OffersOpenComposite && view.Problem is null)
         {
-            // Why setting it failed no longer matters once it is set.
             openCompositeProblem = null;
         }
 
-        // Without OpenLamina the row says so and offers "Get OpenLamina"; one uninstalled while OpenVR games still
-        // go to it is a problem.
         var level = view.Problem is not null ? StatusLevel.Error : view.OffersOpenComposite || CanGetOpenComposite ? StatusLevel.Info : StatusLevel.Ok;
         OpenVrRow = new StatusItem("OpenVR runtime", CanGetOpenComposite && view.Problem is null ? "OpenLamina isn't installed yet" : view.Runtime, level);
         CanSetOpenComposite = view.OffersOpenComposite && !CanGetOpenComposite;
@@ -888,10 +788,6 @@ public sealed partial class HomeViewModel : ObservableObject
         OpenVrProblem = openCompositeProblem ?? view.Problem;
     }
 
-    /// <summary>
-    /// "Get OpenLamina": the fork's latest release, installed with its own installer. It doesn't switch OpenVR games:
-    /// "Set OpenLamina" then does.
-    /// </summary>
     [RelayCommand]
     private async Task GetOpenCompositeAsync()
     {
@@ -911,7 +807,6 @@ public sealed partial class HomeViewModel : ObservableObject
         RefreshRuntime();
     }
 
-    /// <summary>"Set OpenLamina": OpenLamina first for OpenVR games, until the owner or SteamVR changes it.</summary>
     [RelayCommand]
     private async Task SetOpenCompositeAsync()
     {
@@ -931,12 +826,10 @@ public sealed partial class HomeViewModel : ObservableObject
             AppLog.Write("Setting OpenLamina: " + openCompositeProblem);
         }
 
-        // Through null, so that the same problem again opens the bar again after it was closed.
         OpenVrProblem = null;
         RefreshRuntime();
     }
 
-    /// <summary>Runs the selected profile's direct-mode and headset checks and shows those that need a look.</summary>
     private async Task RunChecksAsync()
     {
         checking?.Cancel();
@@ -990,7 +883,6 @@ public sealed partial class HomeViewModel : ObservableObject
             }
         }
 
-        // Only while Monado is stopped: a check that finished after a Start began is stale.
         DirectModeNotice = State == SessionState.Stopped
             ? results.FirstOrDefault(r => r.Label == IDirectMode.HeadsetOnDesktopLabel)?.Text
             : null;
@@ -1005,11 +897,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// "Fix direct mode" on the direct mode warning: the headset's module frees its display and the direct-mode layer
-    /// turns direct mode on, while Monado is stopped (through the session, which keeps Starts out meanwhile). The checks
-    /// run again after.
-    /// </summary>
     [RelayCommand]
     private async Task FixDirectModeAsync()
     {
@@ -1044,7 +931,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Monado ended other than by Stop: a problem (it stopped by itself, or failed to come up) or as asked (after the last app closed).</summary>
     private void OnEnded(SessionEnd end)
     {
         if (end.Message != "Stopped.")
@@ -1053,14 +939,12 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>How installing Mirador's Monado at launch went.</summary>
     public void ShowMonadoNotice(string message, bool ok)
     {
         ShowNotice("miradors-monado", "Bundled Monado", message, ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         RefreshRuntime();
     }
 
-    /// <summary>The home or the dashboard isn't running though it should be, or (no problem) it is again.</summary>
     private void ShowHeadsetProblem()
     {
         if (host.Xr.Problem is { } problem)
@@ -1073,7 +957,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>After a Monado start: the room setup couldn't be put into Monado, or (null) it could.</summary>
     private void ShowRoomSetupProblem(string? problem)
     {
         if (problem is null)
@@ -1086,12 +969,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Whether the Lighthouse space in use has a room setup, from SteamVR's files and Mirador's own (read off the UI
-    /// thread, without starting Monado): at launch, when Home shows, when the profile changes and after a room setup step.
-    /// Also whether SteamVR's room setup changed since Mirador's was measured on it. Each notice stays while it is true;
-    /// neither is the one for a room setup that couldn't be applied.
-    /// </summary>
     public void CheckRoomSetup() => _ = CheckRoomSetupAsync();
 
     private async Task CheckRoomSetupAsync()
@@ -1101,7 +978,6 @@ public sealed partial class HomeViewModel : ObservableObject
         ShowState("room-setup-changed", changed);
     }
 
-    /// <summary>A notice that shows a state: there while <paramref name="warning"/> is, updated in place.</summary>
     private void ShowState(string key, string? warning)
     {
         var existing = Notices.FirstOrDefault(n => n.Key == key);
@@ -1119,10 +995,6 @@ public sealed partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// At launch and at each Start: whether SteamVR changed its setting back while "Stop SteamVR starting when a
-    /// controller turns on" is on (SteamVR rewrites its settings when it exits).
-    /// </summary>
     public void CheckSteamVrButtonStart()
     {
         if (host.SteamVrButtonStartWarning() is { } warning)

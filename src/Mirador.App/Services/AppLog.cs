@@ -3,15 +3,12 @@ using Mirador.Core;
 
 namespace Mirador.App.Services;
 
-/// <summary>Mirador's own log, <c>logs\mirador.log</c>: what it did and what went wrong, with the time of each line.</summary>
 public static class AppLog
 {
     private static TextLog? log;
 
-    /// <summary>The log's lines so far, oldest first (the last 200).</summary>
     public static IReadOnlyList<string> Tail => log?.Tail ?? [];
 
-    /// <summary>Raised, on the writing thread, after each line.</summary>
     public static event Action<string>? LineWritten;
 
     public static void Open(AppPaths paths) => log ??= new TextLog(paths.AppLogFile);
@@ -25,7 +22,6 @@ public static class AppLog
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // The log is for finding out what happened; Mirador goes on without it.
         }
 
         LineWritten?.Invoke(line);

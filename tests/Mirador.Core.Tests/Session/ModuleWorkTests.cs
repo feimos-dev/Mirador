@@ -2,7 +2,6 @@ using Mirador.Core.Session;
 
 namespace Mirador.Core.Tests.Session;
 
-/// <summary><see cref="SessionController.RunWhileStoppedAsync"/>: a module's own work while Monado is stopped (the display check).</summary>
 public class ModuleWorkTests
 {
     private static readonly TimeSpan Limit = Harness.Limit;

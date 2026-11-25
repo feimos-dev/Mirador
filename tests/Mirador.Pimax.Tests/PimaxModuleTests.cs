@@ -29,7 +29,6 @@ public sealed class PimaxModuleTests : IDisposable
     {
         helper = new FakeHelper(steps, processes);
 
-        // Some of Pimax's software runs, so a Start asks the helper to stop it, unless a test removes it.
         processes.Add("PimaxClient", 7);
         paths = new AppPaths(Path.Combine(dir.Path, "Mirador"));
         state = new DreamAirStateStore(paths.DreamAirFile);
@@ -135,7 +134,6 @@ public sealed class PimaxModuleTests : IDisposable
     [Fact]
     public async Task A_layer_folder_left_in_a_profile_is_ignored()
     {
-        // Profiles could name a layer folder until the layer came with Mirador; such a folder may be gone.
         var profile = DreamAirProfile(Path.Combine(dir.Path, "gone", "layer-build"));
 
         using var session = (DreamAirSession)await BeforeStart(profile);
@@ -256,7 +254,6 @@ public sealed class PimaxModuleTests : IDisposable
         session.Warning += w => { lock (warnings) { warnings.Add(w); } };
         processes.Add("pi_server");
 
-        // The fake clock runs the session's poll inside Advance.
         Poll(3);
         lock (warnings)
         {
@@ -307,7 +304,7 @@ public sealed class PimaxModuleTests : IDisposable
 
         Assert.Equal(["Pimax Play", "Eye geometry", "SteamVR", "Headset", "Eye tracker variant"], results.Select(r => r.Label));
         Assert.All(results.SkipLast(1), r => Assert.Equal(StatusLevel.Ok, r.Level));
-        Assert.Equal(StatusLevel.Warning, results[^1].Level); // nothing known about the variant yet
+        Assert.Equal(StatusLevel.Warning, results[^1].Level);
     }
 
     [Fact]
@@ -509,14 +506,12 @@ public sealed class PimaxModuleTests : IDisposable
             var reply = Replies.GetValueOrDefault(command) ?? new HelperReply(true);
             if (command == HelperCommand.StopPimax && reply.Ok)
             {
-                processes.Remove("PimaxClient"); // the helper ends Pimax's processes
+                processes.Remove("PimaxClient");
             }
 
             return Task.FromResult(reply);
         }
     }
-
-    // --- Pimax models ---
 
     private void Plug(PimaxModel model)
     {
@@ -614,7 +609,7 @@ public sealed class PimaxModuleTests : IDisposable
     public async Task A_start_looks_the_model_up_afresh()
     {
         var module = Module();
-        _ = module.Model(); // the Dream Air, cached
+        _ = module.Model();
         Plug(PimaxModels.CrystalLight);
 
         using var session = (DreamAirSession)await module.BeforeStartAsync(Context, DreamAirProfile(), new Progress(steps), Save, CancellationToken.None).WaitAsync(Limit);

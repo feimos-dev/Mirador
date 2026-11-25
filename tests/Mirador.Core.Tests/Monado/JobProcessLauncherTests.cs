@@ -6,7 +6,6 @@ namespace Mirador.Core.Tests.Monado;
 
 public class JobProcessLauncherTests
 {
-    /// <summary>Long enough for a slow machine, short enough that a hang fails the test instead of the suite.</summary>
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(10);
 
     private static string System32(string exe) => Path.Combine(Environment.SystemDirectory, exe);
@@ -38,7 +37,7 @@ public class JobProcessLauncherTests
 
         Assert.Equal(3, code);
         Assert.Contains("one", lines);
-        Assert.Contains("two", lines.Select(l => l.TrimEnd())); // cmd leaves a space before the redirection
+        Assert.Contains("two", lines.Select(l => l.TrimEnd()));
     }
 
     [Fact]
@@ -58,7 +57,7 @@ public class JobProcessLauncherTests
     {
         using var launcher = new JobProcessLauncher();
         await using var process = launcher.Start(Cmd("/c echo early"));
-        await process.Exited.WaitAsync(Limit); // the line is long gone by the time we listen
+        await process.Exited.WaitAsync(Limit);
 
         var lines = Listen(process);
 
@@ -96,14 +95,14 @@ public class JobProcessLauncherTests
             bad.Enqueue(line);
             throw new InvalidOperationException("listener fault");
         };
-        both += good.Enqueue; // one subscription holding both, so neither can miss a line to a timing gap
+        both += good.Enqueue;
 
         process.Line += both;
         await process.Exited.WaitAsync(Limit);
 
         Assert.Equal(["one", "two"], bad);
         Assert.Equal(["one", "two"], good);
-        Assert.Equal(2, failures.Count); // once per failure
+        Assert.Equal(2, failures.Count);
         Assert.All(failures, f =>
         {
             Assert.IsType<InvalidOperationException>(f);
@@ -128,8 +127,8 @@ public class JobProcessLauncherTests
         };
         await process.Exited.WaitAsync(Limit);
 
-        Assert.Equal(["one", "two"], lines); // the reading went on
-        Assert.Equal(2, reported.Count);      // and the later failure handler was still told
+        Assert.Equal(["one", "two"], lines);
+        Assert.Equal(2, reported.Count);
     }
 
     [Fact]
@@ -138,7 +137,6 @@ public class JobProcessLauncherTests
         var env = SystemEnv();
         env["MIRADOR_TEST"] = "xyz";
         using var launcher = new JobProcessLauncher();
-        // USERNAME is set in this test process; cmd leaves a variable it doesn't know as typed.
         await using var process = launcher.Start(Cmd("/c echo %MIRADOR_TEST%:%USERNAME%", env));
         var lines = Listen(process);
 
@@ -167,7 +165,6 @@ public class JobProcessLauncherTests
         var folder = Path.Combine(dir.Path, "Zoë Build", "monado build");
         Directory.CreateDirectory(folder);
         using var launcher = new JobProcessLauncher();
-        // cd fails (exit code 1) when the folder in the command line did not arrive intact.
         await using var process = launcher.Start(Cmd($"/c cd /d \"{folder}\""));
 
         Assert.Equal(0, await process.Exited.WaitAsync(Limit));
@@ -179,7 +176,7 @@ public class JobProcessLauncherTests
         using var dir = new TempDir();
         File.WriteAllText(dir.File("utf8.txt"), "Zoë — ok" + Environment.NewLine, new System.Text.UTF8Encoding(false));
         using var launcher = new JobProcessLauncher();
-        await using var process = launcher.Start(Cmd($"/c type \"{dir.File("utf8.txt")}\"")); // type copies the bytes as they are
+        await using var process = launcher.Start(Cmd($"/c type \"{dir.File("utf8.txt")}\""));
         var lines = Listen(process);
 
         await process.Exited.WaitAsync(Limit);
@@ -191,7 +188,6 @@ public class JobProcessLauncherTests
     public async Task Exited_completes_even_when_a_child_keeps_the_output_open()
     {
         using var launcher = new JobProcessLauncher();
-        // cmd ends at once; the ping it started keeps the output pipes (and runs for 20 s). Exited waits a couple of seconds for it, then gives up.
         await using var process = launcher.Start(Cmd("/c start /b ping -n 20 127.0.0.1"));
 
         var code = await process.Exited.WaitAsync(Limit);
@@ -245,7 +241,7 @@ public class JobProcessLauncherTests
         await process.DisposeAsync();
 
         Assert.True(exited.IsCompleted);
-        process.Kill(); // after dispose: nothing to do
+        process.Kill();
     }
 
     [Fact]
@@ -258,7 +254,7 @@ public class JobProcessLauncherTests
         Assert.False(first.Exited.IsCompleted);
         Assert.False(second.Exited.IsCompleted);
 
-        launcher.Dispose(); // closing the job ends everything in it
+        launcher.Dispose();
 
         await Task.WhenAll(first.Exited, second.Exited).WaitAsync(TimeSpan.FromSeconds(5));
     }
@@ -268,15 +264,13 @@ public class JobProcessLauncherTests
     {
         var process = StartAndForgetTheLauncher();
 
-        // The launcher is garbage now. Its job handle must not be closed by the finalizer while the process is running,
-        // or Windows ends the process (kill on close) at some random collection.
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
         await Task.Delay(500);
         Assert.False(process.Exited.IsCompleted);
 
-        await process.DisposeAsync(); // disposing the process still ends it
+        await process.DisposeAsync();
         Assert.True(process.Exited.IsCompleted);
     }
 
@@ -316,13 +310,12 @@ public class JobProcessLauncherTests
         File.WriteAllText(notProgram, "this is text, not a program");
         var watch = System.Diagnostics.Stopwatch.StartNew();
 
-        // With Windows' message box this call would wait until someone clicked OK on "Unsupported 16-Bit Application".
         var ex = Assert.Throws<MiradorException>(() =>
             launcher.Start(new ProcessSpec(notProgram, "", Environment.SystemDirectory, SystemEnv())));
 
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), watch.Elapsed.ToString());
         Assert.StartsWith($"Couldn't start {notProgram}: ", ex.Message);
-        Assert.DoesNotContain("%1", ex.Message); // Windows' texts name the file with a placeholder that must be filled in
+        Assert.DoesNotContain("%1", ex.Message);
     }
 
     [Fact]

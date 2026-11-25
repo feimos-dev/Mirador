@@ -2,28 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace Mirador.Core.BaseStations;
 
-/// <summary>A base station Mirador has seen, in <c>basestations.json</c>.</summary>
-/// <param name="Address">The Bluetooth address, as <see cref="StationProtocol.FormatAddress"/> writes it.</param>
-/// <param name="Name">The Bluetooth name the station advertises ("LHB-..." or "HTC BS ...").</param>
-/// <param name="Selected">The user chose to have Mirador switch this station.</param>
-/// <param name="CustomName">A name the user gave it (at most <see cref="MaxNameLength"/> characters), or null.</param>
-/// <param name="Id">A first-generation station's ID (8 hex digits) as the user typed it, or null.</param>
 public sealed record KnownStation(string Address, string Name, bool Selected = false, string? CustomName = null, string? Id = null)
 {
-    /// <summary>The longest custom name kept.</summary>
     public const int MaxNameLength = 40;
 
-    /// <summary>The generation of the station, from its <see cref="Name"/>.</summary>
-    /// <exception cref="InvalidOperationException">The name isn't a base station's; the store never keeps such a station.</exception>
     [JsonIgnore]
     public StationVersion Version =>
         StationProtocol.VersionOf(Name) ?? throw new InvalidOperationException($"\"{Name}\" is not the name of a base station.");
 
-    /// <summary>What to show for the station: the custom name, else the Bluetooth name.</summary>
     [JsonIgnore]
     public string DisplayName => CustomName ?? Name;
 
-    // The generated printing would show Version, which throws for a name that isn't a base station's.
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
         builder.Append($"Address = {Address}, Name = {Name}, Selected = {Selected}, CustomName = {CustomName}, Id = {Id}");
@@ -31,21 +20,12 @@ public sealed record KnownStation(string Address, string Name, bool Selected = f
     }
 }
 
-/// <summary>The shape of <c>basestations.json</c>.</summary>
 public sealed record StationList(IReadOnlyList<KnownStation> Stations);
 
-/// <summary>Keeps the known base stations in one JSON file.</summary>
 public sealed class StationStore(string path)
 {
     private readonly object _lock = new();
 
-    /// <summary>
-    /// The saved stations. A missing file gives none; one that can't be read is set aside as <c>.bad</c> and gives none.
-    /// Entries that can't be used are left out (an address that doesn't parse, an empty name, a name that isn't a base
-    /// station's, an address already seen) and a bad ID or custom name is put right (an ID that isn't 8 hex digits is
-    /// dropped, a custom name is trimmed and cut to <see cref="KnownStation.MaxNameLength"/>); then a copy of the file is
-    /// kept as <c>.bad</c>. Addresses come back in the standard form.
-    /// </summary>
     public IReadOnlyList<KnownStation> Load()
     {
         lock (_lock)
@@ -66,7 +46,6 @@ public sealed class StationStore(string path)
         }
     }
 
-    /// <summary>Writes the stations, replacing the file. Saves, and loads, from several threads go one after the other.</summary>
     public void Save(IReadOnlyList<KnownStation> stations)
     {
         lock (_lock)
@@ -119,7 +98,6 @@ public sealed class StationStore(string path)
             return trimmed;
         }
 
-        // Don't cut a surrogate pair in half.
         var length = char.IsHighSurrogate(trimmed[KnownStation.MaxNameLength - 1]) ? KnownStation.MaxNameLength - 1 : KnownStation.MaxNameLength;
         return trimmed[..length];
     }

@@ -1,13 +1,7 @@
 namespace Mirador.Core.BaseStations;
 
-// One command's rounds of tries: connecting to each station, writing to it and naming the ones that didn't answer.
 public sealed partial class StationManager
 {
-    /// <summary>
-    /// Up to <see cref="Tries"/> rounds, <see cref="TryPause"/> apart, each trying once every station not done yet that
-    /// is still wanted; then names the ones that were tried and never answered. Bluetooth going away ends the rounds,
-    /// and a station not tried by then is left as it was.
-    /// </summary>
     private async Task TryAllAsync(List<string> targets, Work work)
     {
         var pending = new List<string>(targets);
@@ -35,7 +29,6 @@ public sealed partial class StationManager
 
                     station = entry.Station;
 
-                    // Never heard since Mirador started: base stations use random addresses.
                     random = entry.RandomAddress ?? true;
                 }
 
@@ -102,11 +95,9 @@ public sealed partial class StationManager
         }
     }
 
-    /// <summary>How the log names the work for one station: <c>Base stations: On Desk (CE:…)</c>, with "again (stuck waking up)" for an On sent again.</summary>
     private static string Line(Work work, string display, string address) =>
         $"Base stations: {Name(work)} {display} ({address}){(work.ResendOf is null ? string.Empty : " again (stuck waking up)")}";
 
-    /// <summary>What a 2.0 station's advert says once it has done the command; null for standby, which shows nothing Mirador can see.</summary>
     private static StationPower? Shows(StationCommand command) =>
         command switch
         {
@@ -115,10 +106,6 @@ public sealed partial class StationManager
             _ => null,
         };
 
-    /// <summary>
-    /// A station took the command: its problem goes, a 1.0 station's state is what it was told, and a 2.0 station an
-    /// On reached is watched while it wakes up.
-    /// </summary>
     private void Answered(KnownStation station, Work work)
     {
         var display = station.DisplayName;
@@ -143,7 +130,6 @@ public sealed partial class StationManager
                     }
                     else
                     {
-                        // Told to go off: it isn't waking any more, whatever its advert still says.
                         entry.WokenAt = null;
                         _wakes.RemoveAll(w => w.Address == entry.Station.Address);
                     }
@@ -161,10 +147,6 @@ public sealed partial class StationManager
         Raise();
     }
 
-    /// <summary>
-    /// One try at one station, given up after <see cref="TryLimit"/>: Windows can't cancel a connection, so a late one
-    /// is closed when it comes. Null when the station took it, else why not.
-    /// </summary>
     private async Task<string?> TryOnceAsync(KnownStation station, bool random, Work work)
     {
         if (!StationProtocol.TryParseAddress(station.Address, out var address))
@@ -186,16 +168,11 @@ public sealed partial class StationManager
         }
         catch (OperationCanceledException)
         {
-            // Stopped or cancelled: the try's own token goes now, before the worker moves on to the next work. The
-            // work's token cancels it too, but its callbacks run newest first, and the worker may go on inside the
-            // first of them; a late link would then still find the try going and send the stopped command after the
-            // next one.
             stop.Cancel();
             throw;
         }
     }
 
-    /// <summary>Connects, sends, and closes the link whatever happens. Never throws: null when sent, else why not.</summary>
     private async Task<string?> AttemptAsync(ulong address, bool random, KnownStation station, Work work, CancellationToken ct)
     {
         try
@@ -214,7 +191,6 @@ public sealed partial class StationManager
                 }
                 catch (Exception)
                 {
-                    // Closing failed; the connection goes when Windows lets it.
                 }
             }
 
@@ -230,7 +206,6 @@ public sealed partial class StationManager
         }
     }
 
-    /// <summary>Writes the command, or Identify, the way the station's generation takes it.</summary>
     private static async Task WriteAsync(IStationLink link, KnownStation station, Work work, CancellationToken ct)
     {
         switch (StationProtocol.VersionOf(station.Name), work.Kind)
@@ -256,10 +231,6 @@ public sealed partial class StationManager
         }
     }
 
-    /// <summary>
-    /// A token for a work or one try, linked to an outer one: cancelled when given up, stopped or the outer token is;
-    /// cancelling and disposing are safe from any thread, in either order.
-    /// </summary>
     private sealed class Stopper
     {
         private readonly object _gate = new();
@@ -289,7 +260,6 @@ public sealed partial class StationManager
                 }
                 catch (Exception)
                 {
-                    // A failing cancellation callback is the radio's; the work or try ends either way.
                 }
             }
         }
