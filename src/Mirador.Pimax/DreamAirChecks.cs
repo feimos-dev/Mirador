@@ -114,7 +114,7 @@ public sealed class DreamAirChecks(
         if (!EyeBlobVariants.All.Contains(variant))
         {
             // dreamair.json edited by hand, or written by a newer Mirador.
-            return new(Label, StatusLevel.Error, $"Mirador doesn't know the eye geometry variant {variant}.", "Pick your headset's variant in Eye tracking.");
+            return new(Label, StatusLevel.Error, $"Mirador doesn't know the eye geometry variant {variant}.", "Pick your headset's variant in Profiles.");
         }
 
         var file = EyeBlobVariants.FileName(variant);
