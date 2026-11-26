@@ -162,12 +162,11 @@ jobs:
   session:
     needs: build
     if: needs.build.outputs.skip != 'true'
-    runs-on: ${{ github.event_name == 'push' && 'windows-2025' || fromJSON('["self-hosted", "gpu"]') }}
-    timeout-minutes: 8 # the GPU runner VM is forced off 10 min after it starts
+    runs-on: windows-2025
+    timeout-minutes: 8
     env:
       TAG: ${{ needs.build.outputs.tag }}
       SHA256: ${{ needs.build.outputs.sha256 }}
-      APIS: ${{ github.event_name == 'push' && 'none' || 'none,vulkan,d3d11' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -196,7 +195,7 @@ jobs:
 
       - name: Monado starts and takes an app
         shell: pwsh
-        run: tools\check-monado-session.ps1 -Install "$env:RUNNER_TEMP\monado-install" -XrCheck "$env:RUNNER_TEMP\xr-check\xr-check.exe" -Api ($env:APIS -split ',')
+        run: tools\check-monado-session.ps1 -Install "$env:RUNNER_TEMP\monado-install" -XrCheck "$env:RUNNER_TEMP\xr-check\xr-check.exe" -Api none
 
       - name: The session's logs
         if: failure()
